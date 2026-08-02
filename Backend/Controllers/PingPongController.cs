@@ -8,8 +8,8 @@ namespace Backend.Controllers;
 public sealed class PingPongController : SocketControllerBase
 {
     [Request]
-    public Task Ping(PingRequest request)
+    public async Task Ping(PingRequest request)
     {
-        return Socket.SendResponse(new PongResponse());
+        await RespondAsync(new PongResponse());
     }
 }

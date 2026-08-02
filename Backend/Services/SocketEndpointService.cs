@@ -43,9 +43,9 @@ public sealed class SocketEndpointService : IHostedService
 
     private async Task SocketRegistryOnMessageReceived(object? sender, MessageReceivedEventArgs e)
     {
-        DtoBase dto = e.Dto;
+        RequestBase request = e.Request;
         Socket socket = ArgumentException.ThrowIfNotOfType<Socket>(sender);
-        if (!_endpoints.TryGetValue(dto.GetType(), out List<RegisteredEndpoint>? registeredEndpoints))
+        if (!_endpoints.TryGetValue(request.GetType(), out List<RegisteredEndpoint>? registeredEndpoints))
         {
             // TODO: Send invalid request error to socket.
             return;
@@ -59,10 +59,10 @@ public sealed class SocketEndpointService : IHostedService
                 object controller = ActivatorUtilities.CreateInstance(_provider, registeredEndpoint.ControllerType);
                 if (controller is SocketControllerBase socketControllerBase)
                 {
-                    socketControllerBase.Context = new SocketControllerContext(socket);
+                    socketControllerBase.Context = new SocketControllerContext(socket, request);
                 }
 
-                object? result = registeredEndpoint.MethodInfo.Invoke(controller, [dto]);
+                object? result = registeredEndpoint.MethodInfo.Invoke(controller, [request]);
                 if (result is Task task)
                 {
                     tasks.Add(task);
@@ -73,7 +73,7 @@ public sealed class SocketEndpointService : IHostedService
         }
         catch (Exception exception)
         {
-            _logger.LogError(exception, "Failed to handle request of type {DtoType}.", dto.GetType().Name);
+            _logger.LogError(exception, "Failed to handle request of type {DtoType}.", request.GetType().Name);
         }
     }
 
