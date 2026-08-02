@@ -1,0 +1,23 @@
+name: Backend Build
+
+on:
+  push:
+    branches: [master]
+  pull_request:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: "10.0.x"
+
+      - name: Restore
+        run: dotnet restore OpenIdle.slnx
+
+      - name: Build
+        run: dotnet build OpenIdle.slnx --configuration Release --no-restore
