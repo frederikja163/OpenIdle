@@ -1,5 +1,5 @@
 ﻿namespace Backend.Dtos;
 
-public sealed class PongResponse : DtoBase
+public sealed class PongResponse : ResponseBase
 {
 }

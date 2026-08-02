@@ -86,15 +86,15 @@ public sealed class SocketEndpointService : IHostedService
         if (parameterInfos.Length != 1)
         {
             throw new ArgumentException(
-                $"Method {controllerType.Name}.{methodInfo.Name} must declare exactly one parameter derived from {nameof(DtoBase)}.",
+                $"Method {controllerType.Name}.{methodInfo.Name} must declare exactly one parameter derived from {nameof(RequestBase)}.",
                 nameof(methodInfo));
         }
 
         ParameterInfo parameter = parameterInfos.First();
-        if (!parameter.ParameterType.IsAssignableTo(typeof(DtoBase)))
+        if (!parameter.ParameterType.IsAssignableTo(typeof(RequestBase)))
         {
             throw new ArgumentException(
-                $"Parameter '{parameter.Name}' of method {controllerType.Name}.{methodInfo.Name} must be derived from {nameof(DtoBase)}.",
+                $"Parameter '{parameter.Name}' of method {controllerType.Name}.{methodInfo.Name} must be derived from {nameof(RequestBase)}.",
                 nameof(methodInfo));
         }
 

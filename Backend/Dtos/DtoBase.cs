@@ -9,3 +9,18 @@ public abstract class DtoBase
 {
     
 }
+
+public abstract class RequestBase : DtoBase
+{
+    
+}
+
+public abstract class ResponseBase : DtoBase
+{
+
+}
+
+public abstract class EventBase : DtoBase
+{
+    
+}

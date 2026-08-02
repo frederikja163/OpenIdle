@@ -74,11 +74,18 @@ internal sealed class Socket : IDisposable
         }
     }
 
-    internal async Task SendMessageAsync(DtoBase dtoBase, CancellationToken cancellationToken = default)
+    internal async Task SendResponse(ResponseBase requestBase)
     {
-        string str = JsonSerializer.Serialize(dtoBase, typeof(DtoBase));
+        string str = JsonSerializer.Serialize(requestBase, typeof(DtoBase));
         byte[] bytes = Encoding.UTF8.GetBytes(str);
-        await _webSocket.SendAsync(bytes, WebSocketMessageType.Text, true, cancellationToken);
+        await _webSocket.SendAsync(bytes, WebSocketMessageType.Text, true, CancellationToken.None);
+    }
+
+    internal async Task SendEvent(EventBase requestBase)
+    {
+        string str = JsonSerializer.Serialize(requestBase, typeof(DtoBase));
+        byte[] bytes = Encoding.UTF8.GetBytes(str);
+        await _webSocket.SendAsync(bytes, WebSocketMessageType.Text, true, CancellationToken.None);
     }
 
     internal async Task CloseAsync(WebSocketCloseStatus status, string description)

@@ -10,6 +10,6 @@ public sealed class PingPongController : SocketControllerBase
     [Request]
     public Task Ping(PingRequest request)
     {
-        return Socket.SendMessageAsync(new PongResponse());
+        return Socket.SendResponse(new PongResponse());
     }
 }

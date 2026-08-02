@@ -1,5 +1,5 @@
 ﻿namespace Backend.Dtos;
 
-public sealed class PingRequest : DtoBase
+public sealed class PingRequest : RequestBase
 {
 }
