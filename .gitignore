@@ -1,0 +1,21 @@
+# .NET build results
+[Bb]in/
+[Oo]bj/
+
+# Visual Studio / Rider
+.vs/
+.idea/
+
+# User-specific files
+*.user
+*.suo
+*.userosscache
+*.sln.docstates
+
+# Local configuration / secrets
+appsettings.Development.json
+
+# OS files
+Thumbs.db
+Desktop.ini
+.DS_Store
