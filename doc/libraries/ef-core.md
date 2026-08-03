@@ -3,7 +3,7 @@
 - Status: adopted
 - Date: 2026-08-03
 - Decided by: project owner
-- Version / commit pinned: EF Core 10.0.10, `Microsoft.EntityFrameworkCore.Sqlite` 10.0.10 (first-party, aligns with .NET 10.0.10)
+- Version / commit pinned: EF Core 10.0.10, `Microsoft.EntityFrameworkCore.Sqlite` 10.0.10 (first-party, aligns with .NET 10.0.10); `SQLitePCLRaw.bundle_e_sqlite3` 3.0.3 (non-Microsoft, see §3 and §5)
 
 ## 1. Problem
 
@@ -31,7 +31,7 @@ Obligations we take on: every entity gets a proper primary key and value-generat
 
 ### Pros
 
-- First-party: zero non-Microsoft packages at the top level, rides the same LTS patch train as the platform.
+- First-party at the top level except one package: EF Core and the SQLite provider ride the same LTS patch train as the platform, while `SQLitePCLRaw.bundle_e_sqlite3` is a non-Microsoft package pinned at 3.0.3 that must be kept current manually — EF Core 10.0.10's transitive pin (2.1.11) bundles a vulnerable SQLite (CVE-2025-6965), so the override cannot rely on the EF pin, see §5.
 - Migrations solve the schema-evolution problem the game will actually hit — no hand-rolled versioning.
 - LINQ + strongly typed entities catch query bugs at compile time; change tracking handles the load-save cycle.
 - Provider swap (SQLite → PostgreSQL) is mostly configuration once `Npgsql` is vetted.
@@ -56,4 +56,4 @@ EF Core spreads across the data layer (a `DbContext`, entity annotations, migrat
 
 ### Security risk — low
 
-Top-level packages are first-party Microsoft (MIT, monthly patching on the platform cadence); EF Core is widely deployed and well-audited. The one supply-chain item to track is the transitive native SQLite binary bundled via `SQLitePCLRaw.bundle_e_sqlite3` — SQLite is among the most audited C codebases in existence and the bundle tracks the platform releases, so risk is low, but it is a native component from a third-party source that should be verified to stay current with each upgrade (pinned via the 10.0.10 top-level package). Operational obligations: pin the patch, apply updates on the platform cadence, and never hand SQL into `ExecuteSqlRaw` from untrusted input (we'll avoid raw SQL entirely — the LINQ surface keeps parameterization automatic).
+Top-level packages are first-party Microsoft (MIT, monthly patching on the platform cadence) except one: `SQLitePCLRaw.bundle_e_sqlite3` is a non-Microsoft package (Apache-2.0) explicitly pinned at 3.0.3 to override EF Core 10.0.10's transitive 2.1.11 bundle, which shipped a vulnerable SQLite (CVE-2025-6965, fixed in ≥ 3.50.2). The bundle does not track the platform releases, and a plain EF Core bump can silently fall back to the vulnerable transitive pin — so this override must be verified to stay current on every upgrade. SQLite is among the most audited C codebases in existence, so risk is low, but it is a native third-party component worth that check. Operational obligations: keep the bundle at ≥ 3.0.3, apply platform patches on cadence, and never hand SQL into `ExecuteSqlRaw` from untrusted input (we'll avoid raw SQL entirely — the LINQ surface keeps parameterization automatic).
