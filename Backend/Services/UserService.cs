@@ -1,14 +1,26 @@
 ﻿using System;
+using System.Threading.Tasks;
+using Backend.Database;
 using Backend.Entities;
+using Microsoft.EntityFrameworkCore;
 
 namespace Backend.Services;
 
-public sealed class UserService
+public sealed class UserService(IDbContextFactory<GameDbContext> dbContextFactory)
 {
-    private static User TestUser { get; } = new User() { UserId = Guid.NewGuid() }; // TODO: Remove in the future, here for testing.
-    internal User GetTestUser()
+    internal async Task<User> GetTestUserAsync()
     {
-        return TestUser;
+        await using GameDbContext dbContext = await dbContextFactory.CreateDbContextAsync();
+
+        User? user = await dbContext.Users.FirstOrDefaultAsync();
+        if (user is null)
+        {
+            user = new User() { UserId = Guid.NewGuid() };
+            dbContext.Users.Add(user);
+            await dbContext.SaveChangesAsync();
+        }
+
+        return user;
     }
 
     internal void SignIn(Socket socket, User user)

@@ -8,7 +8,7 @@ using Microsoft.Extensions.DependencyInjection;
 
 var builder = WebApplication.CreateSlimBuilder(args);
 
-builder.Services.AddDbContext<GameDbContext>(options => options.UseSqlite(builder.Configuration.GetConnectionString("Default")));
+builder.Services.AddDbContextFactory<GameDbContext>(options => options.UseSqlite(builder.Configuration.GetConnectionString("Default")));
 builder.Services.AddControllers();
 builder.Services.AddSocketControllers();
 builder.Services.AddSingleton<UserService>();
@@ -18,7 +18,8 @@ var app = builder.Build();
 
 using (IServiceScope scope = app.Services.CreateScope())
 {
-    GameDbContext dbContext = scope.ServiceProvider.GetRequiredService<GameDbContext>();
+    IDbContextFactory<GameDbContext> dbContextFactory = scope.ServiceProvider.GetRequiredService<IDbContextFactory<GameDbContext>>();
+    await using GameDbContext dbContext = await dbContextFactory.CreateDbContextAsync();
     await dbContext.Database.MigrateAsync();
 }
 

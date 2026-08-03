@@ -3,7 +3,7 @@ using System.Collections.Generic;
 
 namespace Backend.Entities;
 
-internal sealed class User
+public sealed class User
 {
     public required Guid UserId { get; init; }
 
