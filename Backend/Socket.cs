@@ -25,6 +25,7 @@ internal sealed class Socket : IDisposable
 {
     private readonly WebSocket _webSocket;
     private bool _isClosed = false;
+    private readonly SemaphoreSlim _sendLock = new SemaphoreSlim(1, 1);
     
     internal Socket(WebSocket webSocket)
     {
@@ -39,14 +40,15 @@ internal sealed class Socket : IDisposable
     internal event AsyncEventHandler<MessageReceivedEventArgs>? MessageReceived;
     internal event AsyncEventHandler<SocketCloseEventArgs>? Close;
 
-    internal async Task StartAsync()
+    internal async Task StartAsync(CancellationToken cancellationToken)
     {
         try
         {
             while (!_isClosed)
             {
                 byte[] bytes = new byte[1024];
-                WebSocketReceiveResult receiveResult = await _webSocket.ReceiveAsync(bytes, CancellationToken.None);
+                WebSocketReceiveResult receiveResult = await _webSocket.ReceiveAsync(bytes, cancellationToken);
+
                 if (!receiveResult.EndOfMessage)
                 {
                     throw new NotImplementedException("Need to implement support for messages bigger than 1KiB");
@@ -72,6 +74,10 @@ internal sealed class Socket : IDisposable
                 }
             }
         }
+        catch (OperationCanceledException)
+        {
+            await CloseAsync(WebSocketCloseStatus.NormalClosure, "Cancellation was requested");
+        }
         catch (Exception exception)
         {
             await CloseAsync(WebSocketCloseStatus.InternalServerError, exception.Message);
@@ -80,15 +86,19 @@ internal sealed class Socket : IDisposable
 
     internal async Task SendResponseAsync(ResponseBase response)
     {
-        string str = JsonSerializer.Serialize(response, typeof(DtoBase));
-        byte[] bytes = Encoding.UTF8.GetBytes(str);
-        await _webSocket.SendAsync(bytes, WebSocketMessageType.Text, true, CancellationToken.None);
+        await SendMessageAsync(response);
     }
 
     internal async Task SendEventAsync(EventBase eventBase)
     {
-        string str = JsonSerializer.Serialize(eventBase, typeof(DtoBase));
+        await SendMessageAsync(eventBase);
+    }
+
+    private async Task SendMessageAsync(DtoBase dtoBase)
+    {
+        string str = JsonSerializer.Serialize(dtoBase, typeof(DtoBase));
         byte[] bytes = Encoding.UTF8.GetBytes(str);
+        await _sendLock.WaitAsync();
         await _webSocket.SendAsync(bytes, WebSocketMessageType.Text, true, CancellationToken.None);
     }
 

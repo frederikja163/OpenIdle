@@ -56,6 +56,7 @@ public sealed class SocketEndpointService : IHostedService
             List<Task> tasks = [];
             foreach (RegisteredEndpoint registeredEndpoint in registeredEndpoints)
             {
+                await using AsyncServiceScope scope = _provider.CreateAsyncScope();
                 object controller = ActivatorUtilities.CreateInstance(_provider, registeredEndpoint.ControllerType);
                 if (controller is SocketControllerBase socketControllerBase)
                 {
