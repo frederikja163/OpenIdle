@@ -16,7 +16,7 @@ namespace Backend.Migrations
                 columns: table => new
                 {
                     ProfileId = table.Column<Guid>(type: "TEXT", nullable: false),
-                    Name = table.Column<string>(type: "TEXT", nullable: false)
+                    Name = table.Column<string>(type: "TEXT", maxLength: 30, nullable: false)
                 },
                 constraints: table =>
                 {
@@ -57,6 +57,12 @@ namespace Backend.Migrations
                         principalColumn: "UserId",
                         onDelete: ReferentialAction.Cascade);
                 });
+
+            migrationBuilder.CreateIndex(
+                name: "IX_Profiles_Name",
+                table: "Profiles",
+                column: "Name",
+                unique: true);
 
             migrationBuilder.CreateIndex(
                 name: "IX_ProfileUser_UsersUserId",

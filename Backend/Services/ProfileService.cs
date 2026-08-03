@@ -30,6 +30,14 @@ public sealed class ProfileService(IDbContextFactory<GameDbContext> dbContextFac
     internal async Task<Profile> CreateProfileAsync(User user, string name)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(name);
+        if (name.Length > 30)
+        {
+            throw new ArgumentException("Profile name must be at most 30 characters.", nameof(name));
+        }
+        if (!name.All(char.IsAsciiLetterOrDigit))
+        {
+            throw new ArgumentException("Profile name must be alphanumeric.", nameof(name));
+        }
 
         await using GameDbContext dbContext = await dbContextFactory.CreateDbContextAsync();
 

@@ -25,9 +25,13 @@ namespace Backend.Migrations
 
                     b.Property<string>("Name")
                         .IsRequired()
+                        .HasMaxLength(30)
                         .HasColumnType("TEXT");
 
                     b.HasKey("ProfileId");
+
+                    b.HasIndex("Name")
+                        .IsUnique();
 
                     b.ToTable("Profiles");
                 });
