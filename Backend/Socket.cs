@@ -57,11 +57,7 @@ internal sealed class Socket : IDisposable
                 switch (receiveResult.MessageType)
                 {
                     case WebSocketMessageType.Text:
-                        string str = Encoding.UTF8.GetString(bytes.AsSpan(0, receiveResult.Count));
-                        RequestBase dto = (JsonSerializer.Deserialize<DtoBase>(str) as RequestBase) ??
-                                      throw new FormatException(
-                                          "Payload was either malformed json or an unrecognized json object.");
-                        if (MessageReceived is { } handler) await handler(this, new MessageReceivedEventArgs(dto));
+                        await HandleTextMessageAsync(bytes, receiveResult.Count);
                         break;
                     case WebSocketMessageType.Binary:
                         throw new NotSupportedException("Binary messages are not supported.");
@@ -92,6 +88,22 @@ internal sealed class Socket : IDisposable
     internal async Task SendEventAsync(EventBase eventBase)
     {
         await SendMessageAsync(eventBase);
+    }
+
+    private async Task HandleTextMessageAsync(byte[] bytes, int count)
+    {
+        try
+        {
+            string str = Encoding.UTF8.GetString(bytes.AsSpan(0, count));
+            RequestBase dto = (JsonSerializer.Deserialize<DtoBase>(str) as RequestBase) ??
+                              throw new FormatException(
+                                  "Payload was either malformed json or an unrecognized json object.");
+            if (MessageReceived is { } handler) await handler(this, new MessageReceivedEventArgs(dto));
+        }
+        catch (Exception exception)
+        {
+            await SendResponseAsync(new ErrorResponse(exception.Message));
+        }
     }
 
     private async Task SendMessageAsync(DtoBase dtoBase)
