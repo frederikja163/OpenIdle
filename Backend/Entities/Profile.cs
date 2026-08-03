@@ -1,4 +1,5 @@
 ﻿using System;
+using System.Collections.Generic;
 using Backend.Dtos.Auth;
 
 namespace Backend.Entities;
@@ -7,6 +8,8 @@ internal sealed class Profile
 {
     public required string Name { get; init; }
     public required Guid ProfileId { get; init; }
+
+    public ICollection<User> Users { get; } = [];
 
     public ProfileDto ToDto()
     {
