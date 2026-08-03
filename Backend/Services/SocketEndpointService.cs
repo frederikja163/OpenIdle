@@ -47,8 +47,7 @@ public sealed class SocketEndpointService : IHostedService
         Socket socket = ArgumentException.ThrowIfNotOfType<Socket>(sender);
         if (!_endpoints.TryGetValue(request.GetType(), out List<RegisteredEndpoint>? registeredEndpoints))
         {
-            await socket.SendResponseAsync(new ErrorResponse("No handler registered for this request type."));
-            return;
+            throw new InvalidOperationException("No handler registered for this request type.");
         }
 
         try
@@ -76,7 +75,7 @@ public sealed class SocketEndpointService : IHostedService
         catch (Exception exception)
         {
             _logger.LogError(exception, "Failed to handle request of type {DtoType}.", request.GetType().Name);
-            await socket.SendResponseAsync(new ErrorResponse(exception.Message));
+            throw;
         }
     }
 
