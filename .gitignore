@@ -19,3 +19,9 @@ appsettings.Development.json
 Thumbs.db
 Desktop.ini
 .DS_Store
+
+# SQLite databases
+*.db
+*.db-shm
+*.db-wal
+*.db-journal

@@ -1,37 +1,45 @@
 ﻿using System;
-using System.Collections.Concurrent;
-using System.Collections.Generic;
 using System.Linq;
+using System.Threading.Tasks;
+using Backend.Database;
 using Backend.Entities;
+using Microsoft.EntityFrameworkCore;
 
 namespace Backend.Services;
 
-public sealed class ProfileService
+public sealed class ProfileService(IDbContextFactory<GameDbContext> dbContextFactory)
 {
-    private readonly ConcurrentDictionary<User, List<Profile>> _profileByUser = new();
-
-    internal Profile[] GetProfiles(User user)
+    internal async Task<Profile[]> GetProfilesAsync(User user)
     {
-        List<Profile> profiles = _profileByUser.GetOrAdd(user, _ => []);
-        lock (profiles)
-        {
-            return [.. profiles];
-        }
+        await using GameDbContext dbContext = await dbContextFactory.CreateDbContextAsync();
+
+        return await dbContext.Profiles
+            .Where(p => p.Users.Any(u => u.UserId == user.UserId))
+            .ToArrayAsync();
     }
 
-    internal Profile GetProfile(User user, Guid profileId)
+    internal async Task<Profile> GetProfileAsync(User user, Guid profileId)
     {
-        List<Profile> profiles = _profileByUser.GetOrAdd(user, _ => []);
-        lock (profiles)
-        {
-            return profiles.FirstOrDefault(p => p.ProfileId == profileId)
-                   ?? throw new InvalidOperationException("Profile does not belong to user.");
-        }
+        await using GameDbContext dbContext = await dbContextFactory.CreateDbContextAsync();
+
+        return await dbContext.Profiles
+                   .FirstOrDefaultAsync(p => p.ProfileId == profileId && p.Users.Any(u => u.UserId == user.UserId))
+               ?? throw new InvalidOperationException("Profile does not belong to user.");
     }
 
-    internal Profile CreateProfile(User user, string name)
+    internal async Task<Profile> CreateProfileAsync(User user, string name)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(name);
+        if (name.Length > 30)
+        {
+            throw new ArgumentException("Profile name must be at most 30 characters.", nameof(name));
+        }
+        if (!name.All(char.IsAsciiLetterOrDigit))
+        {
+            throw new ArgumentException("Profile name must be alphanumeric.", nameof(name));
+        }
+
+        await using GameDbContext dbContext = await dbContextFactory.CreateDbContextAsync();
 
         Profile profile = new Profile()
         {
@@ -39,17 +47,16 @@ public sealed class ProfileService
             Name = name,
         };
 
-        List<Profile> profiles = _profileByUser.GetOrAdd(user, _ => []);
-        lock (profiles)
-        {
-            profiles.Add(profile);
-        }
+        dbContext.Attach(user);
+        profile.Users.Add(user);
+        dbContext.Profiles.Add(profile);
+        await dbContext.SaveChangesAsync();
 
         return profile;
     }
 
-    internal void SelectProfile(Socket socket, User user, Guid profileId)
+    internal async Task SelectProfileAsync(Socket socket, User user, Guid profileId)
     {
-        socket.Profile = GetProfile(user, profileId);
+        socket.Profile = await GetProfileAsync(user, profileId);
     }
 }
