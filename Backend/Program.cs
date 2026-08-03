@@ -11,6 +11,5 @@ var app = builder.Build();
 
 app.MapControllers();
 app.MapSocketControllers();
-app.UseHttpsRedirection();
 
 app.Run();

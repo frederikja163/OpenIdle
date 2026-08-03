@@ -20,10 +20,10 @@ public sealed class WsController(SocketRegistryService socketRegistryService) : 
             return;
         }
 
-        WebSocket webSocket = await HttpContext.WebSockets.AcceptWebSocketAsync();
+        using WebSocket webSocket = await HttpContext.WebSockets.AcceptWebSocketAsync();
 
-        Backend.Socket socket = new(webSocket);
+        Socket socket = new(webSocket);
         socketRegistryService.RegisterSocket(socket);
-        await socket.StartAsync();
+        await socket.StartAsync(HttpContext.RequestAborted);
     }
 }
