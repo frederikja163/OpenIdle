@@ -44,12 +44,7 @@ internal sealed class Socket : IDisposable
             {
                 byte[] bytes = new byte[1024];
                 WebSocketReceiveResult receiveResult = await _webSocket.ReceiveAsync(bytes, cancellationToken);
-                if (cancellationToken.IsCancellationRequested)
-                {
-                    await CloseAsync(WebSocketCloseStatus.Empty, "Cancellation was requested");
-                    return;
-                }
-                
+
                 if (!receiveResult.EndOfMessage)
                 {
                     throw new NotImplementedException("Need to implement support for messages bigger than 1KiB");
@@ -74,6 +69,10 @@ internal sealed class Socket : IDisposable
                         throw new ArgumentOutOfRangeException();
                 }
             }
+        }
+        catch (OperationCanceledException)
+        {
+            await CloseAsync(WebSocketCloseStatus.NormalClosure, "Cancellation was requested");
         }
         catch (Exception exception)
         {
