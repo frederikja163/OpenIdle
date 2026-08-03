@@ -16,6 +16,12 @@ builder.Services.AddSingleton<ProfileService>();
 
 var app = builder.Build();
 
+using (IServiceScope scope = app.Services.CreateScope())
+{
+    GameDbContext dbContext = scope.ServiceProvider.GetRequiredService<GameDbContext>();
+    await dbContext.Database.MigrateAsync();
+}
+
 app.MapControllers();
 app.MapSocketControllers();
 
