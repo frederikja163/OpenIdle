@@ -1,5 +1,4 @@
 ﻿using System;
-using System.Collections.Generic;
 using System.Linq;
 using System.Threading.Tasks;
 using Backend.Attributes;
@@ -24,7 +23,7 @@ public sealed class UserController(UserService userService, ProfileService profi
     public async Task ListProfiles(ListProfilesRequest request)
     {
         ArgumentNullException.ThrowIfNull(User);
-        List<Profile> profiles = profileService.GetProfiles(User);
+        Profile[] profiles = profileService.GetProfiles(User);
         await RespondAsync(new ListProfilesResponse() { Profiles = profiles.Select(p => p.ToDto()).ToArray() });
     }
 

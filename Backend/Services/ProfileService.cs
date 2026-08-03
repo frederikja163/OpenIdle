@@ -8,39 +8,43 @@ namespace Backend.Services;
 
 public sealed class ProfileService
 {
-    private Dictionary<User, List<Profile>> _profileByUser = [];
+    private readonly ConcurrentDictionary<User, List<Profile>> _profileByUser = new();
 
-    internal List<Profile> GetProfiles(User user)
+    internal Profile[] GetProfiles(User user)
     {
-        if (!_profileByUser.TryGetValue(user, out List<Profile>? profiles))
+        List<Profile> profiles = _profileByUser.GetOrAdd(user, _ => []);
+        lock (profiles)
         {
-            profiles = [];
-            _profileByUser[user] = profiles;
+            return [.. profiles];
         }
-
-        return profiles;
     }
 
-    internal Profile GetProfile(User user, Guid guid)
+    internal Profile GetProfile(User user, Guid profileId)
     {
-        Profile? profile = GetProfiles(user).FirstOrDefault(p => p.ProfileId == guid);
-        if (profile is null)
+        List<Profile> profiles = _profileByUser.GetOrAdd(user, _ => []);
+        lock (profiles)
         {
-            throw new Exception("Profile does not belong to user.");
+            return profiles.FirstOrDefault(p => p.ProfileId == profileId)
+                   ?? throw new InvalidOperationException("Profile does not belong to user.");
         }
-
-        return profile;
     }
 
     internal Profile CreateProfile(User user, string name)
     {
+        ArgumentException.ThrowIfNullOrWhiteSpace(name);
+
         Profile profile = new Profile()
         {
             ProfileId = Guid.NewGuid(),
             Name = name,
         };
-        
-        GetProfiles(user).Add(profile);
+
+        List<Profile> profiles = _profileByUser.GetOrAdd(user, _ => []);
+        lock (profiles)
+        {
+            profiles.Add(profile);
+        }
+
         return profile;
     }
 

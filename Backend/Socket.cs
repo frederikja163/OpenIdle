@@ -42,11 +42,11 @@ internal sealed class Socket : IDisposable
 
     internal async Task StartAsync(CancellationToken cancellationToken)
     {
+        byte[] bytes = new byte[1024];
         try
         {
             while (!_isClosed)
             {
-                byte[] bytes = new byte[1024];
                 WebSocketReceiveResult receiveResult = await _webSocket.ReceiveAsync(bytes, cancellationToken);
 
                 if (!receiveResult.EndOfMessage)
@@ -99,7 +99,14 @@ internal sealed class Socket : IDisposable
         string str = JsonSerializer.Serialize(dtoBase, typeof(DtoBase));
         byte[] bytes = Encoding.UTF8.GetBytes(str);
         await _sendLock.WaitAsync();
-        await _webSocket.SendAsync(bytes, WebSocketMessageType.Text, true, CancellationToken.None);
+        try
+        {
+            await _webSocket.SendAsync(bytes, WebSocketMessageType.Text, true, CancellationToken.None);
+        }
+        finally
+        {
+            _sendLock.Release();
+        }
     }
 
     internal async Task CloseAsync(WebSocketCloseStatus status, string description)
@@ -109,7 +116,17 @@ internal sealed class Socket : IDisposable
             return;
         }
         _isClosed = true;
-        await _webSocket.CloseAsync(status, description, CancellationToken.None);
+
+        using CancellationTokenSource timeout = new(TimeSpan.FromSeconds(5));
+        try
+        {
+            await _webSocket.CloseAsync(status, description, timeout.Token);
+        }
+        catch (OperationCanceledException)
+        {
+            _webSocket.Abort();
+        }
+
         if (Close is { } handler) await handler(this, new SocketCloseEventArgs());
     }
 

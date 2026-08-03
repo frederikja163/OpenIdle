@@ -47,17 +47,18 @@ public sealed class SocketEndpointService : IHostedService
         Socket socket = ArgumentException.ThrowIfNotOfType<Socket>(sender);
         if (!_endpoints.TryGetValue(request.GetType(), out List<RegisteredEndpoint>? registeredEndpoints))
         {
-            // TODO: Send invalid request error to socket.
+            await socket.SendResponseAsync(new ErrorResponse("No handler registered for this request type."));
             return;
         }
 
         try
         {
+            await using AsyncServiceScope scope = _provider.CreateAsyncScope();
+
             List<Task> tasks = [];
             foreach (RegisteredEndpoint registeredEndpoint in registeredEndpoints)
             {
-                await using AsyncServiceScope scope = _provider.CreateAsyncScope();
-                object controller = ActivatorUtilities.CreateInstance(_provider, registeredEndpoint.ControllerType);
+                object controller = ActivatorUtilities.CreateInstance(scope.ServiceProvider, registeredEndpoint.ControllerType);
                 if (controller is SocketControllerBase socketControllerBase)
                 {
                     socketControllerBase.Context = new SocketControllerContext(socket, request);
@@ -75,6 +76,7 @@ public sealed class SocketEndpointService : IHostedService
         catch (Exception exception)
         {
             _logger.LogError(exception, "Failed to handle request of type {DtoType}.", request.GetType().Name);
+            await socket.SendResponseAsync(new ErrorResponse(exception.Message));
         }
     }
 
