@@ -1,14 +1,27 @@
 <script lang="ts">
+	import { goto } from '$app/navigation';
 	import { resolve } from '$app/paths';
 	import { page } from '$app/state';
 	import Gamepad2 from '@lucide/svelte/icons/gamepad-2';
 	import InfinityIcon from '@lucide/svelte/icons/infinity';
+	import LogOut from '@lucide/svelte/icons/log-out';
 	import Users from '@lucide/svelte/icons/users';
 	import githubMark from '$lib/assets/github-mark-white.svg';
 	import Row from '$lib/components/layout/Row.svelte';
+	import { Button } from '$lib/components/ui/button';
+	import { logout, userState } from '$lib/state/user.svelte';
 	import { cn } from '$lib/utils/stylingUtils';
 
 	let { children } = $props();
+
+	// Everything in (auth) requires a live login. Also fires when the socket
+	// drops mid-session, since that resets userState to 'loggedOut'. 'error'
+	// bounces too — /login is the surface that shows auth errors.
+	$effect(() => {
+		if (userState.status === 'loggedOut' || userState.status === 'error') {
+			void goto(resolve('/login'));
+		}
+	});
 
 	// resolve() applies the configured base path and type-checks each pathname
 	// against the real route tree, so a renamed route fails the build here
@@ -93,7 +106,29 @@
 				class="size-3.75 opacity-50 transition-opacity duration-(--dur-fast) ease-out group-hover:opacity-100"
 			/>
 		</a>
+
+		<!--
+			The design's TopBar sets this rule's own 6px margins on top of the
+			cluster's 4px gap, so the account control clears the links by 10px.
+		-->
+		<span aria-hidden="true" class="mx-(--sp-3) h-5 w-px bg-line-soft"></span>
+
+		<!--
+			Sentence case: `oi-label-sm` inside the button applies the uppercase
+			treatment, and the design system forbids typing it that way. The icon
+			takes its 12px from the `sm` size rather than a Lucide `size` prop, so
+			the two cannot drift apart.
+		-->
+		<Button variant="ghost" size="sm" onclick={logout}>
+			<LogOut />
+			Log out
+		</Button>
 	</Row>
 </header>
 
-{@render children()}
+{#if userState.status === 'loggedIn'}
+	{@render children()}
+{:else}
+	<!-- SSR and pre-redirect frames: never flash protected page content. -->
+	<p class="oi-body-md p-(--gutter-app) text-text-muted">Redirecting to login…</p>
+{/if}
