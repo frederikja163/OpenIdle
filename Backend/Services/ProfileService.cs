@@ -42,7 +42,7 @@ public sealed class ProfileService(IDbContextFactory<GameDbContext> dbContextFac
         }
 
         await using GameDbContext dbContext = await dbContextFactory.CreateDbContextAsync();
-        if (dbContext.Profiles.Any(p => p.Name == name))
+        if (await dbContext.Profiles.AnyAsync(p => p.Name == name))
         {
             throw new ArgumentException("Profile name is already taken.");
         }
