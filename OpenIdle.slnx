@@ -1,6 +1,7 @@
 <solution>
   <Folder Name="/tests/">
     <Project Path="tests/OpenIdle.Tests/OpenIdle.Tests.csproj" />
+    <Project Path="tests/OpenIdle.IntegrationTests/OpenIdle.IntegrationTests.csproj" />
   </Folder>
   <Project Path="Backend/Backend.csproj" />
 </solution>

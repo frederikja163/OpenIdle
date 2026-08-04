@@ -16,6 +16,7 @@
 
     <ItemGroup>
       <InternalsVisibleTo Include="OpenIdle.Tests" />
+      <InternalsVisibleTo Include="OpenIdle.IntegrationTests" />
     </ItemGroup>
 
 </Project>
