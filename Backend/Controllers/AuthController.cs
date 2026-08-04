@@ -33,7 +33,7 @@ public sealed class AuthController(UserService userService, ProfileService profi
     [Request]
     public async Task LoginAsTestUser(LoginAsTestUserRequest request)
     {
-        if (User is not null)
+        if (Socket.User is not null)
         {
             throw new InvalidOperationException("Already logged in.");
         }
@@ -46,7 +46,7 @@ public sealed class AuthController(UserService userService, ProfileService profi
     [Request]
     public async Task SelectProfile(SelectProfileRequest request)
     {
-        Profile profile = await profileService.SelectProfileAsync(Socket, UserOrThrow, request.ProfileId);
+        await profileService.SelectProfileAsync(Socket, UserOrThrow, request.ProfileId);
         await RespondAsync(new SelectProfileResponse());
     }
 }

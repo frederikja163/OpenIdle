@@ -1,5 +1,7 @@
 using System;
-using System.Text.Json;
+using System.Linq;
+using Backend.Dtos;
+using Backend.Dtos.Auth;
 
 namespace OpenIdle.IntegrationTests;
 
@@ -21,123 +23,112 @@ public sealed class SocketBroadcastIntegrationTests : IDisposable
     [CancelAfter(30_000)]
     public async Task Ping_ReturnsPongWithSameId(CancellationToken ct)
     {
-        using TestSocket socket = await _app.ConnectAsync(ct).ConfigureAwait(false);
+        using TestSocketClient socket = await _app.ConnectAsync(ct).ConfigureAwait(false);
 
-        await socket.SendAsync("{\"$type\":\"PingRequest\",\"id\":7}", ct).ConfigureAwait(false);
+        await socket.SendAsync(new PingRequest { Id = 7 }, ct).ConfigureAwait(false);
 
-        string message = await socket.ReceiveAsync(ct).ConfigureAwait(false);
-        Assert.Multiple(() =>
-        {
-            Assert.That(message, Does.Contain("\"PongResponse\""));
-            Assert.That(message, Does.Contain("\"id\":7"));
-        });
+        PongResponse response = await ReceiveUntilAsync<PongResponse>(socket, ct);
+        Assert.That(response.Id, Is.EqualTo(7));
     }
 
     [Test]
     [CancelAfter(30_000)]
     public async Task UnknownRequestType_ReturnsErrorResponse(CancellationToken ct)
     {
-        using TestSocket socket = await _app.ConnectAsync(ct).ConfigureAwait(false);
+        using TestSocketClient socket = await _app.ConnectAsync(ct).ConfigureAwait(false);
 
-        await socket.SendAsync("{\"$type\":\"NotARealRequest\",\"id\":9}", ct).ConfigureAwait(false);
+        await socket.SendRawAsync("{\"$type\":\"NotARealRequest\",\"id\":9}", ct).ConfigureAwait(false);
 
-        string message = await socket.ReceiveAsync(ct).ConfigureAwait(false);
-        Assert.Multiple(() =>
-        {
-            Assert.That(message, Does.Contain("\"ErrorResponse\""));
-            Assert.That(message, Does.Contain("\"message\""));
-        });
+        ErrorResponse response = await ReceiveUntilAsync<ErrorResponse>(socket, ct);
+        Assert.That(response.Message, Is.Not.Empty);
     }
 
     [Test]
     [CancelAfter(30_000)]
     public async Task ProfilesChangedEvent_IsDeliveredToAllSocketsOfUser(CancellationToken ct)
     {
-        using TestSocket a = await _app.ConnectAsync(ct).ConfigureAwait(false);
-        using TestSocket b = await _app.ConnectAsync(ct).ConfigureAwait(false);
-        using TestSocket d = await _app.ConnectAsync(ct).ConfigureAwait(false);
-        using TestSocket e = await _app.ConnectAsync(ct).ConfigureAwait(false);
+        using TestSocketClient a = await _app.ConnectAsync(ct).ConfigureAwait(false);
+        using TestSocketClient b = await _app.ConnectAsync(ct).ConfigureAwait(false);
+        using TestSocketClient d = await _app.ConnectAsync(ct).ConfigureAwait(false);
+        using TestSocketClient e = await _app.ConnectAsync(ct).ConfigureAwait(false);
 
         string nameA = $"EvA{Guid.NewGuid():N}"[..8];
         string nameB = $"EvB{Guid.NewGuid():N}"[..8];
         string nameC = $"EvC{Guid.NewGuid():N}"[..8];
 
-        await a.SendAsync("{\"$type\":\"LoginAsTestUserRequest\",\"id\":1}", ct).ConfigureAwait(false);
-        Assert.That(await a.ReceiveAsync(ct).ConfigureAwait(false), Does.Contain("\"LoginAsTestUserResponse\""));
+        await LoginAsync(a, ct);
+        ProfilesChangedEvent evtA1 = await CreateProfileAsync(a, nameA, ct);
+        AssertProfiles(evtA1, nameA);
 
-        await a.SendAsync($"{{\"$type\":\"CreateProfileRequest\",\"id\":2,\"name\":\"{nameA}\"}}", ct).ConfigureAwait(false);
-        AssertProfileEvent(await a.ReceiveAsync(ct).ConfigureAwait(false), nameA);
-        AssertResponse(await a.ReceiveAsync(ct).ConfigureAwait(false), "CreateProfileResponse", 2);
+        ProfilesChangedEvent evtA2 = await CreateProfileAsync(a, nameB, ct);
+        AssertProfiles(evtA2, nameA, nameB);
 
-        await a.SendAsync($"{{\"$type\":\"CreateProfileRequest\",\"id\":3,\"name\":\"{nameB}\"}}", ct).ConfigureAwait(false);
-        AssertProfileEvent(await a.ReceiveAsync(ct).ConfigureAwait(false), nameA, nameB);
-        AssertResponse(await a.ReceiveAsync(ct).ConfigureAwait(false), "CreateProfileResponse", 3);
+        ListProfilesResponse aList = await ListProfilesAsync(a, ct);
+        Guid profileAId = FindProfile(aList, nameA).ProfileId;
+        Guid profileBId = FindProfile(aList, nameB).ProfileId;
 
-        await a.SendAsync("{\"$type\":\"ListProfilesRequest\",\"id\":4}", ct).ConfigureAwait(false);
-        string aList = await a.ReceiveAsync(ct).ConfigureAwait(false);
-        Assert.That(aList, Does.Contain("\"ListProfilesResponse\""));
-        Guid profileAId = ParseProfileId(aList, nameA);
-        Guid profileBId = ParseProfileId(aList, nameB);
+        await LoginAsync(b, ct);
+        Guid profileAIdB = FindProfile(await ListProfilesAsync(b, ct), nameA).ProfileId;
+        await SelectProfileAsync(b, profileAIdB, ct);
 
-        await b.SendAsync("{\"$type\":\"LoginAsTestUserRequest\",\"id\":1}", ct).ConfigureAwait(false);
-        Assert.That(await b.ReceiveAsync(ct).ConfigureAwait(false), Does.Contain("\"LoginAsTestUserResponse\""));
-        await b.SendAsync("{\"$type\":\"ListProfilesRequest\",\"id\":2}", ct).ConfigureAwait(false);
-        Guid profileAIdB = ParseProfileId(await b.ReceiveAsync(ct).ConfigureAwait(false), nameA);
-        await b.SendAsync($"{{\"$type\":\"SelectProfileRequest\",\"id\":3,\"profileId\":\"{profileAIdB}\"}}", ct).ConfigureAwait(false);
-        AssertResponse(await b.ReceiveAsync(ct).ConfigureAwait(false), "SelectProfileResponse", 3);
+        await LoginAsync(d, ct);
+        Guid profileBIdD = FindProfile(await ListProfilesAsync(d, ct), nameB).ProfileId;
+        await SelectProfileAsync(d, profileBIdD, ct);
 
-        await d.SendAsync("{\"$type\":\"LoginAsTestUserRequest\",\"id\":1}", ct).ConfigureAwait(false);
-        Assert.That(await d.ReceiveAsync(ct).ConfigureAwait(false), Does.Contain("\"LoginAsTestUserResponse\""));
-        await d.SendAsync("{\"$type\":\"ListProfilesRequest\",\"id\":2}", ct).ConfigureAwait(false);
-        Guid profileBIdD = ParseProfileId(await d.ReceiveAsync(ct).ConfigureAwait(false), nameB);
-        await d.SendAsync($"{{\"$type\":\"SelectProfileRequest\",\"id\":3,\"profileId\":\"{profileBIdD}\"}}", ct).ConfigureAwait(false);
-        AssertResponse(await d.ReceiveAsync(ct).ConfigureAwait(false), "SelectProfileResponse", 3);
+        await LoginAsync(e, ct);
 
-        await e.SendAsync("{\"$type\":\"LoginAsTestUserRequest\",\"id\":1}", ct).ConfigureAwait(false);
-        Assert.That(await e.ReceiveAsync(ct).ConfigureAwait(false), Does.Contain("\"LoginAsTestUserResponse\""));
-
-        await a.SendAsync($"{{\"$type\":\"CreateProfileRequest\",\"id\":5,\"name\":\"{nameC}\"}}", ct).ConfigureAwait(false);
-        AssertProfileEvent(await a.ReceiveAsync(ct).ConfigureAwait(false), nameA, nameB, nameC);
-        AssertResponse(await a.ReceiveAsync(ct).ConfigureAwait(false), "CreateProfileResponse", 5);
-        AssertProfileEvent(await b.ReceiveAsync(ct).ConfigureAwait(false), nameA, nameB, nameC);
-        AssertProfileEvent(await d.ReceiveAsync(ct).ConfigureAwait(false), nameA, nameB, nameC);
-        AssertProfileEvent(await e.ReceiveAsync(ct).ConfigureAwait(false), nameA, nameB, nameC);
+        ProfilesChangedEvent evtA3 = await CreateProfileAsync(a, nameC, ct);
+        AssertProfiles(evtA3, nameA, nameB, nameC);
+        AssertProfiles(await ReceiveProfilesChangedEventAsync(b, ct), nameA, nameB, nameC);
+        AssertProfiles(await ReceiveProfilesChangedEventAsync(d, ct), nameA, nameB, nameC);
+        AssertProfiles(await ReceiveProfilesChangedEventAsync(e, ct), nameA, nameB, nameC);
     }
 
-    private static void AssertResponse(string json, string expectedType, int expectedId)
+    private static async Task LoginAsync(TestSocketClient socket, CancellationToken ct)
     {
-        Assert.Multiple(() =>
-        {
-            Assert.That(json, Does.Contain($"\"{expectedType}\""), $"Expected {expectedType}, got: {json}");
-            Assert.That(json, Does.Contain($"\"id\":{expectedId}"), $"Expected id {expectedId}, got: {json}");
-        });
+        await socket.SendAsync(new LoginAsTestUserRequest { Id = 1 }, ct).ConfigureAwait(false);
+        await ReceiveUntilAsync<LoginAsTestUserResponse>(socket, ct);
     }
 
-    private static void AssertProfileEvent(string json, params string[] expectedNames)
+    private static async Task<ProfilesChangedEvent> CreateProfileAsync(TestSocketClient socket, string name, CancellationToken ct)
     {
-        Assert.Multiple(() =>
-        {
-            Assert.That(json, Does.Contain("\"ProfilesChangedEvent\""), $"Expected ProfilesChangedEvent, got: {json}");
-            foreach (string name in expectedNames)
-            {
-                Assert.That(json, Does.Contain($"\"name\":\"{name}\""),
-                    $"ProfilesChangedEvent is missing profile '{name}': {json}");
-            }
-        });
+        await socket.SendAsync(new CreateProfileRequest { Id = 2, Name = name }, ct).ConfigureAwait(false);
+        ProfilesChangedEvent evt = await ReceiveUntilAsync<ProfilesChangedEvent>(socket, ct);
+        await ReceiveUntilAsync<CreateProfileResponse>(socket, ct);
+        return evt;
     }
 
-    private static Guid ParseProfileId(string listJson, string name)
+    private static async Task<ListProfilesResponse> ListProfilesAsync(TestSocketClient socket, CancellationToken ct)
     {
-        using JsonDocument document = JsonDocument.Parse(listJson);
-        foreach (JsonElement profile in document.RootElement.GetProperty("profiles").EnumerateArray())
-        {
-            if (profile.GetProperty("name").GetString() == name)
-            {
-                return profile.GetProperty("profileId").GetGuid();
-            }
-        }
+        await socket.SendAsync(new ListProfilesRequest { Id = 3 }, ct).ConfigureAwait(false);
+        return await ReceiveUntilAsync<ListProfilesResponse>(socket, ct);
+    }
 
-        Assert.Fail($"Profile '{name}' not found in list response: {listJson}");
-        return Guid.Empty;
+    private static async Task<SelectProfileResponse> SelectProfileAsync(TestSocketClient socket, Guid profileId, CancellationToken ct)
+    {
+        await socket.SendAsync(new SelectProfileRequest { ProfileId = profileId, Id = 4 }, ct).ConfigureAwait(false);
+        return await ReceiveUntilAsync<SelectProfileResponse>(socket, ct);
+    }
+
+    private static async Task<ProfilesChangedEvent> ReceiveProfilesChangedEventAsync(TestSocketClient socket, CancellationToken ct)
+    {
+        return await ReceiveUntilAsync<ProfilesChangedEvent>(socket, ct);
+    }
+
+    private static async Task<T> ReceiveUntilAsync<T>(TestSocketClient socket, CancellationToken ct) where T : DtoBase
+    {
+        DtoBase message = await socket.ReceiveUntilAsync(candidate => candidate is T, ct).ConfigureAwait(false);
+        Assert.That(message, Is.InstanceOf<T>(), $"Expected {typeof(T).Name}, got {message.GetType().Name}");
+        return (T)message;
+    }
+
+    private static void AssertProfiles(ProfilesChangedEvent evt, params string[] expectedNames)
+    {
+        Assert.That(evt.Profiles.Select(profile => profile.Name), Is.EquivalentTo(expectedNames));
+    }
+
+    private static ProfileDto FindProfile(ListProfilesResponse response, string name)
+    {
+        return response.Profiles.Single(profile => profile.Name == name);
     }
 }

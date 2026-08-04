@@ -11,8 +11,6 @@ internal record SocketControllerContext(Socket Socket, RequestBase Request, Sock
 public abstract class SocketControllerBase
 {
     internal Socket Socket => Context.Socket;
-    internal User? User => Socket.User;
-    internal Profile? Profile => Socket.Profile;
     internal RequestBase Request => Context.Request;
     internal SocketRegistryService SocketRegistry => Context.SocketRegistry;
 

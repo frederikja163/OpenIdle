@@ -1,6 +1,9 @@
 using System;
 using System.IO;
 using System.Linq;
+using System.Threading;
+using System.Threading.Tasks;
+using Backend;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Hosting.Server;
 using Microsoft.AspNetCore.Hosting.Server.Features;
@@ -19,9 +22,9 @@ public sealed class TestApplication : IDisposable
     {
         _dbPath = Path.Combine(Path.GetTempPath(), $"openidle-it-{Guid.NewGuid():N}.db");
 
-        WebApplication app = Program.CreateApp([], $"Data Source={_dbPath};Pooling=False");
+        WebApplication app = AppHost.CreateApp([], $"Data Source={_dbPath};Pooling=False");
         app.Urls.Add("http://127.0.0.1:0");
-        Program.MigrateDatabaseAsync(app.Services).GetAwaiter().GetResult();
+        AppHost.MigrateDatabaseAsync(app.Services).GetAwaiter().GetResult();
         app.StartAsync().GetAwaiter().GetResult();
 
         IServerAddressesFeature addresses = app.Services.GetRequiredService<IServer>().Features.Get<IServerAddressesFeature>()
@@ -32,11 +35,9 @@ public sealed class TestApplication : IDisposable
         WsUri = new Uri(baseAddress.Replace("http://", "ws://", StringComparison.Ordinal) + "/ws");
     }
 
-    public async Task<TestSocket> ConnectAsync(CancellationToken externalToken = default)
+    public async Task<TestSocketClient> ConnectAsync(CancellationToken externalToken = default)
     {
-        TestSocket socket = new(WsUri);
-        await socket.ConnectAsync(externalToken).ConfigureAwait(false);
-        return socket;
+        return await TestSocketClient.ConnectAsync(WsUri, externalToken).ConfigureAwait(false);
     }
 
     public void Dispose()

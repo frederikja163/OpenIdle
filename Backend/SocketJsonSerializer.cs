@@ -23,11 +23,16 @@ internal static class SocketJsonSerializer
         return Encoding.UTF8.GetBytes(json);
     }
 
-    internal static RequestBase DeserializeRequest(byte[] bytes, int count)
+    internal static DtoBase Deserialize(byte[] bytes, int count)
     {
         string json = Encoding.UTF8.GetString(bytes, 0, count);
-        return JsonSerializer.Deserialize<DtoBase>(json, Options) as RequestBase
-               ?? throw new FormatException(
-                   "Payload was either malformed json or an unrecognized json object.");
+        return JsonSerializer.Deserialize<DtoBase>(json, Options)
+               ?? throw new FormatException("Payload was either malformed json or an unrecognized json object.");
+    }
+
+    internal static RequestBase DeserializeRequest(byte[] bytes, int count)
+    {
+        return Deserialize(bytes, count) as RequestBase
+               ?? throw new FormatException("Payload was either malformed json or an unrecognized json object.");
     }
 }

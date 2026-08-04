@@ -22,14 +22,14 @@ Why the others lost: **Mvc.Testing** is the industry default and was seriously c
 
 ## 3. Decision & rationale
 
-Reject `Microsoft.AspNetCore.Mvc.Testing`; build a small in-house harness in the new `tests/OpenIdle.IntegrationTests` project. The harness refactors `Program.cs` to expose `Program.CreateApp(string[] args, string? connectionString)` and `Program.MigrateDatabaseAsync(IServiceProvider)`, then starts the returned `WebApplication` on `127.0.0.1:0` (OS-assigned ephemeral port), points the connection string at a unique temp SQLite file, and lets tests drive it with real `ClientWebSocket` connections. All of the pieces (Kestrel, SQLite, `ClientWebSocket`) already exist in the project, so this adds zero dependencies. Each test gets its own app instance and DB; per-operation and per-test timeouts turn any server hang into a test failure.
+Reject `Microsoft.AspNetCore.Mvc.Testing`; build a small in-house harness in the new `tests/OpenIdle.IntegrationTests` project. The harness extracts startup into `AppHost.CreateApp(string[] args, string? connectionString)` and `AppHost.MigrateDatabaseAsync(IServiceProvider)` (a dedicated static class, keeping `Program.cs` a plain top-level-statement entry point), then starts the returned `WebApplication` on `127.0.0.1:0` (OS-assigned ephemeral port), points the connection string at a unique temp SQLite file, and lets tests drive it with real `ClientWebSocket` connections. All of the pieces (Kestrel, SQLite, `ClientWebSocket`) already exist in the project, so this adds zero dependencies. Each test gets its own app instance and DB; per-operation and per-test timeouts turn any server hang into a test failure.
 
 ### Pros
 
 - Zero new packages — satisfies the project's "as few third-party libraries as possible" rule.
 - Uses real TCP sockets end-to-end (the exact thing the manual smoke test validates), so hang/deadlock behavior in the receive/send loops is exercised for real.
-- No `public partial class Program` marker or `WebApplicationFactory` reflection magic required; `Program` is referenced directly via the existing `InternalsVisibleTo`.
-- The `Program.CreateApp` seam is small and genuinely useful beyond tests (it makes startup logic independently callable).
+- No `public partial class Program` marker or `WebApplicationFactory` reflection magic required; `AppHost` is referenced directly via the existing `InternalsVisibleTo`.
+- The `AppHost.CreateApp` seam is small and genuinely useful beyond tests (it makes startup logic independently callable).
 - Cheap and fully controlled: ephemeral ports, isolated temp DBs, deterministic cleanup.
 
 ### Cons
