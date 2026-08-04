@@ -10,6 +10,8 @@ Every third-party dependency used (or considered and rejected) by this project i
 | [ASP.NET Core (Minimal APIs + DI)](./aspnet-core.md) | adopted | 2026-08-02 | low | low |
 
 | [EF Core + SQLite](./ef-core.md) | adopted | 2026-08-03 | medium | low |
+| [DTO XML contract](./dto-xml-contract.md) | in-house | 2026-08-04 | medium | low |
+
 ## Frontend
 
 All frontend packages are declared as `devDependencies` — a packaging convention, not a statement about what reaches the browser. The client now ships third-party code in two places: the `cn()` helper at `Frontend/src/lib/utils/stylingUtils.ts`, which imports [clsx](./clsx.md) and [tailwind-merge](./tailwind-merge.md), and the three [@lucide/svelte](./lucide-svelte.md) icons used by the app chrome. The [shadcn-svelte](./shadcn-svelte.md) component set and [bits-ui](./bits-ui.md) are declared and lockfile-pinned but **not yet bundled**: `src/lib/components/ui/` is empty and nothing imports bits-ui until the first `shadcn-svelte add`.
@@ -107,6 +109,7 @@ Three decisions remain unsettled:
 1. **[@sveltejs/adapter-auto](./sveltejs-adapter-auto.md)** — a placeholder that detects nothing on a self-hosted VPS and downloads an unpinned adapter at build time, defeating the lockfile. Should be replaced with `@sveltejs/adapter-static` plus `ssr = false`, per the SPA constraint recorded in [SvelteKit](./sveltekit.md).
 2. **[@internationalized/date](./internationalized-date.md)** — declared to satisfy a [bits-ui](./bits-ui.md) peer requirement, but **imported by nothing**. It ships zero bytes today. It can be dropped outright if the project commits to native `<input type="date">` over a custom calendar component; the only consequence is an unmet-peer warning on install. Decide this before any date component is added, since adopting one makes it load-bearing.
 3. **The three typefaces** — [Chakra Petch](./fontsource-chakra-petch.md), [IBM Plex Sans](./fontsource-variable-ibm-plex-sans.md), [IBM Plex Mono](./fontsource-ibm-plex-mono.md) — are substitutions the design system picked in the absence of any supplied font binaries, and it flags them for replacement itself. Settle whether OpenIdle commissions or licenses real brand faces, or promotes these to `adopted`. The swap is cheap either way: each face is named in exactly one `--font-*` declaration in [layout.css](../../Frontend/src/routes/layout.css). Of the three, [IBM Plex Mono](./fontsource-ibm-plex-mono.md) is the most reconsiderable on its own merits — `font-variant-numeric: tabular-nums` on the body face solves most of what it is bought for, at zero bytes.
+4. **[fast-xml-parser](./dto-xml-contract.md)** — the anticipated XML parser for the frontend's TS DTO emitter under the [DTO XML contract](./dto-xml-contract.md). Not yet adopted; the frontend side of that decision (parser choice, `$type` union shape, generated-file location) is pending and will get its own decision document.
 
 ## Configuration fixes
 
