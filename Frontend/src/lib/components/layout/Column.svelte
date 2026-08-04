@@ -5,6 +5,6 @@
 	let { children, class: className, ...rest }: SvelteHTMLElements['div'] = $props();
 </script>
 
-<div {...rest} class={cn('flex flex-row', className)}>
+<div {...rest} class={cn('flex flex-col', className)}>
 	{@render children?.()}
 </div>

@@ -51,10 +51,23 @@ The rest were **entailed** by those two rather than chosen independently — ins
 | [clsx](./clsx.md) | adopted | 2026-08-03 | low | low | yes |
 | [@lucide/svelte](./lucide-svelte.md) | adopted | 2026-08-03 | low | low | yes (tree-shaken per icon) |
 | [tw-animate-css](./tw-animate-css.md) | adopted | 2026-08-03 | low | low | **no** — CSS only |
-| [@fontsource-variable/inter](./fontsource-variable-inter.md) | adopted | 2026-08-03 | low | low | **no** — CSS + woff2 |
 | [@internationalized/date](./internationalized-date.md) | adopted (**unused**) | 2026-08-03 | low | low | **no** — nothing imports it |
 
 Not separately documented: the ten transitives behind `bits-ui`, enumerated with versions and licences in [bits-ui](./bits-ui.md).
+
+### Typefaces
+
+The [OpenIdle Design System](../../Frontend/src/lib/styles/openidle/index.css) specifies three faces for three jobs — display, prose, numbers. All three are self-hosted through Fontsource, OFL-1.1, zero dependencies, no install scripts, and **no JavaScript reaching the browser**: the packages contribute CSS and woff2 only.
+
+| Library | Job | Decision | Date | Risk (undo) | Risk (security) |
+|---|---|---|---|---|---|
+| [@fontsource/chakra-petch](./fontsource-chakra-petch.md) | HUD display, wordmark | **under-review** | 2026-08-04 | low | low |
+| [@fontsource-variable/ibm-plex-sans](./fontsource-variable-ibm-plex-sans.md) | prose, document default | **under-review** | 2026-08-04 | low | low |
+| [@fontsource/ibm-plex-mono](./fontsource-ibm-plex-mono.md) | every number | **under-review** | 2026-08-04 | low | low |
+
+All three are `under-review` for the same reason, recorded in each document: **they are substitutions, not brand fonts.** The design system's own `tokens/fonts.css` is headed *"SUBSTITUTED FONTS — no font binaries were provided with the source material"* and its readme carries a standing *"Font substitution — action needed"* item. They are in use because the interface needs typefaces and these are good ones; the choice is provisional.
+
+**`@fontsource-variable/inter` was uninstalled on 2026-08-04 and its decision document removed.** It was the `vega` preset's face and the previous `--font-body`; when the design system landed, nothing imported it any more. The privacy argument first made in that document — self-host, never the Google Fonts CDN — is restated in full in [@fontsource/chakra-petch](./fontsource-chakra-petch.md) and carried by the other two.
 
 Two of these are honestly marginal on their own merits and are recorded as such — [@lucide/svelte](./lucide-svelte.md) (6.4 MB installed for one icon in current use) and [@internationalized/date](./internationalized-date.md) (declared for a peer requirement, imported nowhere). Each is kept because removing it costs recurring friction against the generator, not because it earned its place unaided.
 
@@ -88,10 +101,11 @@ Two of these are honestly marginal on their own merits and are recorded as such 
 
 ## Open items
 
-Two decisions remain unsettled:
+Three decisions remain unsettled:
 
 1. **[@sveltejs/adapter-auto](./sveltejs-adapter-auto.md)** — a placeholder that detects nothing on a self-hosted VPS and downloads an unpinned adapter at build time, defeating the lockfile. Should be replaced with `@sveltejs/adapter-static` plus `ssr = false`, per the SPA constraint recorded in [SvelteKit](./sveltekit.md).
 2. **[@internationalized/date](./internationalized-date.md)** — declared to satisfy a [bits-ui](./bits-ui.md) peer requirement, but **imported by nothing**. It ships zero bytes today. It can be dropped outright if the project commits to native `<input type="date">` over a custom calendar component; the only consequence is an unmet-peer warning on install. Decide this before any date component is added, since adopting one makes it load-bearing.
+3. **The three typefaces** — [Chakra Petch](./fontsource-chakra-petch.md), [IBM Plex Sans](./fontsource-variable-ibm-plex-sans.md), [IBM Plex Mono](./fontsource-ibm-plex-mono.md) — are substitutions the design system picked in the absence of any supplied font binaries, and it flags them for replacement itself. Settle whether OpenIdle commissions or licenses real brand faces, or promotes these to `adopted`. The swap is cheap either way: each face is named in exactly one `--font-*` declaration in [layout.css](../../Frontend/src/routes/layout.css). Of the three, [IBM Plex Mono](./fontsource-ibm-plex-mono.md) is the most reconsiderable on its own merits — `font-variant-numeric: tabular-nums` on the body face solves most of what it is bought for, at zero bytes.
 
 ## Configuration fixes
 
