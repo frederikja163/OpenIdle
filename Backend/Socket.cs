@@ -25,6 +25,7 @@ internal sealed class Socket : IDisposable
 {
     private readonly WebSocket _webSocket;
     private bool _isClosed = false;
+    private readonly SemaphoreSlim _sendLock = new SemaphoreSlim(1, 1);
     
     internal Socket(WebSocket webSocket)
     {
@@ -39,14 +40,15 @@ internal sealed class Socket : IDisposable
     internal event AsyncEventHandler<MessageReceivedEventArgs>? MessageReceived;
     internal event AsyncEventHandler<SocketCloseEventArgs>? Close;
 
-    internal async Task StartAsync()
+    internal async Task StartAsync(CancellationToken cancellationToken)
     {
+        byte[] bytes = new byte[1024];
         try
         {
             while (!_isClosed)
             {
-                byte[] bytes = new byte[1024];
-                WebSocketReceiveResult receiveResult = await _webSocket.ReceiveAsync(bytes, CancellationToken.None);
+                WebSocketReceiveResult receiveResult = await _webSocket.ReceiveAsync(bytes, cancellationToken);
+
                 if (!receiveResult.EndOfMessage)
                 {
                     throw new NotImplementedException("Need to implement support for messages bigger than 1KiB");
@@ -55,11 +57,7 @@ internal sealed class Socket : IDisposable
                 switch (receiveResult.MessageType)
                 {
                     case WebSocketMessageType.Text:
-                        string str = Encoding.UTF8.GetString(bytes.AsSpan(0, receiveResult.Count));
-                        RequestBase dto = (JsonSerializer.Deserialize<DtoBase>(str) as RequestBase) ??
-                                      throw new FormatException(
-                                          "Payload was either malformed json or an unrecognized json object.");
-                        if (MessageReceived is { } handler) await handler(this, new MessageReceivedEventArgs(dto));
+                        await HandleTextMessageAsync(bytes, receiveResult.Count);
                         break;
                     case WebSocketMessageType.Binary:
                         throw new NotSupportedException("Binary messages are not supported.");
@@ -72,6 +70,10 @@ internal sealed class Socket : IDisposable
                 }
             }
         }
+        catch (OperationCanceledException)
+        {
+            await CloseAsync(WebSocketCloseStatus.NormalClosure, "Cancellation was requested");
+        }
         catch (Exception exception)
         {
             await CloseAsync(WebSocketCloseStatus.InternalServerError, exception.Message);
@@ -80,16 +82,43 @@ internal sealed class Socket : IDisposable
 
     internal async Task SendResponseAsync(ResponseBase response)
     {
-        string str = JsonSerializer.Serialize(response, typeof(DtoBase));
-        byte[] bytes = Encoding.UTF8.GetBytes(str);
-        await _webSocket.SendAsync(bytes, WebSocketMessageType.Text, true, CancellationToken.None);
+        await SendMessageAsync(response);
     }
 
     internal async Task SendEventAsync(EventBase eventBase)
     {
-        string str = JsonSerializer.Serialize(eventBase, typeof(DtoBase));
+        await SendMessageAsync(eventBase);
+    }
+
+    private async Task HandleTextMessageAsync(byte[] bytes, int count)
+    {
+        try
+        {
+            string str = Encoding.UTF8.GetString(bytes.AsSpan(0, count));
+            RequestBase dto = (JsonSerializer.Deserialize<DtoBase>(str) as RequestBase) ??
+                              throw new FormatException(
+                                  "Payload was either malformed json or an unrecognized json object.");
+            if (MessageReceived is { } handler) await handler(this, new MessageReceivedEventArgs(dto));
+        }
+        catch (Exception exception)
+        {
+            await SendResponseAsync(new ErrorResponse(exception.Message));
+        }
+    }
+
+    private async Task SendMessageAsync(DtoBase dtoBase)
+    {
+        string str = JsonSerializer.Serialize(dtoBase, typeof(DtoBase));
         byte[] bytes = Encoding.UTF8.GetBytes(str);
-        await _webSocket.SendAsync(bytes, WebSocketMessageType.Text, true, CancellationToken.None);
+        await _sendLock.WaitAsync();
+        try
+        {
+            await _webSocket.SendAsync(bytes, WebSocketMessageType.Text, true, CancellationToken.None);
+        }
+        finally
+        {
+            _sendLock.Release();
+        }
     }
 
     internal async Task CloseAsync(WebSocketCloseStatus status, string description)
@@ -99,7 +128,17 @@ internal sealed class Socket : IDisposable
             return;
         }
         _isClosed = true;
-        await _webSocket.CloseAsync(status, description, CancellationToken.None);
+
+        using CancellationTokenSource timeout = new(TimeSpan.FromSeconds(5));
+        try
+        {
+            await _webSocket.CloseAsync(status, description, timeout.Token);
+        }
+        catch (OperationCanceledException)
+        {
+            _webSocket.Abort();
+        }
+
         if (Close is { } handler) await handler(this, new SocketCloseEventArgs());
     }
 
