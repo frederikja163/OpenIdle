@@ -7,6 +7,7 @@ public sealed class FakeWebSocket : WebSocket
 {
     private readonly WebSocketState _state;
     private readonly List<(byte[] Bytes, WebSocketMessageType Type)> _sent = [];
+    private readonly Queue<(byte[] Bytes, WebSocketMessageType Type)> _received = [];
     private int _sendFailuresLeft;
     private WebSocketCloseStatus? _closeStatus;
     private string? _closeStatusDescription;
@@ -25,6 +26,16 @@ public sealed class FakeWebSocket : WebSocket
     public void ThrowOnNextSend()
     {
         Interlocked.Increment(ref _sendFailuresLeft);
+    }
+
+    public void EnqueueReceive(byte[] bytes, WebSocketMessageType type = WebSocketMessageType.Text)
+    {
+        _received.Enqueue((bytes, type));
+    }
+
+    public void EnqueueClose()
+    {
+        _received.Enqueue(([], WebSocketMessageType.Close));
     }
 
     public override WebSocketState State => _state;
@@ -62,13 +73,17 @@ public sealed class FakeWebSocket : WebSocket
     public override Task<WebSocketReceiveResult> ReceiveAsync(ArraySegment<byte> buffer,
         CancellationToken cancellationToken)
     {
-        throw new NotSupportedException("ReceiveAsync is not used by these tests.");
+        (byte[] bytes, WebSocketMessageType type) = _received.Dequeue();
+        bytes.AsSpan().CopyTo(buffer);
+        return Task.FromResult(new WebSocketReceiveResult(bytes.Length, type, true));
     }
 
     public override ValueTask<ValueWebSocketReceiveResult> ReceiveAsync(Memory<byte> buffer,
         CancellationToken cancellationToken)
     {
-        throw new NotSupportedException("ReceiveAsync is not used by these tests.");
+        (byte[] bytes, WebSocketMessageType type) = _received.Dequeue();
+        bytes.AsSpan().CopyTo(buffer.Span);
+        return ValueTask.FromResult(new ValueWebSocketReceiveResult(bytes.Length, type, true));
     }
 
     public override Task SendAsync(ArraySegment<byte> buffer, WebSocketMessageType messageType, bool endOfMessage,
