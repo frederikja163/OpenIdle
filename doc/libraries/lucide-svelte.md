@@ -24,7 +24,7 @@ Why the others lost: Iconify solves a breadth problem this project does not have
 
 Adopt **@lucide/svelte 1.28.0**, entailed by the [shadcn-svelte](./shadcn-svelte.md) preset choice rather than selected on its own.
 
-**This is the weakest of the entailed decisions and should be recorded as such.** Icons are static SVG markup. The set is ISC-licensed, so the individual files can simply be copied into the repository with no dependency at all — and at present the project imports **no icons at all**, since no components are vendored. During evaluation the only icon in use was a single close cross, imported by the dialog's content component. Weighed on today's usage alone, a 6.4 MB package for one cross glyph is difficult to defend.
+**This is the weakest of the entailed decisions and should be recorded as such.** Icons are static SVG markup. The set is ISC-licensed, so the individual files can simply be copied into the repository with no dependency at all. Three icons are currently imported — `gamepad-2`, `infinity` and `users`, used by the app chrome — at roughly half a kilobyte each after tree-shaking. Weighed on that usage alone, a 6.4 MB package for three glyphs is difficult to defend.
 
 Two things keep it. The first is the familiar regeneration argument: `shadcn-svelte add` writes `import XIcon from '@lucide/svelte/icons/x'` into every component that needs an icon, and each new component brings its own. Removing the package means rewriting those imports after every add and every update — a recurring chore that grows with the component count. The second is that the tree-shaken cost is genuinely small: deep imports mean the 6.4 MB figure never reaches the browser, and each icon actually used costs on the order of half a kilobyte.
 
@@ -43,7 +43,7 @@ Note the licence: **ISC**, not MIT. Functionally equivalent — a permissive lic
 
 ### Cons
 
-- **6.4 MB unpacked for zero icons in current use** — no components are vendored yet, so nothing imports it at all. By far the worst ratio of installed size to actual use in the project.
+- **6.4 MB unpacked for three icons in current use** (the app chrome). By far the worst ratio of installed size to actual use in the project.
 - The most replaceable package in the set: the icons are ISC-licensed SVGs that could simply be copied.
 - ISC rather than MIT — harmless, but the first licence variation in the frontend set.
 - Only as useful as the preset that chose it; switching presets would switch icon libraries.
@@ -51,7 +51,7 @@ Note the licence: **ISC**, not MIT. Functionally equivalent — a permissive lic
 
 ## 4. Build-vs-buy
 
-"Building" here means copying: open the icon on the Lucide site, paste the SVG into a `.svelte` file or inline it, done. Five minutes per icon, zero dependencies, ISC permits it, and the result is fully ours. For the single icon in use today this is unambiguously the cheaper answer, and this project's rule of thumb — build what fits in hours — points at it plainly.
+"Building" here means copying: open the icon on the Lucide site, paste the SVG into a `.svelte` file or inline it, done. Five minutes per icon, zero dependencies, ISC permits it, and the result is fully ours. For the three icons in use today this is unambiguously the cheaper answer, and this project's rule of thumb — build what fits in hours — points at it plainly.
 
 **Buying wins on trajectory rather than on present state, and the margin is thin.** The icon count will not stay at one: menus want chevrons, toggles want checks, forms want warnings, dismissible things want crosses, and every component `shadcn-svelte add` generates arrives with its imports already written. Hand-copying converts each of those from a no-op into a small manual task, indefinitely — and each copied file is one more asset to keep visually consistent with the rest by eye.
 
@@ -61,7 +61,7 @@ Against a per-icon cost of about half a kilobyte and zero dependencies of its ow
 
 ### Undo risk — low
 
-No import sites today, and each future one is a one-line change to a component we own. Removal means copying the SVGs in use and rewriting those imports; the ongoing cost is re-doing it after each `shadcn-svelte add`. Nothing structural depends on it.
+Three import sites today (all in the app chrome), each a one-line change to a component we own. Removal means copying the SVGs in use and rewriting those imports; the ongoing cost is re-doing it after each `shadcn-svelte add`. Nothing structural depends on it.
 
 ### Security risk — low
 

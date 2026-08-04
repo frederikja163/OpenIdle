@@ -1,5 +1,6 @@
 import tailwindcss from '@tailwindcss/vite';
 import { defineConfig } from 'vitest/config';
+import { playwright } from '@vitest/browser-playwright';
 import adapter from '@sveltejs/adapter-auto';
 import { sveltekit } from '@sveltejs/kit/vite';
 
@@ -27,8 +28,24 @@ export default defineConfig({
 				test: {
 					name: 'server',
 					environment: 'node',
-					include: ['src/**/*.{test,spec}.{js,ts}'],
-					exclude: ['src/**/*.svelte.{test,spec}.{js,ts}']
+					include: ['src/**/*.{test,spec}.{js,ts}']
+				}
+			},
+			{
+				extends: './vite.config.ts',
+				test: {
+					name: 'client',
+					// Svelte component tests run in a real browser via the
+					// already-installed Playwright (chromium). This is what the
+					// `server` project's old `*.svelte.{test,spec}.*` exclusion
+					// anticipated; without it those tests were collected by no
+					// project and passed green without executing.
+					include: ['src/**/*.svelte.{test,spec}.{js,ts}'],
+					browser: {
+						enabled: true,
+						provider: playwright(),
+						instances: [{ browser: 'chromium' }]
+					}
 				}
 			}
 		]

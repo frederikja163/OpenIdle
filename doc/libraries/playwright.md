@@ -24,16 +24,15 @@ Why the others lost: Cypress is behind Playwright on the merits. Manual testing 
 
 ## 3. Decision & rationale
 
-Adopt **@playwright/test**, with two configuration defects recorded as required fixes.
+Adopt **@playwright/test**, with one configuration defect recorded as a required fix.
 
 The case rests on what this particular client does. An idle MMORPG client is not a set of pages — it is one long-lived session where the UI is driven by a WebSocket stream from the C# backend. The failure modes that matter most are the ones that only appear against a real browser and a real build: a socket that reconnects but leaves stale state on screen, a counter that stops updating after a tab is backgrounded, a production build whose assets resolve differently from dev. Unit tests under [Vitest](./vitest.md) cannot reach any of that. Playwright's network interception is the specific capability that makes a socket-driven client testable — it can hold a connection open, inject server messages, and assert on what the UI does with them.
 
 Playwright is also the right pick within the category rather than merely the default one: auto-waiting is what keeps an e2e suite from becoming flaky enough to be ignored, and the trace viewer is what makes a CI failure debuggable six months later. Both are the difference between a suite that survives and one that gets deleted.
 
-**Two configuration defects should be fixed:**
+**One configuration defect should be fixed:**
 
 1. **`playwright install` runs on every `bun run test:e2e`.** The script is `playwright install && playwright test`. With no arguments, `playwright install` downloads *all* browser families — Chromium, Firefox, and WebKit — even though `playwright.config.ts` defines no `projects` and therefore exercises only the default Chromium. That is a large download and a hard network dependency on every test run, for browsers that are never launched. Change it to `playwright install chromium`, and ideally move it out of the test command into an explicit setup step that CI can cache.
-2. **The `webServer` command uses `npm`** (`npm run build && npm run preview`) while the project installs and runs with Bun. Mixing package managers in a build step invites divergence between what CI runs and what a developer runs.
 
 The overlap with Vitest browser mode is real and worth keeping in view: for component-level assertions, Vitest is already installed and is the cheaper tool. The sensible division is Vitest for components, Playwright for full-build journeys and socket behaviour. If that division is never actually used — if e2e tests end up asserting things a component test could have covered — the case for carrying hundreds of megabytes of browser binaries weakens, and this decision should be revisited.
 
@@ -50,7 +49,6 @@ The overlap with Vitest browser mode is real and worth keeping in view: for comp
 
 - Hundreds of megabytes of browser binaries per environment; by far the largest disk cost in the project.
 - `playwright install` in the test script downloads all three browser families on every run, and only Chromium is configured to be used.
-- `webServer` uses `npm` while the project uses Bun.
 - Browser binaries are opaque prebuilt executables downloaded outside the npm integrity model — see security risk.
 - e2e suites are the highest-maintenance test category: slower than unit tests, more prone to flakiness, and quickest to be ignored once they start failing intermittently.
 - Overlaps with [Vitest](./vitest.md) browser mode at the component level, so the two need a clear division of labour to avoid paying twice.

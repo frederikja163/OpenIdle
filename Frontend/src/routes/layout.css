@@ -13,7 +13,7 @@
 @import '../lib/styles/openidle/index.css';
 
 /* Self-hosted webfonts, never the Google Fonts CDN — see
-   doc/libraries/fontsource-variable-inter.md for the reasoning.
+   doc/libraries/fontsource-chakra-petch.md for the reasoning.
    Chakra Petch and IBM Plex Mono have no variable build on Fontsource, so only
    the weights the type tokens actually reference are pulled in. */
 @import '@fontsource/chakra-petch/500.css';
@@ -59,7 +59,8 @@
 	--chart-4: var(--amethyst-500);
 	--chart-5: var(--copper-500);
 
-	/* Cards sit at --radius-md 8; the scale itself is set in @theme below. */
+	/* Cards sit at --radius-md 8; the scale is authored in
+	   ../lib/styles/openidle/effects.css and mapped into @theme below. */
 	--radius: 8px;
 
 	--sidebar: var(--surface-panel);
@@ -165,11 +166,11 @@
 	/* Radii are the design system's machined scale (3 / 5 / 8 / 12 / 16), not a
 	   ramp derived from --radius. Panels 12, cards 8, controls 5, chips and
 	   inner wells 3; only meter tracks and status dots are fully round. */
-	--radius-xs: 3px;
-	--radius-sm: 5px;
-	--radius-md: 8px;
-	--radius-lg: 12px;
-	--radius-xl: 16px;
+	--radius-xs: var(--radius-xs);
+	--radius-sm: var(--radius-sm);
+	--radius-md: var(--radius-md);
+	--radius-lg: var(--radius-lg);
+	--radius-xl: var(--radius-xl);
 }
 
 @layer base {

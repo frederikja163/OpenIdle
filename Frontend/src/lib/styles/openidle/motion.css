@@ -24,6 +24,20 @@
 		--dur-base: 0ms;
 		--dur-slow: 0ms;
 	}
+
+	/* Zeroing the duration tokens above only covers transitions. The looping
+	   keyframes (oi-pulse, oi-sweep) are applied with inline `animation` values,
+	   so they need the same treatment here — repeating decorative motion is the
+	   exact class of movement this preference exists to stop. The 0.01ms floor
+	   rather than 0 is so `animation` still computes (an element can otherwise
+	   be left stuck in its keyframe state in some engines). One-shot animations
+	   like tw-animate-css's enter/exit also collapse to instant, as intended. */
+	*,
+	*::before,
+	*::after {
+		animation-duration: 0.01ms !important;
+		animation-iteration-count: 1 !important;
+	}
 }
 
 @keyframes oi-pulse {

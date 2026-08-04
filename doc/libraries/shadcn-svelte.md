@@ -51,7 +51,7 @@ The first component is the expensive one: `tailwind-merge` and `tailwind-variant
 - Ships a semantic token layer (`--background`, `--primary`, `--ring`, …) and a dark-mode variant, which is the visual baseline this project has no designer to produce.
 - The CLI is a scaffolding tool, so most of the surface can be removed later by simply not running it again.
 - Everything lands in `devDependencies`, consistent with the existing convention.
-- Fonts are self-hosted — no external CDN request, no third-party origin at runtime. (This was `@fontsource-variable/inter` when the preset was adopted; since 2026-08-04 the preset runs on the OpenIdle Design System's typefaces instead — see the [typefaces section](./README.md#typefaces). The self-hosting property is unchanged.)
+- Fonts are self-hosted — no external CDN request, no third-party origin at runtime. The preset runs on the OpenIdle Design System's typefaces (see the [typefaces section](./README.md#typefaces)).
 - MIT, actively maintained, tracks the much larger shadcn/ui ecosystem upstream.
 - No install or postinstall scripts anywhere in the added tree — the project's standing invariant survives.
 
