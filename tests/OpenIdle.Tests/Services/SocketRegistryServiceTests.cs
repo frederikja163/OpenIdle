@@ -127,6 +127,34 @@ public sealed class SocketRegistryServiceTests
     }
 
     [Test]
+    public async Task SendToUserAsync_NonTransportException_DoesNotRemoveSocket()
+    {
+        SocketRegistryService registry = CreateRegistry();
+        TestSocket testSocket = CreateRegisteredSocket(registry);
+        registry.SetUser(testSocket.Socket, UserA);
+        testSocket.WebSocket.ThrowNonTransportOnNextSend();
+
+        Assert.ThrowsAsync<InvalidOperationException>(() => registry.SendToUserAsync(UserA, CreateEvent()));
+
+        await registry.SendToUserAsync(UserA, CreateEvent());
+        Assert.That(testSocket.WebSocket.SendAttempts, Is.EqualTo(1));
+    }
+
+    [Test]
+    public async Task SendToProfileAsync_NonTransportException_DoesNotRemoveSocket()
+    {
+        SocketRegistryService registry = CreateRegistry();
+        TestSocket testSocket = CreateRegisteredSocket(registry);
+        registry.SetProfile(testSocket.Socket, ProfileA);
+        testSocket.WebSocket.ThrowNonTransportOnNextSend();
+
+        Assert.ThrowsAsync<InvalidOperationException>(() => registry.SendToProfileAsync(ProfileA, CreateEvent()));
+
+        await registry.SendToProfileAsync(ProfileA, CreateEvent());
+        Assert.That(testSocket.WebSocket.SendAttempts, Is.EqualTo(1));
+    }
+
+    [Test]
     public async Task ClosingSocket_RemovesItFromUserAndProfileBuckets()
     {
         SocketRegistryService registry = CreateRegistry();

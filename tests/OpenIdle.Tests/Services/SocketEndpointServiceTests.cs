@@ -1,5 +1,4 @@
 using System.Reflection;
-using System.Text.Json;
 using Backend;
 using Backend.Attributes;
 using Backend.Dtos;
@@ -69,7 +68,7 @@ public sealed class SocketEndpointServiceTests
         {
             Assert.That(webSocket.FirstSentText, Is.Not.Null);
             Assert.That(webSocket.FirstSentText, Does.Contain("PongResponse"));
-            Assert.That(webSocket.FirstSentText, Does.Contain("\"Id\":42"));
+            Assert.That(webSocket.FirstSentText, Does.Contain("\"id\":42"));
         });
     }
 
@@ -147,7 +146,7 @@ public sealed class SocketEndpointServiceTests
 
     private static byte[] Serialize(RequestBase request)
     {
-        return System.Text.Encoding.UTF8.GetBytes(JsonSerializer.Serialize(request, typeof(DtoBase)));
+        return SocketJsonSerializer.Serialize(request);
     }
 
     private static MethodInfo GetMethod<T>(string name)

@@ -8,7 +8,7 @@ public sealed class FakeWebSocket : WebSocket
     private readonly WebSocketState _state;
     private readonly List<(byte[] Bytes, WebSocketMessageType Type)> _sent = [];
     private readonly Queue<(byte[] Bytes, WebSocketMessageType Type)> _received = [];
-    private int _sendFailuresLeft;
+    private Exception? _sendException;
     private WebSocketCloseStatus? _closeStatus;
     private string? _closeStatusDescription;
 
@@ -25,7 +25,12 @@ public sealed class FakeWebSocket : WebSocket
 
     public void ThrowOnNextSend()
     {
-        Interlocked.Increment(ref _sendFailuresLeft);
+        _sendException = new WebSocketException(WebSocketError.ConnectionClosedPrematurely, "Simulated send failure.");
+    }
+
+    public void ThrowNonTransportOnNextSend()
+    {
+        _sendException = new InvalidOperationException("Simulated send failure.");
     }
 
     public void EnqueueReceive(byte[] bytes, WebSocketMessageType type = WebSocketMessageType.Text)
@@ -102,9 +107,10 @@ public sealed class FakeWebSocket : WebSocket
 
     private void RecordSend(byte[] bytes, WebSocketMessageType messageType)
     {
-        if (Interlocked.Decrement(ref _sendFailuresLeft) >= 0)
+        Exception? exception = Interlocked.Exchange(ref _sendException, null);
+        if (exception is not null)
         {
-            throw new InvalidOperationException("Simulated send failure.");
+            throw exception;
         }
 
         lock (_sent)

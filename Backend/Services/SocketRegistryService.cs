@@ -1,6 +1,8 @@
 ﻿using System;
 using System.Collections.Concurrent;
+using System.IO;
 using System.Linq;
+using System.Net.WebSockets;
 using System.Threading.Tasks;
 using Backend.Dtos;
 using Backend.Entities;
@@ -64,13 +66,14 @@ public sealed class SocketRegistryService
             return;
         }
 
+        byte[] bytes = SocketJsonSerializer.Serialize(eventBase);
         foreach (Socket socket in sockets.Keys.ToArray())
         {
             try
             {
-                await socket.SendEventAsync(eventBase);
+                await socket.SendMessageAsync(bytes);
             }
-            catch (Exception exception)
+            catch (Exception exception) when (IsTransportException(exception))
             {
                 _logger.LogError(exception, "Failed to send event {EventType} to socket.", eventBase.GetType().Name);
                 RemoveSocket(socket);
@@ -85,18 +88,24 @@ public sealed class SocketRegistryService
             return;
         }
 
+        byte[] bytes = SocketJsonSerializer.Serialize(eventBase);
         foreach (Socket socket in sockets.Keys.ToArray())
         {
             try
             {
-                await socket.SendEventAsync(eventBase);
+                await socket.SendMessageAsync(bytes);
             }
-            catch (Exception exception)
+            catch (Exception exception) when (IsTransportException(exception))
             {
                 _logger.LogError(exception, "Failed to send event {EventType} to socket.", eventBase.GetType().Name);
                 RemoveSocket(socket);
             }
         }
+    }
+
+    private static bool IsTransportException(Exception exception)
+    {
+        return exception is WebSocketException or IOException or ObjectDisposedException;
     }
 
     private async Task SocketOnMessageReceived(object? sender, MessageReceivedEventArgs e)

@@ -1,7 +1,5 @@
 ﻿using System;
 using System.Net.WebSockets;
-using System.Text;
-using System.Text.Json;
 using System.Threading;
 using System.Threading.Tasks;
 using Backend.Dtos;
@@ -82,34 +80,16 @@ internal sealed class Socket : IDisposable
 
     internal async Task SendResponseAsync(ResponseBase response)
     {
-        await SendMessageAsync(response);
+        await SendMessageAsync(SocketJsonSerializer.Serialize(response));
     }
 
     internal async Task SendEventAsync(EventBase eventBase)
     {
-        await SendMessageAsync(eventBase);
+        await SendMessageAsync(SocketJsonSerializer.Serialize(eventBase));
     }
 
-    private async Task HandleTextMessageAsync(byte[] bytes, int count)
+    internal async Task SendMessageAsync(byte[] bytes)
     {
-        try
-        {
-            string str = Encoding.UTF8.GetString(bytes.AsSpan(0, count));
-            RequestBase dto = (JsonSerializer.Deserialize<DtoBase>(str) as RequestBase) ??
-                              throw new FormatException(
-                                  "Payload was either malformed json or an unrecognized json object.");
-            if (MessageReceived is { } handler) await handler(this, new MessageReceivedEventArgs(dto));
-        }
-        catch (Exception exception)
-        {
-            await SendResponseAsync(new ErrorResponse(exception.Message));
-        }
-    }
-
-    private async Task SendMessageAsync(DtoBase dtoBase)
-    {
-        string str = JsonSerializer.Serialize(dtoBase, typeof(DtoBase));
-        byte[] bytes = Encoding.UTF8.GetBytes(str);
         await _sendLock.WaitAsync();
         try
         {
@@ -118,6 +98,19 @@ internal sealed class Socket : IDisposable
         finally
         {
             _sendLock.Release();
+        }
+    }
+
+    private async Task HandleTextMessageAsync(byte[] bytes, int count)
+    {
+        try
+        {
+            RequestBase dto = SocketJsonSerializer.DeserializeRequest(bytes, count);
+            if (MessageReceived is { } handler) await handler(this, new MessageReceivedEventArgs(dto));
+        }
+        catch (Exception exception)
+        {
+            await SendResponseAsync(new ErrorResponse(exception.Message));
         }
     }
 
