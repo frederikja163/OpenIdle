@@ -3,6 +3,7 @@ using Backend.Dtos.Auth;
 
 namespace Backend.Dtos;
 
+// TODO: Make dtos from xml/json file.
 [JsonPolymorphic]
 [JsonDerivedType(typeof(PingRequest), nameof(PingRequest))]
 [JsonDerivedType(typeof(PongResponse), nameof(PongResponse))]
