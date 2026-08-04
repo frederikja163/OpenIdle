@@ -18,7 +18,7 @@ public sealed class SocketRegistryService
 
     private async Task SocketOnMessageReceived(object? sender, MessageReceivedEventArgs e)
     {
-        if (MessageReceived is { } handler) await handler(sender, e);
+        if (MessageReceived is { } handler) await handler.InvokeAsync(sender, e);
     }
 
     private async Task SocketOnClose(object? sender, SocketCloseEventArgs e)
