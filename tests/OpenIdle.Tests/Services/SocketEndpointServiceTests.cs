@@ -1,7 +1,5 @@
 using System.Reflection;
 using System.Text.Json;
-using System.Threading;
-using System.Threading.Tasks;
 using Backend;
 using Backend.Attributes;
 using Backend.Dtos;
@@ -13,36 +11,40 @@ using OpenIdle.Tests.TestDoubles;
 
 namespace OpenIdle.Tests.Services;
 
+[TestFixture]
 public sealed class SocketEndpointServiceTests
 {
-    [Fact]
+    [Test]
     public void TryRegisterEndpoint_WithNoParameters_Throws()
     {
         SocketEndpointService service = CreateService(out _);
 
-        Assert.Throws<ArgumentException>(() =>
-            service.TryRegisterEndpoint(GetMethod<ValidationProbeController>(nameof(ValidationProbeController.NoParams))));
+        Assert.That(() =>
+            service.TryRegisterEndpoint(GetMethod<ValidationProbeController>(nameof(ValidationProbeController.NoParams))),
+            Throws.TypeOf<ArgumentException>());
     }
 
-    [Fact]
+    [Test]
     public void TryRegisterEndpoint_WithMultipleParameters_Throws()
     {
         SocketEndpointService service = CreateService(out _);
 
-        Assert.Throws<ArgumentException>(() =>
-            service.TryRegisterEndpoint(GetMethod<ValidationProbeController>(nameof(ValidationProbeController.TwoParams))));
+        Assert.That(() =>
+            service.TryRegisterEndpoint(GetMethod<ValidationProbeController>(nameof(ValidationProbeController.TwoParams))),
+            Throws.TypeOf<ArgumentException>());
     }
 
-    [Fact]
+    [Test]
     public void TryRegisterEndpoint_WithNonRequestParameter_Throws()
     {
         SocketEndpointService service = CreateService(out _);
 
-        Assert.Throws<ArgumentException>(() =>
-            service.TryRegisterEndpoint(GetMethod<ValidationProbeController>(nameof(ValidationProbeController.WrongParam))));
+        Assert.That(() =>
+            service.TryRegisterEndpoint(GetMethod<ValidationProbeController>(nameof(ValidationProbeController.WrongParam))),
+            Throws.TypeOf<ArgumentException>());
     }
 
-    [Fact]
+    [Test]
     public void TryRegisterEndpoint_WithValidHandler_DoesNotThrow()
     {
         SocketEndpointService service = CreateService(out _);
@@ -50,7 +52,7 @@ public sealed class SocketEndpointServiceTests
         service.TryRegisterEndpoint(GetMethod<TestPingController>(nameof(TestPingController.Ping)));
     }
 
-    [Fact]
+    [Test]
     public async Task Dispatch_InvokesHandlerAndSendsResponse()
     {
         SocketEndpointService service = CreateService(out SocketRegistryService registry);
@@ -63,12 +65,15 @@ public sealed class SocketEndpointServiceTests
 
         await socket.StartAsync(CancellationToken.None);
 
-        Assert.NotNull(webSocket.FirstSentText);
-        Assert.Contains("PongResponse", webSocket.FirstSentText);
-        Assert.Contains("\"Id\":42", webSocket.FirstSentText);
+        Assert.Multiple(() =>
+        {
+            Assert.That(webSocket.FirstSentText, Is.Not.Null);
+            Assert.That(webSocket.FirstSentText, Does.Contain("PongResponse"));
+            Assert.That(webSocket.FirstSentText, Does.Contain("\"Id\":42"));
+        });
     }
 
-    [Fact]
+    [Test]
     public async Task Dispatch_UnknownRequestType_RespondsWithError()
     {
         SocketEndpointService service = CreateService(out SocketRegistryService registry);
@@ -80,12 +85,15 @@ public sealed class SocketEndpointServiceTests
 
         await socket.StartAsync(CancellationToken.None);
 
-        Assert.NotNull(webSocket.FirstSentText);
-        Assert.Contains("ErrorResponse", webSocket.FirstSentText);
-        Assert.Contains("No handler registered for this request type.", webSocket.FirstSentText);
+        Assert.Multiple(() =>
+        {
+            Assert.That(webSocket.FirstSentText, Is.Not.Null);
+            Assert.That(webSocket.FirstSentText, Does.Contain("ErrorResponse"));
+            Assert.That(webSocket.FirstSentText, Does.Contain("No handler registered for this request type."));
+        });
     }
 
-    [Fact]
+    [Test]
     public async Task Dispatch_InvokesAllHandlersForRequestType()
     {
         SocketEndpointService service = CreateService(out SocketRegistryService registry);
@@ -99,10 +107,10 @@ public sealed class SocketEndpointServiceTests
 
         await socket.StartAsync(CancellationToken.None);
 
-        Assert.Equal(2, webSocket.SendAttempts);
+        Assert.That(webSocket.SendAttempts, Is.EqualTo(2));
     }
 
-    [Fact]
+    [Test]
     public async Task Dispatch_HandlerSettingUser_AllowsUserEvents()
     {
         SocketEndpointService service = CreateService(out SocketRegistryService registry);
@@ -118,8 +126,8 @@ public sealed class SocketEndpointServiceTests
 
         await socket.StartAsync(CancellationToken.None);
 
-        Assert.NotNull(webSocket.FirstSentText);
-        Assert.Contains("ProfilesChangedEvent", webSocket.FirstSentText);
+        Assert.That(webSocket.FirstSentText, Is.Not.Null);
+        Assert.That(webSocket.FirstSentText, Does.Contain("ProfilesChangedEvent"));
     }
 
     private static SocketEndpointService CreateService(out SocketRegistryService registry)

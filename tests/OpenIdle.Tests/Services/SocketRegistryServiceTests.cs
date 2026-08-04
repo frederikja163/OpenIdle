@@ -8,6 +8,7 @@ using OpenIdle.Tests.TestDoubles;
 
 namespace OpenIdle.Tests.Services;
 
+[TestFixture]
 public sealed class SocketRegistryServiceTests
 {
     private static readonly User UserA = new() { UserId = Guid.NewGuid() };
@@ -16,7 +17,7 @@ public sealed class SocketRegistryServiceTests
     private static readonly Profile ProfileA = new() { ProfileId = Guid.NewGuid(), Name = "A" };
     private static readonly Profile ProfileB = new() { ProfileId = Guid.NewGuid(), Name = "B" };
 
-    [Fact]
+    [Test]
     public async Task SendToUserAsync_DeliversEventToAllSocketsOfUser()
     {
         SocketRegistryService registry = CreateRegistry();
@@ -34,7 +35,7 @@ public sealed class SocketRegistryServiceTests
         AssertNoEventSent(third);
     }
 
-    [Fact]
+    [Test]
     public async Task SendToUserAsync_MovedSocket_LeavesPreviousUserBucket()
     {
         SocketRegistryService registry = CreateRegistry();
@@ -45,11 +46,11 @@ public sealed class SocketRegistryServiceTests
 
         await registry.SendToUserAsync(UserA, CreateEvent());
         await registry.SendToUserAsync(UserB, CreateEvent());
-        Assert.Equal(1, testSocket.WebSocket.SendAttempts);
-        Assert.Contains("ProfilesChangedEvent", testSocket.WebSocket.FirstSentText);
+        Assert.That(testSocket.WebSocket.SendAttempts, Is.EqualTo(1));
+        Assert.That(testSocket.WebSocket.FirstSentText, Does.Contain("ProfilesChangedEvent"));
     }
 
-    [Fact]
+    [Test]
     public async Task SendToProfileAsync_DeliversEventToAllSocketsOfProfile()
     {
         SocketRegistryService registry = CreateRegistry();
@@ -66,7 +67,7 @@ public sealed class SocketRegistryServiceTests
         AssertNoEventSent(second);
     }
 
-    [Fact]
+    [Test]
     public async Task SendToProfileAsync_MovedSocket_LeavesPreviousProfileBucket()
     {
         SocketRegistryService registry = CreateRegistry();
@@ -77,11 +78,11 @@ public sealed class SocketRegistryServiceTests
 
         await registry.SendToProfileAsync(ProfileA, CreateEvent());
         await registry.SendToProfileAsync(ProfileB, CreateEvent());
-        Assert.Equal(1, testSocket.WebSocket.SendAttempts);
-        Assert.Contains("ProfilesChangedEvent", testSocket.WebSocket.FirstSentText);
+        Assert.That(testSocket.WebSocket.SendAttempts, Is.EqualTo(1));
+        Assert.That(testSocket.WebSocket.FirstSentText, Does.Contain("ProfilesChangedEvent"));
     }
 
-    [Fact]
+    [Test]
     public async Task SendToUserAsync_WithNoSockets_DoesNotThrow()
     {
         SocketRegistryService registry = CreateRegistry();
@@ -89,7 +90,7 @@ public sealed class SocketRegistryServiceTests
         await registry.SendToUserAsync(UserA, CreateEvent());
     }
 
-    [Fact]
+    [Test]
     public async Task SendToProfileAsync_WithNoSockets_DoesNotThrow()
     {
         SocketRegistryService registry = CreateRegistry();
@@ -97,7 +98,7 @@ public sealed class SocketRegistryServiceTests
         await registry.SendToProfileAsync(ProfileA, CreateEvent());
     }
 
-    [Fact]
+    [Test]
     public async Task SendToUserAsync_WhenSendFails_RemovesSocketFromUser()
     {
         SocketRegistryService registry = CreateRegistry();
@@ -108,10 +109,10 @@ public sealed class SocketRegistryServiceTests
         await registry.SendToUserAsync(UserA, CreateEvent());
         await registry.SendToUserAsync(UserA, CreateEvent());
 
-        Assert.Equal(0, testSocket.WebSocket.SendAttempts);
+        Assert.That(testSocket.WebSocket.SendAttempts, Is.EqualTo(0));
     }
 
-    [Fact]
+    [Test]
     public async Task SendToProfileAsync_WhenSendFails_RemovesSocketFromProfile()
     {
         SocketRegistryService registry = CreateRegistry();
@@ -122,10 +123,10 @@ public sealed class SocketRegistryServiceTests
         await registry.SendToProfileAsync(ProfileA, CreateEvent());
         await registry.SendToProfileAsync(ProfileA, CreateEvent());
 
-        Assert.Equal(0, testSocket.WebSocket.SendAttempts);
+        Assert.That(testSocket.WebSocket.SendAttempts, Is.EqualTo(0));
     }
 
-    [Fact]
+    [Test]
     public async Task ClosingSocket_RemovesItFromUserAndProfileBuckets()
     {
         SocketRegistryService registry = CreateRegistry();
@@ -163,13 +164,16 @@ public sealed class SocketRegistryServiceTests
 
     private static void AssertSingleEventSent(TestSocket testSocket)
     {
-        Assert.NotNull(testSocket.WebSocket.FirstSentText);
-        Assert.Contains("ProfilesChangedEvent", testSocket.WebSocket.FirstSentText);
+        Assert.Multiple(() =>
+        {
+            Assert.That(testSocket.WebSocket.FirstSentText, Is.Not.Null);
+            Assert.That(testSocket.WebSocket.FirstSentText, Does.Contain("ProfilesChangedEvent"));
+        });
     }
 
     private static void AssertNoEventSent(TestSocket testSocket)
     {
-        Assert.Equal(0, testSocket.WebSocket.SendAttempts);
+        Assert.That(testSocket.WebSocket.SendAttempts, Is.EqualTo(0));
     }
 
     private sealed record TestSocket(Socket Socket, FakeWebSocket WebSocket);
