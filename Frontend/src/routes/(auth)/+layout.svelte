@@ -4,10 +4,15 @@
 	import Gamepad2 from '@lucide/svelte/icons/gamepad-2';
 	import InfinityIcon from '@lucide/svelte/icons/infinity';
 	import Users from '@lucide/svelte/icons/users';
+	import type { Snippet } from 'svelte';
 	import Row from '$lib/components/layout/Row.svelte';
 	import { cn } from '$lib/utils/stylingUtils';
 
-	let { children } = $props();
+	interface Props {
+		children?: Snippet;
+	}
+
+	let { children }: Props = $props();
 
 	// resolve() applies the configured base path and type-checks each pathname
 	// against the real route tree, so a renamed route fails the build here
@@ -42,11 +47,11 @@
 			stand-in is a verdant tile beside the wordmark set in Chakra Petch —
 			do not draw one. The wordmark is always one word, capital O and I.
 		-->
-		<span
-			class="inline-flex size-5.5 items-center justify-center rounded-xs bg-verdant-600 text-action-primary-text"
+		<Row
+			class="size-5.5 items-center justify-center rounded-xs bg-verdant-600 text-action-primary-text"
 		>
 			<InfinityIcon size={14} />
-		</span>
+		</Row>
 		<span class="oi-display-md text-text-strong">OpenIdle</span>
 	</Row>
 
@@ -93,4 +98,4 @@
 	</Row>
 </header>
 
-{@render children()}
+{@render children?.()}

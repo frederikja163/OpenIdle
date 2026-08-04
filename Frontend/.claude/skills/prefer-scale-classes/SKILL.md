@@ -31,8 +31,8 @@ resort, not the shortcut.
 
 ## The `--sp-*` indices are not Tailwind's numeric scale
 
-The spacing ramp is deliberately non-linear, so the token's *number* and the utility's
-*number* mean different things. Convert by pixel value, never by index — `--sp-6` is 16px
+The spacing ramp is deliberately non-linear, so the token's _number_ and the utility's
+_number_ mean different things. Convert by pixel value, never by index — `--sp-6` is 16px
 while `p-6` is 24px.
 
 | token    | px  |     | token    | px  |     | token     | px  |
@@ -43,7 +43,7 @@ while `p-6` is 24px.
 | `--sp-3` | 6   |     | `--sp-8` | 24  |     | `--sp-12` | 64  |
 | `--sp-4` | 8   |     |          |     |     |           |     |
 
-Where a value has a *structural* name, prefer that name over the raw step — it says why the
+Where a value has a _structural_ name, prefer that name over the raw step — it says why the
 value is what it is, and it moves when the design system moves:
 `--gutter-app` (app frame padding) · `--gutter-panel` (inside a panel) · `--gap-grid`
 (between action/item cards) · `--gap-stack` · `--pad-card` · `--pad-control-y` /

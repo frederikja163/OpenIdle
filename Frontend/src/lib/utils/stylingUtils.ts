@@ -12,3 +12,9 @@ import { twMerge } from 'tailwind-merge';
 export function cn(...inputs: ClassValue[]) {
 	return twMerge(clsx(inputs));
 }
+
+/**
+ * Add a bindable `ref` to a component's props so it can expose its underlying
+ * DOM node. Vendored shadcn-svelte components import this type.
+ */
+export type WithElementRef<T, U extends HTMLElement = HTMLElement> = T & { ref?: U | null };
