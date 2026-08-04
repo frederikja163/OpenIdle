@@ -1,7 +1,7 @@
 import Root, {
+	type ButtonProps,
 	type ButtonSize,
 	type ButtonVariant,
-	type Props,
 	buttonVariants
 } from './button.svelte';
 
@@ -10,7 +10,10 @@ export {
 	//
 	Root as Button,
 	buttonVariants,
-	type Props,
+	type ButtonProps,
+	// The generator's name is `ButtonProps`; `Props` is the shorter alias the
+	// rest of the vendored components use for their own props type.
+	type ButtonProps as Props,
 	type ButtonSize,
 	type ButtonVariant
 };
