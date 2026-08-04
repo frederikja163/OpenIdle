@@ -8,3 +8,4 @@ Every third-party dependency used (or considered and rejected) by this project i
 | [ASP.NET Core (Minimal APIs + DI)](./aspnet-core.md) | adopted | 2026-08-02 | low | low |
 | [EF Core + SQLite](./ef-core.md) | adopted | 2026-08-03 | medium | low |
 | [NUnit (test framework)](./nunit.md) | adopted | 2026-08-04 | low | low |
+| [Microsoft.AspNetCore.Mvc.Testing](./mvc-testing.md) | rejected | 2026-08-04 | low | low |

@@ -7,7 +7,7 @@
 
 ## 1. Problem
 
-The project has no automated tests yet, and a test project (`tests/OpenIdle.Tests`) was just scaffolded for the socket-controller work. The unit and integration tests we are about to write (socket registry, endpoint dispatch, and later `WebApplicationFactory`-based integration tests) need a test framework: something that discovers tests, runs them, reports results, and plugs into `dotnet test` and the IDE. The framework initially added was xUnit (the `dotnet new` default). The project owner has a strong preference for NUnit's naming (`[Test]`/`[TestCase]`) and its constraint-based assertion model (`Assert.That`), has deep existing proficiency in NUnit (including custom extension work), and wants one test framework to standardize on going forward. This is a **dev-time dependency only** — nothing in the shipped product depends on it.
+The project has no automated tests yet, and a test project (`tests/OpenIdle.Tests`) was just scaffolded for the socket-controller work. The unit and integration tests we are about to write (socket registry, endpoint dispatch, and later end-to-end integration tests against the real app) need a test framework: something that discovers tests, runs them, reports results, and plugs into `dotnet test` and the IDE. The framework initially added was xUnit (the `dotnet new` default). The project owner has a strong preference for NUnit's naming (`[Test]`/`[TestCase]`) and its constraint-based assertion model (`Assert.That`), has deep existing proficiency in NUnit (including custom extension work), and wants one test framework to standardize on going forward. This is a **dev-time dependency only** — nothing in the shipped product depends on it.
 
 ## 2. Alternatives considered
 
@@ -23,7 +23,7 @@ Why the others lost: **xUnit** is the only zero-new-dependency option (it is alr
 
 ## 3. Decision & rationale
 
-Adopt **NUnit 4**, replacing xUnit in the test project. The deciding factors are subjective but durable: the owner prefers `[Test]`/`[TestCase]` naming and finds the `Assert.That` constraint model more intuitive than xUnit's `Assert.*`, and has deep existing proficiency (including custom NUnit extensions). For a framework that will be written and read on a daily basis, developer preference and mastery outweigh the objective-but-marginal differences between the frameworks, which are otherwise functionally equivalent for this project's needs (all support `dotnet test`, parallel execution, parameterized tests, and integration-testing via `WebApplicationFactory`).
+Adopt **NUnit 4**, replacing xUnit in the test project. The deciding factors are subjective but durable: the owner prefers `[Test]`/`[TestCase]` naming and finds the `Assert.That` constraint model more intuitive than xUnit's `Assert.*`, and has deep existing proficiency (including custom NUnit extensions). For a framework that will be written and read on a daily basis, developer preference and mastery outweigh the objective-but-marginal differences between the frameworks, which are otherwise functionally equivalent for this project's needs (all support `dotnet test`, parallel execution, parameterized tests, and integration testing).
 
 Two honest caveats:
 
