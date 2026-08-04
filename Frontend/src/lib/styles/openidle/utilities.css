@@ -1,0 +1,72 @@
+/* OpenIdle Design System — the element and helper rules that ship alongside the
+   tokens. The design system's own base.css also resets `* { box-sizing }` and
+   sets `body { margin; background; font }`; those are deliberately not copied,
+   because Tailwind's preflight and the `@layer base` block in layout.css
+   already own them. Its `:focus-visible` rule is likewise dropped — shadcn's
+   `--ring` is remapped onto `--focus-ring`, which produces the same ring.
+
+   Everything here is placed in a cascade layer on purpose. Unlayered CSS beats
+   layered CSS regardless of specificity, so an unlayered `a { color }` would
+   defeat every Tailwind text-colour utility applied to a link. */
+
+@layer base {
+	a {
+		color: var(--link);
+		text-decoration-color: rgba(143, 220, 155, 0.4);
+		text-underline-offset: 2px;
+	}
+
+	a:hover {
+		color: var(--link-hover);
+		text-decoration-color: currentColor;
+	}
+
+	::selection {
+		background: rgba(79, 170, 94, 0.35);
+		color: var(--ink-100);
+	}
+}
+
+@layer components {
+	/* The board: dark slate, a 32px hairline grid at 4.5% white, and a soft
+	   verdant vignette bleeding down from the top edge. */
+	.oi-board {
+		background: var(--bg-vignette), var(--bg-grid), var(--surface-app);
+	}
+
+	/* Panels scroll internally rather than growing the page — the game never
+	   scrolls the document. */
+	.oi-scroll {
+		scrollbar-width: thin;
+		scrollbar-color: var(--ink-700) transparent;
+	}
+
+	.oi-scroll::-webkit-scrollbar {
+		width: 9px;
+		height: 9px;
+	}
+
+	.oi-scroll::-webkit-scrollbar-thumb {
+		background: var(--ink-700);
+		border-radius: var(--radius-full);
+		border: 2px solid transparent;
+		background-clip: content-box;
+	}
+
+	.oi-scroll::-webkit-scrollbar-thumb:hover {
+		background: var(--ink-600);
+		background-clip: content-box;
+	}
+
+	.oi-scroll::-webkit-scrollbar-track {
+		background: transparent;
+	}
+
+	.oi-icon > svg {
+		width: 100%;
+		height: 100%;
+		display: block;
+		stroke: currentColor;
+		fill: none;
+	}
+}

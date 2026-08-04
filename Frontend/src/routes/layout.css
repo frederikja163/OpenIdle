@@ -1,0 +1,186 @@
+@import 'tailwindcss';
+@import 'tw-animate-css';
+@import 'shadcn-svelte/tailwind.css';
+
+/* OpenIdle Design System tokens. Everything below maps this layer onto the
+   Tailwind and shadcn token layers, so brand values are authored in exactly one
+   place. See ../lib/styles/openidle/index.css.
+
+   Note that the token layer is unlayered CSS and so deliberately outranks
+   Tailwind's own theme defaults where the names coincide: `ease-out`,
+   `ease-in-out` and `ease-linear` are the design system's easings project-wide,
+   not Tailwind's. That is the intent — there is one motion vocabulary. */
+@import '../lib/styles/openidle/index.css';
+
+/* Self-hosted webfonts, never the Google Fonts CDN — see
+   doc/libraries/fontsource-chakra-petch.md for the reasoning.
+   Chakra Petch and IBM Plex Mono have no variable build on Fontsource, so only
+   the weights the type tokens actually reference are pulled in. */
+@import '@fontsource/chakra-petch/500.css';
+@import '@fontsource/chakra-petch/600.css';
+@import '@fontsource/chakra-petch/700.css';
+@import '@fontsource-variable/ibm-plex-sans/wght.css';
+@import '@fontsource/ibm-plex-mono/400.css';
+@import '@fontsource/ibm-plex-mono/500.css';
+@import '@fontsource/ibm-plex-mono/600.css';
+
+@custom-variant dark (&:is(.dark *));
+
+/* OpenIdle is a single dark theme — the board is `--surface-app` and there is
+   no light mode to switch to, so shadcn's paired :root / .dark blocks collapse
+   into one. `@custom-variant dark` is kept so shadcn's `dark:` utilities still
+   compile; with no `.dark` class on the document they simply never match, which
+   is the correct outcome for a permanently dark product. */
+:root {
+	--background: var(--surface-app);
+	--foreground: var(--text-body);
+	--card: var(--surface-card);
+	--card-foreground: var(--text-strong);
+	--popover: var(--surface-panel-raised);
+	--popover-foreground: var(--text-body);
+	--primary: var(--action-primary);
+	--primary-foreground: var(--action-primary-text);
+	--secondary: var(--action-quiet);
+	--secondary-foreground: var(--text-body);
+	--muted: var(--surface-panel);
+	--muted-foreground: var(--text-muted);
+	--accent: var(--surface-active);
+	--accent-foreground: var(--text-accent);
+	--destructive: var(--crimson-500);
+	--border: var(--line-soft);
+	--input: var(--line-strong);
+	--ring: var(--focus-ring);
+
+	/* Charts inherit the skill and rarity hues rather than a generic ramp —
+	   verdant first, since it is the product's one accent. */
+	--chart-1: var(--verdant-500);
+	--chart-2: var(--azure-500);
+	--chart-3: var(--amber-500);
+	--chart-4: var(--amethyst-500);
+	--chart-5: var(--copper-500);
+
+	/* Cards sit at --radius-md 8; the scale is authored in
+	   ../lib/styles/openidle/effects.css and mapped into @theme below. */
+	--radius: 8px;
+
+	--sidebar: var(--surface-panel);
+	--sidebar-foreground: var(--text-body);
+	--sidebar-primary: var(--action-primary);
+	--sidebar-primary-foreground: var(--action-primary-text);
+	--sidebar-accent: var(--surface-active);
+	--sidebar-accent-foreground: var(--text-accent);
+	--sidebar-border: var(--line-soft);
+	--sidebar-ring: var(--focus-ring);
+}
+
+@theme inline {
+	/* The three faces, declared here rather than in the token layer because
+	   these names are simultaneously Tailwind's font namespace — see the note in
+	   ../lib/styles/openidle/typography.css, which composes them into the
+	   `--type-*` shorthands. Chakra Petch for HUD display, IBM Plex Sans for
+	   prose, IBM Plex Mono for every number. */
+	--font-display: 'Chakra Petch', 'Segoe UI', system-ui, sans-serif;
+	--font-body: 'IBM Plex Sans Variable', 'IBM Plex Sans', system-ui, -apple-system, sans-serif;
+	--font-mono: 'IBM Plex Mono', ui-monospace, 'SFMono-Regular', monospace;
+	--font-sans: var(--font-body);
+
+	--color-sidebar-ring: var(--sidebar-ring);
+	--color-sidebar-border: var(--sidebar-border);
+	--color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
+	--color-sidebar-accent: var(--sidebar-accent);
+	--color-sidebar-primary-foreground: var(--sidebar-primary-foreground);
+	--color-sidebar-primary: var(--sidebar-primary);
+	--color-sidebar-foreground: var(--sidebar-foreground);
+	--color-sidebar: var(--sidebar);
+	--color-chart-5: var(--chart-5);
+	--color-chart-4: var(--chart-4);
+	--color-chart-3: var(--chart-3);
+	--color-chart-2: var(--chart-2);
+	--color-chart-1: var(--chart-1);
+	--color-ring: var(--ring);
+	--color-input: var(--input);
+	--color-border: var(--border);
+	--color-destructive: var(--destructive);
+	--color-accent-foreground: var(--accent-foreground);
+	--color-accent: var(--accent);
+	--color-muted-foreground: var(--muted-foreground);
+	--color-muted: var(--muted);
+	--color-secondary-foreground: var(--secondary-foreground);
+	--color-secondary: var(--secondary);
+	--color-primary-foreground: var(--primary-foreground);
+	--color-primary: var(--primary);
+	--color-popover-foreground: var(--popover-foreground);
+	--color-popover: var(--popover);
+	--color-card-foreground: var(--card-foreground);
+	--color-card: var(--card);
+	--color-foreground: var(--foreground);
+	--color-background: var(--background);
+
+	/* Brand colours as first-class utilities, so components can say
+	   `bg-surface-chrome` / `border-line-soft` / `text-text-accent` instead of
+	   reaching for arbitrary `var()` values. Names mirror the design system's
+	   token names exactly, to keep the two greppable against each other. */
+	--color-surface-app: var(--surface-app);
+	--color-surface-panel: var(--surface-panel);
+	--color-surface-panel-raised: var(--surface-panel-raised);
+	--color-surface-card: var(--surface-card);
+	--color-surface-card-hover: var(--surface-card-hover);
+	--color-surface-inset: var(--surface-inset);
+	--color-surface-chrome: var(--surface-chrome);
+	--color-surface-overlay: var(--surface-overlay);
+	--color-surface-active: var(--surface-active);
+
+	--color-text-strong: var(--text-strong);
+	--color-text-body: var(--text-body);
+	--color-text-muted: var(--text-muted);
+	--color-text-faint: var(--text-faint);
+	--color-text-inverse: var(--text-inverse);
+	--color-text-accent: var(--text-accent);
+	--color-text-xp: var(--text-xp);
+	--color-text-danger: var(--text-danger);
+
+	--color-line-hairline: var(--line-hairline);
+	--color-line-soft: var(--line-soft);
+	--color-line-strong: var(--line-strong);
+	--color-line-accent: var(--line-accent);
+
+	--color-action-primary: var(--action-primary);
+	--color-action-primary-hover: var(--action-primary-hover);
+	--color-action-primary-press: var(--action-primary-press);
+	--color-action-primary-text: var(--action-primary-text);
+	--color-action-quiet: var(--action-quiet);
+	--color-action-quiet-hover: var(--action-quiet-hover);
+
+	--color-verdant-700: var(--verdant-700);
+	--color-verdant-600: var(--verdant-600);
+	--color-verdant-500: var(--verdant-500);
+	--color-verdant-400: var(--verdant-400);
+	--color-verdant-300: var(--verdant-300);
+	--color-verdant-200: var(--verdant-200);
+
+	--color-amber-600: var(--amber-600);
+	--color-amber-500: var(--amber-500);
+	--color-amber-400: var(--amber-400);
+	--color-amber-300: var(--amber-300);
+
+	/* Radii are the design system's machined scale (3 / 5 / 8 / 12 / 16), not a
+	   ramp derived from --radius. Panels 12, cards 8, controls 5, chips and
+	   inner wells 3; only meter tracks and status dots are fully round. */
+	--radius-xs: var(--radius-xs);
+	--radius-sm: var(--radius-sm);
+	--radius-md: var(--radius-md);
+	--radius-lg: var(--radius-lg);
+	--radius-xl: var(--radius-xl);
+}
+
+@layer base {
+	* {
+		@apply border-border outline-ring/50;
+	}
+	body {
+		@apply bg-background text-foreground;
+	}
+	html {
+		@apply font-sans;
+	}
+}

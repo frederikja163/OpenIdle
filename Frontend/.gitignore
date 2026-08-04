@@ -1,0 +1,31 @@
+node_modules
+
+# Lockfiles — the project installs with Bun, so a conflicting package
+# manager's lockfile must never be committed against bun.lock.
+package-lock.json
+pnpm-lock.yaml
+yarn.lock
+
+# Output
+.output
+.vercel
+.netlify
+.wrangler
+/.svelte-kit
+/build
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Env
+.env
+.env.*
+!.env.example
+!.env.test
+
+# Vite
+vite.config.js.timestamp-*
+vite.config.ts.timestamp-*
+# Playwright
+test-results
