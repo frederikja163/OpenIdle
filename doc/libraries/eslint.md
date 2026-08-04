@@ -13,7 +13,7 @@
 
 | Alternative | Version / size | Differentiating features | Maintenance health | License | Our fit |
 |---|---|---|---|---|---|
-| **ESLint 10** (chosen) | 10.8.0, 3.8 MB, 30 direct deps | The de facto standard; flat config; the only linter with a mature Svelte plugin and full type-aware TypeScript rules | Extremely active: 155M weekly downloads, 426 releases, OpenJS Foundation | MIT | High: the only option with first-class Svelte support |
+| **ESLint 10** (chosen) | 10.8.0, 3.8 MB, 30 direct deps | The de facto standard; flat config; the only linter with a mature Svelte plugin, and the only one full type-aware TypeScript rules can plug into — those come from [typescript-eslint](./typescript-eslint.md), not from ESLint itself | Extremely active: 155M weekly downloads, 426 releases, OpenJS Foundation | MIT | High: the only option with first-class Svelte support |
 | Biome | 2.x | Rust-based lint + format in one tool, ~25× faster, single dependency, no plugin sprawl | Active and growing fast | MIT/Apache-2.0 | Medium: would replace ESLint *and* [Prettier](./prettier.md) and delete 8 packages — genuinely attractive. Loses on Svelte support |
 | Oxlint | 1.x | Rust-based, extremely fast, ESLint-rule-compatible subset | Active (VoidZero, same org as Vite) | MIT | Medium: fast and lean, but type-aware rules and Svelte support are still incomplete |
 | `tsc` strict mode only | already present | Zero new dependencies; catches a real subset of the same bugs | n/a | Apache-2.0 | Medium: the honest minimalist answer. Misses everything non-type-related |
