@@ -1,0 +1,23 @@
+/* OpenIdle Design System token layer.
+ *
+ * Mirrored from the `OpenIdle Design System` project on claude.ai/design
+ * (project af78cd2a-8c52-41ad-a03a-a8ae94a41f7f, `tokens/`). Treat these files
+ * as a copy of that source: edit the design system first, then re-sync here,
+ * so the two do not drift.
+ *
+ * Deliberate divergences from the upstream `tokens/` directory:
+ *   - `fonts.css` is not mirrored. Upstream loads Chakra Petch and IBM Plex
+ *     from the Google Fonts CDN; we self-host through @fontsource, imported
+ *     from routes/layout.css. See doc/libraries/fontsource-chakra-petch.md
+ *     for why the CDN is rejected.
+ *   - `base.css` is mirrored only in part, as `utilities.css` — see its header.
+ *
+ * Consumers should not import this file directly; routes/layout.css pulls it in
+ * once and maps it onto the Tailwind and shadcn token layers.
+ */
+@import './colors.css';
+@import './typography.css';
+@import './spacing.css';
+@import './effects.css';
+@import './motion.css';
+@import './utilities.css';

@@ -1,0 +1,38 @@
+/* OpenIdle Design System — spacing tokens.
+   4px scale. Chrome is fixed and never reflows; panels fill the remaining
+   height and scroll internally rather than growing the page. */
+:root {
+	/* 4px base scale */
+	--sp-0: 0px;
+	--sp-1: 2px;
+	--sp-2: 4px;
+	--sp-3: 6px;
+	--sp-4: 8px;
+	--sp-5: 12px;
+	--sp-6: 16px;
+	--sp-7: 20px;
+	--sp-8: 24px;
+	--sp-9: 32px;
+	--sp-10: 40px;
+	--sp-11: 48px;
+	--sp-12: 64px;
+
+	/* structural rhythm */
+	--gutter-app: 14px; /* app frame padding */
+	--gutter-panel: 16px; /* inside a panel */
+	--gap-grid: 10px; /* between action / item cards */
+	--gap-stack: 8px;
+	--pad-card: 10px;
+	--pad-control-y: 7px;
+	--pad-control-x: 14px;
+
+	/* fixed chrome */
+	--h-topbar: 52px;
+	--h-tabstrip: 38px;
+	--w-skillrail: 176px;
+	--size-slot: 52px; /* inventory slot */
+	--size-action-card: 158px; /* action card width */
+	--h-meter: 6px;
+	--h-meter-lg: 9px;
+	--radius-full: 999px;
+}

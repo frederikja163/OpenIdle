@@ -1,0 +1,94 @@
+/* OpenIdle Design System — colour tokens.
+   Twelve-step cool slate carries ~95% of every surface. Exactly one accent
+   (verdant) reserved for the running action, primary buttons and selection.
+   Amber is XP and only XP. Copper / azure / amethyst / crimson exist solely as
+   skill and rarity identity plus danger — never decoration. */
+:root {
+	/* ---- base palette: deep slate "console" neutrals ---- */
+	--ink-950: #0a0e13;
+	--ink-900: #0f151d;
+	--ink-850: #141c26;
+	--ink-800: #1a232f;
+	--ink-750: #212c3a;
+	--ink-700: #2a3746;
+	--ink-600: #3a4a5c;
+	--ink-500: #546a7f;
+	--ink-400: #7b8fa3;
+	--ink-300: #a8b8c7;
+	--ink-200: #cdd8e2;
+	--ink-100: #e8eef4;
+	--ink-000: #ffffff;
+
+	/* ---- accent: verdant (carried over from the source app's green) ---- */
+	--verdant-700: #2f6b3c;
+	--verdant-600: #3d8a4c;
+	--verdant-500: #4faa5e;
+	--verdant-400: #68c477;
+	--verdant-300: #8fdc9b;
+	--verdant-200: #bdeec5;
+
+	/* ---- xp / progress: amber ---- */
+	--amber-600: #b3730f;
+	--amber-500: #dd9520;
+	--amber-400: #f0b344;
+	--amber-300: #ffd27a;
+
+	/* ---- rarity + skill hues ---- */
+	--copper-500: #c07a4a;
+	--copper-400: #dd9a6c;
+	--azure-600: #2a6fa8;
+	--azure-500: #3a90d4;
+	--azure-400: #6bb2ea;
+	--amethyst-500: #8a5fd0;
+	--amethyst-400: #a985e6;
+	--crimson-600: #a83232;
+	--crimson-500: #d24747;
+	--crimson-400: #ec7676;
+
+	/* ---- semantic: surfaces ---- */
+	--surface-app: var(--ink-950);
+	--surface-panel: var(--ink-900);
+	--surface-panel-raised: var(--ink-850);
+	--surface-card: var(--ink-800);
+	--surface-card-hover: var(--ink-750);
+	--surface-inset: #080b10;
+	--surface-chrome: var(--ink-900);
+	--surface-overlay: rgba(6, 9, 13, 0.72);
+	--surface-active: rgba(79, 170, 94, 0.14);
+
+	/* ---- semantic: text ---- */
+	--text-strong: var(--ink-100);
+	--text-body: var(--ink-200);
+	--text-muted: var(--ink-400);
+	--text-faint: var(--ink-500);
+	--text-inverse: var(--ink-950);
+	--text-accent: var(--verdant-300);
+	--text-xp: var(--amber-300);
+	--text-danger: var(--crimson-400);
+
+	/* ---- semantic: lines ---- */
+	--line-hairline: rgba(168, 184, 199, 0.1);
+	--line-soft: rgba(168, 184, 199, 0.16);
+	--line-strong: rgba(168, 184, 199, 0.28);
+	--line-accent: rgba(104, 196, 119, 0.55);
+
+	/* ---- semantic: interactive ---- */
+	--action-primary: var(--verdant-600);
+	--action-primary-hover: var(--verdant-500);
+	--action-primary-press: var(--verdant-700);
+	--action-primary-text: #06110a;
+	--action-quiet: rgba(168, 184, 199, 0.08);
+	--action-quiet-hover: rgba(168, 184, 199, 0.14);
+	--focus-ring: var(--verdant-400);
+
+	/* ---- semantic: meters ---- */
+	--meter-track: rgba(8, 11, 16, 0.9);
+	--meter-skill: var(--verdant-500);
+	--meter-xp: var(--amber-500);
+	--meter-action: var(--azure-500);
+	--meter-danger: var(--crimson-500);
+
+	/* ---- links ---- */
+	--link: var(--verdant-300);
+	--link-hover: var(--verdant-200);
+}

@@ -1,0 +1,108 @@
+/* OpenIdle Design System — type tokens.
+   Three faces, three jobs: Chakra Petch for HUD display, IBM Plex Sans for
+   prose, IBM Plex Mono (tabular) for every number — counts and timers change
+   every second and non-tabular digits jitter. */
+/* `--font-display`, `--font-body` and `--font-mono` are NOT declared here, even
+   though the upstream design system declares them in this file. Those three
+   names are also Tailwind's font namespace, so declaring them in both places
+   leaves `@theme` emitting `--font-display: var(--font-display)` — a
+   self-reference that only resolves by accident of cascade-layer order. They
+   are declared once, in routes/layout.css, and referenced from here. */
+:root {
+	--weight-regular: 400;
+	--weight-medium: 500;
+	--weight-semibold: 600;
+	--weight-bold: 700;
+
+	/* display — HUD titles, skill names, panel headers (Chakra Petch, tight, tracked) */
+	--type-display-xl: var(--weight-bold) 34px/1.05 var(--font-display);
+	--type-display-lg: var(--weight-bold) 26px/1.1 var(--font-display);
+	--type-display-md: var(--weight-semibold) 19px/1.15 var(--font-display);
+	--type-display-sm: var(--weight-semibold) 15px/1.2 var(--font-display);
+
+	/* body — descriptions, tooltips, log lines */
+	--type-body-lg: var(--weight-regular) 15px/1.55 var(--font-body);
+	--type-body-md: var(--weight-regular) 13px/1.5 var(--font-body);
+	--type-body-sm: var(--weight-regular) 12px/1.45 var(--font-body);
+
+	/* label — buttons, tabs, chips (uppercase + tracking) */
+	--type-label-md: var(--weight-semibold) 12px/1 var(--font-display);
+	--type-label-sm: var(--weight-semibold) 10px/1 var(--font-display);
+
+	/* numeric — counts, timers, rates. tabular, always mono */
+	--type-num-lg: var(--weight-semibold) 20px/1 var(--font-mono);
+	--type-num-md: var(--weight-medium) 13px/1 var(--font-mono);
+	--type-num-sm: var(--weight-medium) 11px/1 var(--font-mono);
+
+	--track-display: 0.005em;
+	--track-label: 0.1em;
+	--track-label-wide: 0.16em;
+	--track-num: 0;
+}
+
+/* The composite `font:` shorthands above cannot be expressed as a single
+   Tailwind utility, and spelling them out in markup (`text-[19px] leading-[1.15]`)
+   would copy token values into components — exactly the drift this layer exists
+   to prevent. These classes are the markup-facing handle for each one.
+   They live in the components layer so a utility can still override them. */
+@layer components {
+	.oi-display-xl {
+		font: var(--type-display-xl);
+		letter-spacing: var(--track-display);
+	}
+	.oi-display-lg {
+		font: var(--type-display-lg);
+		letter-spacing: var(--track-display);
+	}
+	.oi-display-md {
+		font: var(--type-display-md);
+		letter-spacing: var(--track-display);
+	}
+	.oi-display-sm {
+		font: var(--type-display-sm);
+		letter-spacing: var(--track-display);
+	}
+
+	.oi-body-lg {
+		font: var(--type-body-lg);
+	}
+	.oi-body-md {
+		font: var(--type-body-md);
+	}
+	.oi-body-sm {
+		font: var(--type-body-sm);
+	}
+
+	/* Uppercase belongs to the class, not the copy: UPPERCASE is a typographic
+	   treatment for labels, buttons and tabs, never something typed into a
+	   string. See the design system's CONTENT FUNDAMENTALS. */
+	.oi-label-md {
+		font: var(--type-label-md);
+		letter-spacing: var(--track-label);
+		text-transform: uppercase;
+	}
+	.oi-label-sm {
+		font: var(--type-label-sm);
+		letter-spacing: var(--track-label);
+		text-transform: uppercase;
+	}
+
+	.oi-num-lg {
+		font: var(--type-num-lg);
+		font-variant-numeric: tabular-nums;
+	}
+	.oi-num-md {
+		font: var(--type-num-md);
+		font-variant-numeric: tabular-nums;
+	}
+	.oi-num-sm {
+		font: var(--type-num-sm);
+		font-variant-numeric: tabular-nums;
+	}
+
+	.num,
+	[data-num] {
+		font-variant-numeric: tabular-nums;
+		font-feature-settings: 'tnum' 1;
+	}
+}

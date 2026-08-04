@@ -15,6 +15,11 @@
 # Local configuration / secrets
 appsettings.Development.json
 
+# Junction to .opencode/skills so Claude Code discovers the same skills.
+# The real files live in .opencode/skills and are tracked there; ignoring this
+# avoids committing them twice. Other .claude/ files (settings.json) stay tracked.
+/.claude/skills/
+
 # OS files
 Thumbs.db
 Desktop.ini

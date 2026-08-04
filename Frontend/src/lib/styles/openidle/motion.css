@@ -1,0 +1,82 @@
+/* OpenIdle Design System — motion tokens.
+   Fast and functional. --ease-snap (slight overshoot) is for the collect and
+   level-up pop only; --ease-linear is for progress meters only, because eased
+   motion misrepresents constant time. */
+:root {
+	--dur-instant: 80ms;
+	--dur-fast: 140ms;
+	--dur-base: 220ms;
+	--dur-slow: 400ms;
+	--dur-tick: 1000ms;
+
+	--ease-out: cubic-bezier(0.2, 0.8, 0.3, 1);
+	--ease-in-out: cubic-bezier(0.5, 0, 0.3, 1);
+	--ease-snap: cubic-bezier(0.2, 1.5, 0.4, 1);
+	--ease-linear: linear;
+
+	--t-control: var(--dur-fast) var(--ease-out);
+	--t-panel: var(--dur-base) var(--ease-out);
+}
+
+@media (prefers-reduced-motion: reduce) {
+	:root {
+		--dur-fast: 0ms;
+		--dur-base: 0ms;
+		--dur-slow: 0ms;
+	}
+
+	/* Zeroing the duration tokens above only covers transitions. The looping
+	   keyframes (oi-pulse, oi-sweep) are applied with inline `animation` values,
+	   so they need the same treatment here — repeating decorative motion is the
+	   exact class of movement this preference exists to stop. The 0.01ms floor
+	   rather than 0 is so `animation` still computes (an element can otherwise
+	   be left stuck in its keyframe state in some engines). One-shot animations
+	   like tw-animate-css's enter/exit also collapse to instant, as intended. */
+	*,
+	*::before,
+	*::after {
+		animation-duration: 0.01ms !important;
+		animation-iteration-count: 1 !important;
+	}
+}
+
+@keyframes oi-pulse {
+	0%,
+	100% {
+		opacity: 1;
+	}
+	50% {
+		opacity: 0.55;
+	}
+}
+
+@keyframes oi-pop {
+	0% {
+		transform: scale(0.85);
+		opacity: 0;
+	}
+	100% {
+		transform: scale(1);
+		opacity: 1;
+	}
+}
+
+@keyframes oi-float-up {
+	0% {
+		transform: translateY(0);
+		opacity: 1;
+	}
+	100% {
+		transform: translateY(-22px);
+		opacity: 0;
+	}
+}
+
+@keyframes oi-sweep {
+	0% {
+		background-position: 0 0;
+	}
+	100% {
+		background-position: 28px 0;
+	}
+}
