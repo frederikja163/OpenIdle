@@ -14,6 +14,7 @@ namespace Backend.Dtos;
 [JsonDerivedType(typeof(LoginAsTestUserResponse), nameof(LoginAsTestUserResponse))]
 [JsonDerivedType(typeof(SelectProfileRequest), nameof(SelectProfileRequest))]
 [JsonDerivedType(typeof(SelectProfileResponse), nameof(SelectProfileResponse))]
+[JsonDerivedType(typeof(ErrorResponse), nameof(ErrorResponse))]
 public abstract class DtoBase
 {
     

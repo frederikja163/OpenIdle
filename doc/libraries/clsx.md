@@ -36,11 +36,11 @@ Two packages depend on it independently of anything we wrote:
 
 The shadcn-svelte CLI promoted clsx to a *direct* `devDependency` so that `cn()` could import it by name, but it did not introduce it. What changed on 2026-08-03 was the declaration, not the dependency.
 
-**Measured behaviour on this project.** In a build with no shadcn component used anywhere, clsx is tree-shaken out and is genuinely absent from the client bundle. Once components with dynamic `class` props render, Svelte's class-attribute code path is included and clsx arrives with it — in the Svelte runtime chunk, not in ours. So it ships because we use Svelte components with dynamic classes, which is unavoidable, rather than because `cn()` imports it.
+**Measured behaviour on this project.** clsx reaches the client bundle in two ways, and both are unavoidable. Svelte's class-attribute code path pulls it in whenever a component renders dynamic classes — in the Svelte runtime chunk, not in ours — and the app chrome's `cn()` import brings it in through our own module as well. Section 4 shows that removing our `cn()` import alone does not remove the package.
 
 The consequence is that the usual build-vs-buy question does not apply in its usual form, and the honest answer is the opposite of what the package's size suggests. Section 4 sets out the measurement.
 
-Its own footprint remains minimal. No components are vendored yet, so the `cn()` helper that imports it has not been generated; when it is, it lives at `Frontend/src/lib/utils/stylingUtils.ts` and is the single import site in our source.
+Its own footprint remains minimal. No components are vendored yet, but the `cn()` helper was written ahead of them: it lives at `Frontend/src/lib/utils/stylingUtils.ts`, imports clsx, and is already the single import site in our source — the app chrome uses it, so clsx ships via `cn()` as well as via Svelte's own class handling.
 
 ### Pros
 

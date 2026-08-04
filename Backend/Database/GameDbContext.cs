@@ -1,0 +1,10 @@
+using Backend.Entities;
+using Microsoft.EntityFrameworkCore;
+
+namespace Backend.Database;
+
+public sealed class GameDbContext(DbContextOptions<GameDbContext> options) : DbContext(options)
+{
+    public DbSet<User> Users => Set<User>();
+    public DbSet<Profile> Profiles => Set<Profile>();
+}

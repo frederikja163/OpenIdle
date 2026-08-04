@@ -27,7 +27,7 @@ Adopt. This is the enforcement half of the [TypeScript](./typescript.md) decisio
 
 Worth noting that `svelte-check` and the Svelte VS Code extension share the same underlying `svelte2tsx` machinery, so the CLI and the editor agree on diagnostics. That consistency is worth something on its own: a check that disagrees with the editor gets ignored.
 
-One coupling to record explicitly: `svelte-check` depends on `svelte2tsx`, which uses TypeScript's programmatic compiler API. That API is not stable in TypeScript 7, which is the direct reason this project stays on TypeScript 6 — see [TypeScript](./typescript.md) for the full analysis and the revisit date.
+One coupling to record explicitly, and it needs stating precisely rather than as a blanket block. `svelte-check` depends on `svelte2tsx`, which drives TypeScript's programmatic compiler API — and that API is not stable in TypeScript 7. What follows is a constraint on the *default* path, not on the tool: 4.7.4 does have TypeScript 7 routes. `--tsgo` writes the transpiled Svelte files to disk and spawns the native compiler binary as a CLI, sidestepping the programmatic API entirely; `--tsgo-experimental-api` uses the native API directly and is documented by its own help text as "Experimental feature, might break without warning". **This project deliberately takes neither.** `bun run check` runs bare `svelte-check --tsconfig ./tsconfig.json`, which means the stable `svelte2tsx` programmatic path, which means TypeScript 6 — a check that gates CI is the wrong place to carry an experimental compiler backend, and the on-disk `--tsgo` route trades that for build artefacts and a second toolchain for no benefit at this codebase's size. So svelte-check is *a* reason this project stays on TypeScript 6, but not an absolute one; the binding constraints are [typescript-eslint](./typescript-eslint.md) and SvelteKit's peer range — see [TypeScript](./typescript.md) for the full analysis and the revisit date.
 
 ### Pros
 
@@ -42,7 +42,7 @@ One coupling to record explicitly: `svelte-check` depends on `svelte2tsx`, which
 - Noticeably slow on large projects — it is the TypeScript language service running over generated code. Not a concern at current size; will become one.
 - Diagnostics point at positions in generated TSX, and while sourcemaps usually map them back cleanly, confusing off-by-a-bit errors do occur in edge cases.
 - Adds a mandatory `svelte-kit sync` step before it can run (visible in the `check` script), so it cannot be run against a clean checkout without a prior generate step.
-- Its dependency on the TypeScript compiler API is what pins the whole project to TypeScript 6. That is a real constraint imposed by a checking tool, not by the language choice itself.
+- On its default, stable path it needs the TypeScript 6 programmatic compiler API, so it is one of the things holding the project at TypeScript 6. Escaping that means opting into `--tsgo` or the experimental `--tsgo-experimental-api`, which this project declines — a real constraint imposed by a checking tool, not by the language choice itself.
 
 ## 4. Build-vs-buy
 

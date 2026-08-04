@@ -28,7 +28,7 @@ The value is not the merging logic, which is simple, but the **data**: a complet
 
 **The cost is real and is the main argument against it.** At 991 KB unpacked it is the single largest browser-bound package in the project after [bits-ui](./bits-ui.md), and it is the dominant part of the 18.4 KB gzip fixed cost that [shadcn-svelte](./shadcn-svelte.md) section 3 measures on the first component. That cost is paid once rather than per component, which is what makes it tolerable.
 
-Like [clsx](./clsx.md), it is reached through exactly **one import site** — the `cn()` helper at `Frontend/src/lib/utils/stylingUtils.ts`, which is generated with the first component and does not exist yet.
+Like [clsx](./clsx.md), it is reached through exactly **one import site** — the `cn()` helper at `Frontend/src/lib/utils/stylingUtils.ts`. That helper now exists and is imported by the app chrome, so tailwind-merge is already in the client bundle.
 
 ### Pros
 
@@ -60,7 +60,7 @@ Buying wins clearly, and it would still win if shadcn-svelte were not in the pic
 
 ### Undo risk — low
 
-One import site once generated, in `Frontend/src/lib/utils/stylingUtils.ts`. Removing it is a two-line edit — `cn()` degrades to plain [clsx](./clsx.md) concatenation, which compiles and runs fine. What breaks is not the build but the *behaviour*: class overrides stop reliably winning, silently. The rating reflects mechanical ease; the practical consequence of removal is worse than the rating suggests.
+One import site, in `Frontend/src/lib/utils/stylingUtils.ts`. Removing it is a two-line edit — `cn()` degrades to plain [clsx](./clsx.md) concatenation, which compiles and runs fine. What breaks is not the build but the *behaviour*: class overrides stop reliably winning, silently. The rating reflects mechanical ease; the practical consequence of removal is worse than the rating suggests.
 
 ### Security risk — low
 

@@ -8,7 +8,7 @@
  * Deliberate divergences from the upstream `tokens/` directory:
  *   - `fonts.css` is not mirrored. Upstream loads Chakra Petch and IBM Plex
  *     from the Google Fonts CDN; we self-host through @fontsource, imported
- *     from routes/layout.css. See doc/libraries/fontsource-variable-inter.md
+ *     from routes/layout.css. See doc/libraries/fontsource-chakra-petch.md
  *     for why the CDN is rejected.
  *   - `base.css` is mirrored only in part, as `utilities.css` — see its header.
  *

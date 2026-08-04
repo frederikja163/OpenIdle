@@ -25,7 +25,7 @@ Why the others lost: the CDN is rejected on privacy grounds, not performance. Dr
 
 ## 3. Decision & rationale
 
-Adopt **@fontsource/chakra-petch 5.3.0**, self-hosted, weights 500/600/700 only.
+Adopt **@fontsource/chakra-petch 5.3.0** *provisionally*, self-hosted, weights 500/600/700 only. The status above is `under-review` and stays there: the delivery decision below is settled, the choice of face is not.
 
 **Self-hosting is the substantive half of this decision and it is a privacy decision before a performance one.** Loading fonts from `fonts.googleapis.com` transmits every visitor's IP address and `User-Agent` to Google on every page load, which the LG München I ruling treats as a GDPR violation without consent. Self-hosting removes the third-party origin entirely: no consent-banner implications, no data leaving our infrastructure, no dependence on another operator's uptime or TLS. Because cache partitioning killed the cross-site cache benefit, we give up nothing by doing so.
 

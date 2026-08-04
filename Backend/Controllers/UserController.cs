@@ -1,5 +1,4 @@
 ﻿using System;
-using System.Collections.Generic;
 using System.Linq;
 using System.Threading.Tasks;
 using Backend.Attributes;
@@ -16,7 +15,7 @@ public sealed class UserController(UserService userService, ProfileService profi
     public async Task CreateProfile(CreateProfileRequest request)
     {
         ArgumentNullException.ThrowIfNull(User);
-        profileService.CreateProfile(User, request.Name);
+        await profileService.CreateProfileAsync(User, request.Name);
         await RespondAsync(new CreateProfileResponse());
     }
     
@@ -24,7 +23,7 @@ public sealed class UserController(UserService userService, ProfileService profi
     public async Task ListProfiles(ListProfilesRequest request)
     {
         ArgumentNullException.ThrowIfNull(User);
-        List<Profile> profiles = profileService.GetProfiles(User);
+        Profile[] profiles = await profileService.GetProfilesAsync(User);
         await RespondAsync(new ListProfilesResponse() { Profiles = profiles.Select(p => p.ToDto()).ToArray() });
     }
 
@@ -36,7 +35,7 @@ public sealed class UserController(UserService userService, ProfileService profi
             throw new Exception("Already logged in.");
         }
 
-        User testUser = userService.GetTestUser();
+        User testUser = await userService.GetTestUserAsync();
         userService.SignIn(Socket, testUser);
         await RespondAsync(new LoginAsTestUserResponse());
     }
@@ -45,7 +44,7 @@ public sealed class UserController(UserService userService, ProfileService profi
     public async Task SelectProfile(SelectProfileRequest request)
     {
         ArgumentNullException.ThrowIfNull(User);
-        profileService.SelectProfile(Socket, User, request.ProfileId);
+        await profileService.SelectProfileAsync(Socket, User, request.ProfileId);
         await RespondAsync(new SelectProfileResponse());
     }
 }

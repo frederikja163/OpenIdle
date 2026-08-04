@@ -25,7 +25,7 @@ Why `adapter-auto` loses: it solves a problem we do not have. It exists so that 
 
 **Status is `under-review` because no decision has actually been made yet.** `adapter-auto` is present because `sv create` put it there, and it survives only because nothing has been deployed. It is a default, and this project's rules do not let a default stand as a decision.
 
-The recommendation is to **replace it with `@sveltejs/adapter-static`, configured with `ssr = false`**, giving a pure single-page application built to static files. That follows directly from the architectural constraint recorded in [SvelteKit](./sveltekit.md): the C# server is the only backend, so the client should compile to assets that any static host — or the ASP.NET Core process itself — can serve. It also removes a Node runtime from production entirely, which is one fewer thing to patch, monitor, and keep alive on the VPS.
+The recommendation is to **replace it with `@sveltejs/adapter-static`, configured with `ssr = false`**, giving a client built to static files. `ssr = false` is only half the configuration — the other half is what `adapter-static` does with a URL it did not prerender, and the two coherent answers (full prerender, or an `index.html` fallback with a matching ASP.NET Core rewrite) are set out in section 4. That follows directly from the architectural constraint recorded in [SvelteKit](./sveltekit.md): the C# server is the only backend, so the client should compile to assets that any static host — or the ASP.NET Core process itself — can serve. It also removes a Node runtime from production entirely, which is one fewer thing to patch, monitor, and keep alive on the VPS.
 
 Two properties of `adapter-auto` are worth flagging beyond mere redundancy. It resolves and **downloads the real adapter at build time**, meaning a production build reaches out to the npm registry for a package that is not in `bun.lock` — an unpinned dependency introduced during the build, which is both a reproducibility problem and a supply-chain one. And because detection is environment-driven, the same commit can produce different build output on different machines. Neither is acceptable for a build we expect to reproduce.
 
@@ -47,7 +47,14 @@ This document should be revised to `rejected` (with `adapter-static` documented 
 
 ## 4. Build-vs-buy
 
-Neither. The correct move is not to build an adapter and not to keep this one — it is to install the first-party adapter that matches our deployment target. `@sveltejs/adapter-static` is small, maintained by the same team, and pinnable. Writing a custom adapter against SvelteKit's adapter API would be perhaps a day's work and is entirely unnecessary when the official one does exactly this. Swapping is a two-line change in `vite.config.ts` plus a `+layout.ts` exporting `ssr = false` and `prerender = true`.
+Neither. The correct move is not to build an adapter and not to keep this one — it is to install the first-party adapter that matches our deployment target. `@sveltejs/adapter-static` is small, maintained by the same team, and pinnable. Writing a custom adapter against SvelteKit's adapter API would be perhaps a day's work and is entirely unnecessary when the official one does exactly this.
+
+Swapping is small, but "swap the adapter" is not by itself a complete configuration — `adapter-static` needs to be told what to do with a URL it did not prerender, and the two ways of answering that are different deployments:
+
+- **Full prerender.** `adapter()` with no `fallback`, plus a root `+layout.ts` exporting `ssr = false` and `prerender = true`. Every route is emitted as its own `index.html` at build time and ASP.NET Core serves the tree as ordinary static files. This only works while every route is enumerable at build time; a dynamic route with unknown parameters fails the build rather than degrading.
+- **SPA fallback.** `adapter({ fallback: 'index.html' })`, plus a root `+layout.ts` exporting `ssr = false` and `prerender = false`. One HTML shell is emitted and the client router resolves everything. ASP.NET Core must then rewrite any non-asset 404 back to `/index.html` — `MapFallbackFile("index.html")` after `UseStaticFiles()` — or a hard refresh on a deep link returns 404 from the server.
+
+The game client is a long-lived authenticated session behind `(auth)`, so the SPA fallback is the likely answer and the ASP.NET Core rewrite is a required part of it, not an afterthought. Pick one before the swap and make `vite.config.ts` and `+layout.ts` agree; mixing them — `fallback` set while `prerender = true` — is the configuration that silently ships both and confuses which one is actually serving a route.
 
 ## 5. Risk
 

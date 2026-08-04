@@ -7,14 +7,11 @@ namespace Backend.Services;
 
 public sealed class SocketRegistryService
 {
-    private HashSet<Socket> _sockets = new();
-
     internal event AsyncEventHandler<MessageReceivedEventArgs>? MessageReceived;
     internal event AsyncEventHandler<SocketCloseEventArgs>? Close;
     
     internal void RegisterSocket(Socket socket)
     {
-        _sockets.Add(socket);
         socket.MessageReceived += SocketOnMessageReceived;
         socket.Close += SocketOnClose;
     }
@@ -26,11 +23,15 @@ public sealed class SocketRegistryService
 
     private async Task SocketOnClose(object? sender, SocketCloseEventArgs e)
     {
-        if (Close is { } handler) await handler(sender, e);
-        
-        Socket socket = ArgumentException.ThrowIfNotOfType<Socket>(sender);
-        _sockets.Remove(socket);
-        socket.MessageReceived -= SocketOnMessageReceived;
-        socket.Close -= SocketOnClose;
+        try
+        {
+            if (Close is { } handler) await handler(sender, e);
+        }
+        finally
+        {
+            Socket socket = ArgumentException.ThrowIfNotOfType<Socket>(sender);
+            socket.MessageReceived -= SocketOnMessageReceived;
+            socket.Close -= SocketOnClose;
+        }
     }
 }

@@ -27,7 +27,7 @@ Why the others lost: keeping Inter is the "change nothing" option and loses beca
 
 ## 3. Decision & rationale
 
-Adopt **@fontsource-variable/ibm-plex-sans 5.3.0**, self-hosted, importing the `wght` axis only.
+Adopt **@fontsource-variable/ibm-plex-sans 5.3.0** *provisionally*, self-hosted, importing the `wght` axis only. The status above is `under-review` and stays there: the delivery decision below is settled, the choice of face is not.
 
 **Self-hosting is the substantive half of this decision and it is a privacy decision before a performance one.** Loading fonts from `fonts.googleapis.com` transmits every visitor's IP address and `User-Agent` to Google on every page load, which the LG München I ruling treats as a GDPR violation without consent. Self-hosting removes the third-party origin entirely: no consent-banner implications, no data leaving our infrastructure, no dependence on another operator's uptime or TLS. Because browsers partition their HTTP caches per top-level site, the shared-cache argument for the CDN no longer exists — a visitor downloads the font from us either way.
 

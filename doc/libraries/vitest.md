@@ -30,7 +30,7 @@ Adopt **Vitest 4**, with the zero-dependency alternatives acknowledged rather th
 
 Vitest's decisive property is that `vite.config.ts` *is* the test config — visible in our setup, where `defineConfig` is imported from `vitest/config` and the test project `extends: './vite.config.ts'`. Tests resolve imports exactly as the build does. For a project that will eventually want to test Svelte components (Vitest browser mode) that gap only widens.
 
-One gap in the current configuration is worth recording rather than presenting the setup as complete: **only a `server` project is configured** (`environment: 'node'`, excluding `*.svelte.spec.ts`). There is no client or browser project, so Svelte component tests have nowhere to run — the exclusion pattern anticipates them, but no project picks them up. Adding a browser-mode project is the natural next step, and doing so also sets the division of labour with [Playwright](./playwright.md): components under Vitest, full-build journeys under Playwright. `expect: { requireAssertions: true }` is a good default that guards against silently passing empty tests, and is worth keeping.
+One gap in the initial configuration is worth recording rather than presenting the setup as complete: it started with **only a `server` project** (`environment: 'node'`, excluding `*.svelte.spec.ts`). There was no client or browser project, so Svelte component tests had nowhere to run — the exclusion pattern anticipated them, but no project picked them up, and such tests passed green without executing. **Resolved 2026-08-04**: a `client` browser project now collects `*.svelte.{test,spec}.*` and runs them in Chromium via the already-installed [Playwright](./playwright.md), which also sets the division of labour: components under Vitest, full-build journeys under Playwright. `expect: { requireAssertions: true }` guards against silently passing empty tests, and applies to both projects.
 
 ### Pros
 
@@ -46,7 +46,7 @@ One gap in the current configuration is worth recording rather than presenting t
 
 - 20 direct dependencies — the largest direct fan-out in the frontend set after ESLint. Mitigated by roughly half being first-party `@vitest/*` sub-packages.
 - Depends on Vite itself, so a Vite major can force a Vitest major in lockstep.
-- Configured for server-side tests only; the browser project needed for component tests is not wired up.
+- Configured for server-side tests initially; the browser project needed for component tests was added on 2026-08-04 (`@vitest/browser` + `@vitest/browser-playwright`) and requires Playwright's `chromium` to be installed to run.
 - `bun test` would deliver much of this at zero dependency cost; we are paying 20 dependencies for config sharing.
 
 ## 4. Build-vs-buy
