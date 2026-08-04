@@ -7,7 +7,7 @@ using Microsoft.EntityFrameworkCore;
 
 namespace Backend.Services;
 
-public sealed class ProfileService(IDbContextFactory<GameDbContext> dbContextFactory)
+public sealed class ProfileService(IDbContextFactory<GameDbContext> dbContextFactory, SocketRegistryService socketRegistry)
 {
     internal async Task<Profile[]> GetProfilesAsync(User user)
     {
@@ -55,8 +55,11 @@ public sealed class ProfileService(IDbContextFactory<GameDbContext> dbContextFac
         return profile;
     }
 
-    internal async Task SelectProfileAsync(Socket socket, User user, Guid profileId)
+    internal async Task<Profile> SelectProfileAsync(Socket socket, User user, Guid profileId)
     {
-        socket.Profile = await GetProfileAsync(user, profileId);
+        Profile profile = await GetProfileAsync(user, profileId);
+        socket.Profile = profile;
+        socketRegistry.SetProfile(socket, profile);
+        return profile;
     }
 }
