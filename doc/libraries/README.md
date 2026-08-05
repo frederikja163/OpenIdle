@@ -10,6 +10,9 @@ Every third-party dependency used (or considered and rejected) by this project i
 | [ASP.NET Core (Minimal APIs + DI)](./aspnet-core.md) | adopted | 2026-08-02 | low | low |
 
 | [EF Core + SQLite](./ef-core.md) | adopted | 2026-08-03 | medium | low |
+| [NUnit (test framework)](./nunit.md) | adopted | 2026-08-04 | low | low |
+| [Microsoft.AspNetCore.Mvc.Testing](./mvc-testing.md) | rejected | 2026-08-04 | low | low |
+
 ## Frontend
 
 All frontend packages are declared as `devDependencies` — a packaging convention, not a statement about what reaches the browser. The client now ships third-party code in three places: the `cn()` helper at `Frontend/src/lib/utils/stylingUtils.ts`, which imports [clsx](./clsx.md) and [tailwind-merge](./tailwind-merge.md); the [@lucide/svelte](./lucide-svelte.md) icons used by the app chrome; and [shadcn-svelte](./shadcn-svelte.md)'s vendored `button` at `src/lib/components/ui/button/`, which brings [tailwind-variants](./tailwind-variants.md) with it. The rest of the component set is declared and lockfile-pinned but not bundled, and [bits-ui](./bits-ui.md) stays unimported until a component that needs it is added.

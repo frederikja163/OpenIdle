@@ -14,4 +14,9 @@
       <PackageReference Include="SQLitePCLRaw.bundle_e_sqlite3" Version="3.0.3" />
     </ItemGroup>
 
+    <ItemGroup>
+      <InternalsVisibleTo Include="OpenIdle.Tests" />
+      <InternalsVisibleTo Include="OpenIdle.IntegrationTests" />
+    </ItemGroup>
+
 </Project>

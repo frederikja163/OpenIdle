@@ -9,6 +9,7 @@ namespace Backend.Dtos;
 [JsonDerivedType(typeof(PongResponse), nameof(PongResponse))]
 [JsonDerivedType(typeof(CreateProfileRequest), nameof(CreateProfileRequest))]
 [JsonDerivedType(typeof(CreateProfileResponse), nameof(CreateProfileResponse))]
+[JsonDerivedType(typeof(ProfilesChangedEvent), nameof(ProfilesChangedEvent))]
 [JsonDerivedType(typeof(ListProfilesRequest), nameof(ListProfilesRequest))]
 [JsonDerivedType(typeof(ListProfilesResponse), nameof(ListProfilesResponse))]
 [JsonDerivedType(typeof(LoginAsTestUserRequest), nameof(LoginAsTestUserRequest))]

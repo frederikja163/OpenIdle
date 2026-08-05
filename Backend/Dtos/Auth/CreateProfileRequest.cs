@@ -9,3 +9,8 @@ public sealed class CreateProfileRequest : RequestBase
 public sealed class CreateProfileResponse : ResponseBase
 {
 }
+
+public sealed class ProfilesChangedEvent : EventBase
+{
+    public required ProfileDto[] Profiles { get; set; }
+}
