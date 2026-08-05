@@ -51,6 +51,10 @@ chore: ignore SQLite journal files
 - Subject in the imperative mood, lower case after the type, no trailing period, ≤ 72 chars.
 - A body only when the *why* is not obvious from the diff — the constraint, the bug it
   reproduces, the decision behind it. Wrap at 72. Skip it otherwise.
+- Keep it short. Most commits are a subject and nothing else, and a body that earns its
+  place is a sentence or two. State the *why* once and stop: do not replay the diff,
+  recount the symptoms, or narrate how the problem was found. If the detail is worth
+  keeping, it belongs in a code comment or a doc, not the log.
 
 ## Before committing
 

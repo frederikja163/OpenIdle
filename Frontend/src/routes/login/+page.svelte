@@ -5,10 +5,12 @@
 	import { ensureLoggedIn, userState } from '$lib/state/user.svelte';
 
 	// /login is only for logged-out visitors: fires both when the login below
-	// succeeds and when an already-logged-in user navigates here.
+	// succeeds and when an already-logged-in user navigates here. replaceState
+	// for the same reason the (auth) guard uses it — a login screen the visitor
+	// has since passed is not somewhere Back should return to.
 	$effect(() => {
 		if (userState.status === 'loggedIn') {
-			void goto(resolve('/profiles'));
+			void goto(resolve('/profiles'), { replaceState: true });
 		}
 	});
 </script>

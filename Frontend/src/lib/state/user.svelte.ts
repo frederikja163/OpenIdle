@@ -37,8 +37,8 @@ export async function ensureLoggedIn(): Promise<void> {
  * dropping the socket is the logout.
  *
  * The state is reset here rather than left to the `onClose` handler below,
- * which fires a tick later and cannot be relied on at all when the socket is
- * already gone: `close()` no-ops silently in that case.
+ * which does not run at all when the socket is already gone: `close()` no-ops
+ * silently in that case.
  */
 export function logout(): void {
 	getWsClient().close();
