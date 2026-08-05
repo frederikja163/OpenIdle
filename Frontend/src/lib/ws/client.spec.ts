@@ -1,6 +1,5 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { WsClient, WsError } from './client';
-import { ALREADY_LOGGED_IN_CODE } from './protocol';
 
 /**
  * Enough of the WebSocket interface for WsClient, plus levers to drive it. A
@@ -112,20 +111,14 @@ describe('WsClient', () => {
 		await flush();
 		sockets[0].open();
 		await flush();
-		sockets[0].deliver({
-			$type: 'ErrorResponse',
-			Id: null,
-			Code: ALREADY_LOGGED_IN_CODE,
-			Message: 'Already logged in.'
-		});
+		sockets[0].deliver({ $type: 'ErrorResponse', Id: null, Message: 'Already logged in.' });
 
-		// The message is surfaced verbatim, and the code rides along: after a
-		// hot reload ensureLoggedIn compares this Code (not the Message) to
-		// recover the existing session, so both fields are load-bearing.
+		// Pinned exactly: ensureLoggedIn compares this string literally to
+		// recover a hot-reloaded session, so rewording the rejection here would
+		// break that with nothing else to notice.
 		const error = await login;
 		expect(error).toBeInstanceOf(WsError);
 		expect((error as WsError).message).toBe('Already logged in.');
-		expect((error as WsError).code).toBe(ALREADY_LOGGED_IN_CODE);
 	});
 
 	it('does not charge an error to a request sent after an earlier one timed out', async () => {

@@ -12,15 +12,7 @@ const DEFAULT_WS_URL = 'ws://localhost:5066/ws';
 const DEFAULT_REQUEST_TIMEOUT_MS = 10_000;
 const DEFAULT_CONNECT_TIMEOUT_MS = 5_000;
 
-export class WsError extends Error {
-	/** The backend's machine-readable code (ErrorResponse.Code), or null. */
-	readonly code: string | null;
-
-	constructor(message: string, code: string | null = null) {
-		super(message);
-		this.code = code;
-	}
-}
+export class WsError extends Error {}
 
 export interface WsClientOptions {
 	url: string;
@@ -173,9 +165,7 @@ export class WsClient {
 				}
 				// Absent from `pending` when that request already timed out: this is
 				// its answer, arriving too late for anyone to receive it.
-				this.takePending(id)?.reject(
-					new WsError(classified.message.Message, classified.message.Code)
-				);
+				this.takePending(id)?.reject(new WsError(classified.message.Message));
 				break;
 			}
 			case 'event': {

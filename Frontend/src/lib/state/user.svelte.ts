@@ -1,6 +1,5 @@
 import { browser } from '$app/environment';
 import { getWsClient, WsError } from '$lib/ws/client';
-import { ALREADY_LOGGED_IN_CODE } from '$lib/ws/protocol';
 
 export type LoginStatus = 'loggedOut' | 'loggingIn' | 'loggedIn' | 'error';
 
@@ -26,9 +25,8 @@ export async function ensureLoggedIn(): Promise<void> {
 		userState.status = 'loggedIn';
 	} catch (error) {
 		// After a hot reload this module's state resets while the socket stays
-		// logged in, so the backend's rejection actually means success. Matched
-		// on the stable machine-readable code, not the message text.
-		if (error instanceof WsError && error.code === ALREADY_LOGGED_IN_CODE) {
+		// logged in, so the backend's rejection actually means success.
+		if (error instanceof WsError && error.message === 'Already logged in.') {
 			userState.status = 'loggedIn';
 			return;
 		}
