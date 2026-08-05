@@ -3,6 +3,8 @@ using System.Threading.Tasks;
 
 namespace Backend.Extensions;
 
+public delegate Task AsyncEventHandler<TEventArgs>(object? sender, TEventArgs e);
+
 internal static class AsyncEventHandlerExtensions
 {
     internal static async Task InvokeAsync<TEventArgs>(this AsyncEventHandler<TEventArgs>? handler, object? sender, TEventArgs e)

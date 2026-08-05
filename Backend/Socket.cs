@@ -1,5 +1,9 @@
 ﻿using System;
+using System.Linq;
 using System.Net.WebSockets;
+using System.Text;
+using System.Text.Json;
+using System.Text.Json.Serialization;
 using System.Threading;
 using System.Threading.Tasks;
 using Backend.Dtos;
@@ -7,8 +11,6 @@ using Backend.Entities;
 using Backend.Extensions;
 
 namespace Backend;
-
-public delegate Task AsyncEventHandler<TEventArgs>(object? sender, TEventArgs e);
 
 internal sealed class MessageReceivedEventArgs(RequestBase request) : EventArgs
 {
