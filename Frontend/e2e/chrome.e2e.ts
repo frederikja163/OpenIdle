@@ -29,6 +29,18 @@ test('a protected route bounces to /login when logged out', async ({ page }) => 
 	await expect(page).toHaveURL(/\/login$/);
 });
 
+test('the guard replaces the rejected entry instead of stacking one', async ({ page }) => {
+	await page.goto('/login');
+	const entries = await page.evaluate(() => history.length);
+
+	await page.goto('/game');
+	await expect(page).toHaveURL(/\/login$/);
+
+	// One entry for the /game navigation and none for the bounce, so Back still
+	// leads out of the app instead of to the route the guard just rejected.
+	expect(await page.evaluate(() => history.length)).toBe(entries + 1);
+});
+
 test('logging in surfaces the failure when the socket will not open', async ({ page }) => {
 	await page.routeWebSocket(WS_ROUTE, (ws) => ws.close());
 
@@ -36,4 +48,24 @@ test('logging in surfaces the failure when the socket will not open', async ({ p
 	await page.getByRole('button', { name: 'Log in' }).click();
 
 	await expect(page.getByText('error', { exact: true })).toBeVisible();
+});
+
+test('a successful login replaces /login rather than stacking /profiles on it', async ({
+	page
+}) => {
+	await page.routeWebSocket(WS_ROUTE, (ws) => {
+		// connectToServer() is never called, so these frames are the whole
+		// backend as far as this test is concerned.
+		ws.onMessage((frame) => {
+			const { Id } = JSON.parse(String(frame));
+			ws.send(JSON.stringify({ $type: 'LoginAsTestUserResponse', Id }));
+		});
+	});
+
+	await page.goto('/login');
+	const entries = await page.evaluate(() => history.length);
+	await page.getByRole('button', { name: 'Log in' }).click();
+
+	await expect(page).toHaveURL(/\/profiles$/);
+	expect(await page.evaluate(() => history.length)).toBe(entries);
 });

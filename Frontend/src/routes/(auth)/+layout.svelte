@@ -17,9 +17,13 @@
 	// Everything in (auth) requires a live login. Also fires when the socket
 	// drops mid-session, since that resets userState to 'loggedOut'. 'error'
 	// bounces too — /login is the surface that shows auth errors.
+	//
+	// replaceState because the entry being left is one the visitor was never
+	// allowed to occupy: pushing over it would put the rejected route under the
+	// Back button, and going back only re-runs this effect and bounces again.
 	$effect(() => {
 		if (userState.status === 'loggedOut' || userState.status === 'error') {
-			void goto(resolve('/login'));
+			void goto(resolve('/login'), { replaceState: true });
 		}
 	});
 
