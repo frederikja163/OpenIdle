@@ -4,9 +4,16 @@ import { expect, test } from '@playwright/test';
 // this is the production build rather than the dev server — which is the whole
 // reason Playwright is carried alongside Vitest.
 //
-// No backend runs here. /login does not log in on its own, so an untouched visit
-// rests at 'loggedOut'; it is pressing the button that fails, which the last
-// test drives.
+// PUBLIC_WS_URL defaults to the address the backend binds in development, so a
+// test that needs the socket to behave a certain way stubs it with
+// routeWebSocket rather than assuming nothing is listening. Tests that never log
+// in need no stub: the client is constructed at import time but only connects
+// once a request is sent.
+
+// Matches the URL itself rather than a glob, which Playwright would resolve
+// against baseURL and so never match a socket on another port.
+const WS_ROUTE = /\/ws$/;
+
 test('the root route funnels through the auth guards to /login', async ({ page }) => {
 	await page.goto('/');
 
@@ -22,7 +29,9 @@ test('a protected route bounces to /login when logged out', async ({ page }) => 
 	await expect(page).toHaveURL(/\/login$/);
 });
 
-test('logging in surfaces the failure when no backend is reachable', async ({ page }) => {
+test('logging in surfaces the failure when the socket will not open', async ({ page }) => {
+	await page.routeWebSocket(WS_ROUTE, (ws) => ws.close());
+
 	await page.goto('/login');
 	await page.getByRole('button', { name: 'Log in' }).click();
 
