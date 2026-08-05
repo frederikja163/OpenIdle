@@ -9,12 +9,14 @@ import {
 
 const DEFAULT_WS_URL = 'ws://localhost:5066/ws';
 const DEFAULT_REQUEST_TIMEOUT_MS = 10_000;
+const DEFAULT_CONNECT_TIMEOUT_MS = 5_000;
 
 export class WsError extends Error {}
 
 export interface WsClientOptions {
 	url: string;
 	requestTimeoutMs?: number;
+	connectTimeoutMs?: number;
 	socketFactory?: (url: string) => WebSocket;
 }
 
@@ -27,6 +29,7 @@ interface PendingRequest {
 export class WsClient {
 	private readonly url: string;
 	private readonly requestTimeoutMs: number;
+	private readonly connectTimeoutMs: number;
 	private readonly socketFactory: (url: string) => WebSocket;
 
 	private socket: WebSocket | null = null;
@@ -45,6 +48,7 @@ export class WsClient {
 	constructor(options: WsClientOptions) {
 		this.url = options.url;
 		this.requestTimeoutMs = options.requestTimeoutMs ?? DEFAULT_REQUEST_TIMEOUT_MS;
+		this.connectTimeoutMs = options.connectTimeoutMs ?? DEFAULT_CONNECT_TIMEOUT_MS;
 		this.socketFactory = options.socketFactory ?? ((url) => new WebSocket(url));
 	}
 
@@ -55,13 +59,22 @@ export class WsClient {
 		this.connectPromise ??= new Promise((resolve, reject) => {
 			const socket = this.socketFactory(this.url);
 			this.socket = socket;
-			socket.addEventListener('open', () => resolve());
+			// A socket whose TCP handshake completes but whose upgrade never does
+			// stays in CONNECTING until the browser's own transport timeout, tens
+			// of seconds away. Closing it routes the failure through the 'close'
+			// listener like any other, so nothing else needs to know about it.
+			const connectTimer = setTimeout(() => socket.close(), this.connectTimeoutMs);
+			socket.addEventListener('open', () => {
+				clearTimeout(connectTimer);
+				resolve();
+			});
 			socket.addEventListener('message', (event) => this.handleMessage(String(event.data)));
 			// A failed connection fires both 'error' and 'close'; rejecting an
 			// already-settled promise is a no-op, so no guard is needed.
 			socket.addEventListener('close', () => {
+				clearTimeout(connectTimer);
 				reject(new WsError('WebSocket closed'));
-				this.handleClose();
+				this.retire(socket);
 			});
 		});
 		return this.connectPromise;
@@ -71,10 +84,12 @@ export class WsClient {
 		type: K,
 		payload: RequestMap[K]['payload']
 	): Promise<RequestMap[K]['response']> {
-		await this.connect();
 		const id = this.nextRequestId++;
 		const frame = encodeRequest(type, id, payload);
 		return new Promise((resolve, reject) => {
+			// Armed before connecting rather than after, so requestTimeoutMs bounds
+			// the whole call. Otherwise a connection that never opens would blow
+			// straight past the deadline the message below promises.
 			const timer = setTimeout(() => {
 				// Dropped from `pending` but left in `outstanding`: giving up on the
 				// caller does not cancel the request, and the backend still owes a
@@ -83,8 +98,25 @@ export class WsClient {
 				reject(new WsError(`${type} timed out after ${this.requestTimeoutMs}ms`));
 			}, this.requestTimeoutMs);
 			this.pending.set(id, { resolve, reject, timer });
-			this.outstanding.push(id);
-			this.socket?.send(frame);
+			this.connect().then(
+				() => {
+					const socket = this.socket;
+					// send() on a CLOSING or CLOSED socket discards the frame and
+					// throws nothing, so this check is the only way the caller hears
+					// about it before the timeout.
+					if (!socket || socket.readyState !== WebSocket.OPEN) {
+						this.takePending(id)?.reject(new WsError('WebSocket is not open'));
+						return;
+					}
+					this.outstanding.push(id);
+					socket.send(frame);
+				},
+				(error: unknown) => {
+					this.takePending(id)?.reject(
+						error instanceof WsError ? error : new WsError(String(error))
+					);
+				}
+			);
 		});
 	}
 
@@ -99,7 +131,16 @@ export class WsClient {
 	}
 
 	close(): void {
-		this.socket?.close();
+		const socket = this.socket;
+		if (!socket) {
+			return;
+		}
+		// Retired before close() returns rather than on the 'close' event, which
+		// is a network round trip away: readyState flips to CLOSING immediately,
+		// and until the event lands connect() would keep handing back the
+		// memoised promise for a socket that can no longer carry a frame.
+		this.retire(socket);
+		socket.close();
 	}
 
 	private handleMessage(raw: string): void {
@@ -154,7 +195,15 @@ export class WsClient {
 		}
 	}
 
-	private handleClose(): void {
+	/**
+	 * Drops a socket and everything riding on it. Reached from close() as well
+	 * as from the 'close' event, and no-ops for a socket that has already been
+	 * replaced so that a late close event cannot tear down its successor.
+	 */
+	private retire(socket: WebSocket): void {
+		if (this.socket !== socket) {
+			return;
+		}
 		this.socket = null;
 		this.connectPromise = null;
 		this.outstanding.length = 0;

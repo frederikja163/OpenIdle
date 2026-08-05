@@ -10,6 +10,8 @@ import { WsClient, WsError } from './client';
 class FakeSocket {
 	readyState: number = WebSocket.CONNECTING;
 	readonly sent: string[] = [];
+	/** Frames passed to send() while not OPEN, which the real API discards. */
+	readonly discarded: string[] = [];
 	private readonly listeners = new Map<string, Set<(event: unknown) => void>>();
 
 	addEventListener(type: string, handler: (event: unknown) => void): void {
@@ -21,6 +23,15 @@ class FakeSocket {
 	send(frame: string): void {
 		if (this.readyState === WebSocket.OPEN) {
 			this.sent.push(frame);
+		} else {
+			this.discarded.push(frame);
+		}
+	}
+
+	/** Like the real close(): flips to CLOSING and leaves the event for later. */
+	close(): void {
+		if (this.readyState !== WebSocket.CLOSED) {
+			this.readyState = WebSocket.CLOSING;
 		}
 	}
 
@@ -46,7 +57,7 @@ class FakeSocket {
 	}
 }
 
-function makeClient(options: { requestTimeoutMs?: number } = {}) {
+function makeClient(options: { requestTimeoutMs?: number; connectTimeoutMs?: number } = {}) {
 	const sockets: FakeSocket[] = [];
 	const client = new WsClient({
 		url: 'ws://test.invalid/ws',
@@ -148,6 +159,64 @@ describe('WsClient', () => {
 
 		expect((await login).toString()).toMatch(/WebSocket closed/);
 		expect(closed).toHaveBeenCalledTimes(1);
+	});
+
+	it('opens a fresh socket for a request made during the closing handshake', async () => {
+		vi.useFakeTimers();
+		const { client, sockets } = makeClient();
+
+		const login = capture(client.request('LoginAsTestUserRequest', {}));
+		await flush();
+		sockets[0].open();
+		await flush();
+		sockets[0].deliver({ $type: 'LoginAsTestUserResponse', Id: 1 });
+		await expect(login).resolves.toMatchObject({ $type: 'LoginAsTestUserResponse' });
+
+		// close() only flips the socket to CLOSING; the event that would clear
+		// the memoised connection is still a round trip away.
+		client.close();
+		const retry = capture(client.request('LoginAsTestUserRequest', {}));
+		await flush();
+
+		expect(sockets).toHaveLength(2);
+		sockets[1].open();
+		await flush();
+		expect(sockets[0].discarded).toHaveLength(0);
+		expect(JSON.parse(sockets[1].sent[0])).toMatchObject({ Id: 2 });
+
+		// The first socket's close event lands late and must not disturb its
+		// successor.
+		sockets[0].finishClose();
+		await flush();
+		sockets[1].deliver({ $type: 'LoginAsTestUserResponse', Id: 2 });
+		await expect(retry).resolves.toMatchObject({ $type: 'LoginAsTestUserResponse' });
+	});
+
+	it('closes a socket that never finishes connecting', async () => {
+		vi.useFakeTimers();
+		const { client, sockets } = makeClient({ connectTimeoutMs: 100, requestTimeoutMs: 10_000 });
+
+		const login = capture(client.request('LoginAsTestUserRequest', {}));
+		await flush();
+		expect(sockets[0].readyState).toBe(WebSocket.CONNECTING);
+
+		await vi.advanceTimersByTimeAsync(100);
+		expect(sockets[0].readyState).toBe(WebSocket.CLOSING);
+
+		sockets[0].finishClose();
+		expect((await login).toString()).toMatch(/WebSocket closed/);
+	});
+
+	it('counts the connection against the request timeout', async () => {
+		vi.useFakeTimers();
+		const { client } = makeClient({ requestTimeoutMs: 50, connectTimeoutMs: 10_000 });
+
+		// The socket is left in CONNECTING forever, so the only thing that can
+		// settle this is a timer armed before the connection was awaited.
+		const ping = capture(client.request('PingRequest', {}));
+		await vi.advanceTimersByTimeAsync(50);
+
+		expect((await ping).toString()).toMatch(/PingRequest timed out after 50ms/);
 	});
 
 	it('stops calling handlers that have unsubscribed', async () => {
