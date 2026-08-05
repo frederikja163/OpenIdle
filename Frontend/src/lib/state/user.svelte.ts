@@ -1,8 +1,12 @@
 import { browser } from '$app/environment';
 import { getWsClient, WsError } from '$lib/ws/client';
+import { ALREADY_LOGGED_IN_CODE } from '$lib/ws/protocol';
 
 export type LoginStatus = 'loggedOut' | 'loggingIn' | 'loggedIn' | 'error';
 
+// Module-scoped $state: safe only because it is never touched outside the
+// browser. Do not mutate it during server-side rendering or in request handling,
+// where this single instance is shared across every request.
 export const userState = $state({
 	status: 'loggedOut' as LoginStatus,
 	// TODO: LoginAsTestUserResponse carries no user id yet; populate this once
@@ -22,8 +26,9 @@ export async function ensureLoggedIn(): Promise<void> {
 		userState.status = 'loggedIn';
 	} catch (error) {
 		// After a hot reload this module's state resets while the socket stays
-		// logged in, so the backend's rejection actually means success.
-		if (error instanceof WsError && error.message === 'Already logged in.') {
+		// logged in, so the backend's rejection actually means success. Matched
+		// on the stable machine-readable code, not the message text.
+		if (error instanceof WsError && error.code === ALREADY_LOGGED_IN_CODE) {
 			userState.status = 'loggedIn';
 			return;
 		}

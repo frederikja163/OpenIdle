@@ -37,8 +37,16 @@ export interface SelectProfileResponse {
 export interface ErrorResponse {
 	$type: 'ErrorResponse';
 	Id: number | null;
+	Code: string | null;
 	Message: string;
 }
+
+/**
+ * Machine-readable code the backend attaches to an ErrorResponse for a session
+ * that already exists (Backend/Errors/ErrorCodeException). Mirrors the value at
+ * the throw site, not the human-readable Message, which may change.
+ */
+export const ALREADY_LOGGED_IN_CODE = 'AlreadyLoggedIn';
 
 export type ServerResponse =
 	| PongResponse
@@ -105,5 +113,21 @@ export function classifyMessage(raw: string): Classified {
 	if (typeof message.Id === 'number') {
 		return { kind: 'response', id: message.Id, message: message as ServerResponse };
 	}
+	// A known response type whose Id is null or otherwise non-numeric is a
+	// malformed response, not a server event: genuine events carry their own
+	// $type and never appear in RESPONSE_TYPES.
+	if (RESPONSE_TYPES.has(message.$type)) {
+		return { kind: 'unknown', raw };
+	}
 	return { kind: 'event', message: message as ServerEvent };
 }
+
+// Keep in sync with the ServerResponse union above: an Id-less frame whose
+// $type is one of these answers a request and must not be read as an event.
+const RESPONSE_TYPES = new Set<string>([
+	'PongResponse',
+	'LoginAsTestUserResponse',
+	'CreateProfileResponse',
+	'ListProfilesResponse',
+	'SelectProfileResponse'
+]);

@@ -1,3 +1,4 @@
+import { dev } from '$app/environment';
 import { env } from '$env/dynamic/public';
 import {
 	classifyMessage,
@@ -11,7 +12,15 @@ const DEFAULT_WS_URL = 'ws://localhost:5066/ws';
 const DEFAULT_REQUEST_TIMEOUT_MS = 10_000;
 const DEFAULT_CONNECT_TIMEOUT_MS = 5_000;
 
-export class WsError extends Error {}
+export class WsError extends Error {
+	/** The backend's machine-readable code (ErrorResponse.Code), or null. */
+	readonly code: string | null;
+
+	constructor(message: string, code: string | null = null) {
+		super(message);
+		this.code = code;
+	}
+}
 
 export interface WsClientOptions {
 	url: string;
@@ -164,7 +173,9 @@ export class WsClient {
 				}
 				// Absent from `pending` when that request already timed out: this is
 				// its answer, arriving too late for anyone to receive it.
-				this.takePending(id)?.reject(new WsError(classified.message.Message));
+				this.takePending(id)?.reject(
+					new WsError(classified.message.Message, classified.message.Code)
+				);
 				break;
 			}
 			case 'event': {
@@ -219,6 +230,25 @@ export class WsClient {
 let client: WsClient | null = null;
 
 export function getWsClient(): WsClient {
-	client ??= new WsClient({ url: env.PUBLIC_WS_URL || DEFAULT_WS_URL });
+	client ??= new WsClient({ url: resolveWsUrl() });
 	return client;
+}
+
+/**
+ * The development default is only safe for a local backend. In any deployed
+ * build a missing PUBLIC_WS_URL is a configuration error worth failing fast on
+ * rather than silently pointing every client at localhost.
+ */
+function resolveWsUrl(): string {
+	const configured = env.PUBLIC_WS_URL;
+	if (configured) {
+		return configured;
+	}
+	if (dev) {
+		return DEFAULT_WS_URL;
+	}
+	console.warn(
+		'PUBLIC_WS_URL is not set; refusing to fall back to the development default outside development.'
+	);
+	throw new Error('PUBLIC_WS_URL must be configured outside development');
 }

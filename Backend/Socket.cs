@@ -6,6 +6,7 @@ using System.Threading;
 using System.Threading.Tasks;
 using Backend.Dtos;
 using Backend.Entities;
+using Backend.Errors;
 
 namespace Backend;
 
@@ -102,7 +103,9 @@ internal sealed class Socket : IDisposable
         }
         catch (Exception exception)
         {
-            await SendResponseAsync(new ErrorResponse(exception.Message));
+            await SendResponseAsync(new ErrorResponse(
+                exception is ErrorCodeException errorCode ? errorCode.Code : null,
+                exception.Message));
         }
     }
 

@@ -1,5 +1,6 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { WsClient, WsError } from './client';
+import { ALREADY_LOGGED_IN_CODE } from './protocol';
 
 /**
  * Enough of the WebSocket interface for WsClient, plus levers to drive it. A
@@ -111,14 +112,20 @@ describe('WsClient', () => {
 		await flush();
 		sockets[0].open();
 		await flush();
-		sockets[0].deliver({ $type: 'ErrorResponse', Id: null, Message: 'Already logged in.' });
+		sockets[0].deliver({
+			$type: 'ErrorResponse',
+			Id: null,
+			Code: ALREADY_LOGGED_IN_CODE,
+			Message: 'Already logged in.'
+		});
 
-		// Pinned exactly: ensureLoggedIn compares this string literally to
-		// recover a hot-reloaded session, so rewording the rejection here would
-		// break that with nothing else to notice.
+		// The message is surfaced verbatim, and the code rides along: after a
+		// hot reload ensureLoggedIn compares this Code (not the Message) to
+		// recover the existing session, so both fields are load-bearing.
 		const error = await login;
 		expect(error).toBeInstanceOf(WsError);
 		expect((error as WsError).message).toBe('Already logged in.');
+		expect((error as WsError).code).toBe(ALREADY_LOGGED_IN_CODE);
 	});
 
 	it('does not charge an error to a request sent after an earlier one timed out', async () => {
@@ -143,6 +150,56 @@ describe('WsClient', () => {
 
 		sockets[0].deliver({ $type: 'ListProfilesResponse', Id: 2, Profiles: [] });
 		await expect(next).resolves.toEqual({ $type: 'ListProfilesResponse', Id: 2, Profiles: [] });
+	});
+
+	it('charges an error to the live request once an answered one is cleared', async () => {
+		vi.useFakeTimers();
+		const { client, sockets } = makeClient({ requestTimeoutMs: 50 });
+
+		const login = capture(client.request('LoginAsTestUserRequest', {}));
+		await flush();
+		sockets[0].open();
+		await flush();
+		sockets[0].deliver({ $type: 'LoginAsTestUserResponse', Id: 1 });
+		await expect(login).resolves.toMatchObject({ $type: 'LoginAsTestUserResponse' });
+
+		// The counterpart to the case above: the backend has answered id 1, so
+		// the cursor has to have moved off it, or this error is charged to a
+		// settled request and the caller waits out the timeout for nothing.
+		const create = capture(client.request('CreateProfileRequest', { Name: 'Alice' }));
+		await flush();
+		sockets[0].deliver({ $type: 'ErrorResponse', Id: null, Message: 'Profile name already taken' });
+		await vi.advanceTimersByTimeAsync(50);
+
+		const error = await create;
+		expect(error).toBeInstanceOf(WsError);
+		expect((error as WsError).message).toBe('Profile name already taken');
+	});
+
+	it('forgets what the backend owed when the socket drops', async () => {
+		vi.useFakeTimers();
+		const { client, sockets } = makeClient({ requestTimeoutMs: 50 });
+
+		const abandoned = capture(client.request('CreateProfileRequest', { Name: 'Alice' }));
+		await flush();
+		sockets[0].open();
+		await flush();
+		await vi.advanceTimersByTimeAsync(50);
+		expect((await abandoned).toString()).toMatch(/timed out after 50ms/);
+
+		// A tombstone outlives the caller but not the connection: the backend
+		// that owed id 1 is gone, so nothing on the new socket answers it.
+		sockets[0].finishClose();
+		const listed = capture(client.request('ListProfilesRequest', {}));
+		await flush();
+		sockets[1].open();
+		await flush();
+		sockets[1].deliver({ $type: 'ErrorResponse', Id: null, Message: 'Not logged in.' });
+		await vi.advanceTimersByTimeAsync(50);
+
+		const error = await listed;
+		expect(error).toBeInstanceOf(WsError);
+		expect((error as WsError).message).toBe('Not logged in.');
 	});
 
 	it('rejects everything in flight when the socket drops', async () => {

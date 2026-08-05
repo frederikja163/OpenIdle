@@ -4,6 +4,7 @@ using System.Threading.Tasks;
 using Backend.Attributes;
 using Backend.Dtos.Auth;
 using Backend.Entities;
+using Backend.Errors;
 using Backend.Services;
 
 namespace Backend.Controllers;
@@ -32,7 +33,7 @@ public sealed class UserController(UserService userService, ProfileService profi
     {
         if (User is not null)
         {
-            throw new Exception("Already logged in.");
+            throw new ErrorCodeException("AlreadyLoggedIn", "Already logged in.");
         }
 
         User testUser = await userService.GetTestUserAsync();
