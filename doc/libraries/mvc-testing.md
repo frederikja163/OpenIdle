@@ -36,7 +36,7 @@ Reject `Microsoft.AspNetCore.Mvc.Testing`; build a small in-house harness in the
 
 - We own the harness: startup, port discovery (`IServerAddressesFeature`), and cleanup are ~70 lines we must maintain.
 - Reimplements (thinly) what `WebApplicationFactory` provides out of the box; no automatic DI override hook like `WithWebHostBuilder` — connection-string injection is handled by the `CreateApp` parameter instead.
-- Controller discovery needed an explicit `.AddApplicationPart(...)` in `Program.cs` because MVC scans the entry assembly, which is the test assembly in this scenario.
+- Controller discovery needed an explicit `.AddApplicationPart(...)` in `AppHost.cs` because MVC scans the entry assembly, which is the test assembly in this scenario.
 - Per-test server startup (a few hundred ms) is slower than TestServer's in-memory host.
 
 ## 4. Build-vs-buy
