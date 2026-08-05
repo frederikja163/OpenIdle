@@ -4,6 +4,7 @@ using System.Threading.Tasks;
 using Backend.Database;
 using Backend.Entities;
 using Microsoft.EntityFrameworkCore;
+using SQLitePCL;
 
 namespace Backend.Services;
 
@@ -29,6 +30,7 @@ public sealed class ProfileService(IDbContextFactory<GameDbContext> dbContextFac
 
     internal async Task<Profile> CreateProfileAsync(User user, string name)
     {
+        // TODO: Fix name duplication problem here.
         ArgumentException.ThrowIfNullOrWhiteSpace(name);
         if (name.Length > 30)
         {
@@ -40,6 +42,10 @@ public sealed class ProfileService(IDbContextFactory<GameDbContext> dbContextFac
         }
 
         await using GameDbContext dbContext = await dbContextFactory.CreateDbContextAsync();
+        if (await dbContext.Profiles.AnyAsync(p => p.Name == name))
+        {
+            throw new ArgumentException("Profile name is already taken.");
+        }
 
         Profile profile = new Profile()
         {
