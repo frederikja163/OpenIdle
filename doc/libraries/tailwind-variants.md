@@ -28,7 +28,7 @@ Of the three packages behind the shadcn styling idiom, this sits between the oth
 
 It also composes with the rest of the idiom rather than duplicating it: `tv()` handles variant selection, and conflict resolution is still delegated to [tailwind-merge](./tailwind-merge.md).
 
-**No import sites yet** — no components are vendored. Unlike [clsx](./clsx.md) and [tailwind-merge](./tailwind-merge.md), which are reached through the single `cn()` helper, `tv()` is called directly in the `module` block of each variant-bearing component, so its import sites grow one-per-component as they are added. That is why its undo risk is rated above [clsx](./clsx.md)'s.
+**Two import sites** — `button.svelte` and `badge.svelte`, the two vendored components that carry variants. Unlike [clsx](./clsx.md) and [tailwind-merge](./tailwind-merge.md), which are reached through the single `cn()` helper, `tv()` is called directly in the `module` block of each variant-bearing component, so its import sites grow one-per-component as they are added. That is why its undo risk is rated above [clsx](./clsx.md)'s.
 
 ### Pros
 

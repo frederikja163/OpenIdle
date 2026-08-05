@@ -12,7 +12,7 @@ Every third-party dependency used (or considered and rejected) by this project i
 | [EF Core + SQLite](./ef-core.md) | adopted | 2026-08-03 | medium | low |
 ## Frontend
 
-All frontend packages are declared as `devDependencies` — a packaging convention, not a statement about what reaches the browser. The client now ships third-party code in two places: the `cn()` helper at `Frontend/src/lib/utils/stylingUtils.ts`, which imports [clsx](./clsx.md) and [tailwind-merge](./tailwind-merge.md), and the [@lucide/svelte](./lucide-svelte.md) icons used by the app chrome. [shadcn-svelte](./shadcn-svelte.md)'s `button` is vendored at `src/lib/components/ui/button/`, which brings `tailwind-variants` with it; the rest of the component set is declared and lockfile-pinned but not bundled, and [bits-ui](./bits-ui.md) stays unimported until a component that needs it is added.
+All frontend packages are declared as `devDependencies` — a packaging convention, not a statement about what reaches the browser. The client now ships third-party code in two places: the `cn()` helper at `Frontend/src/lib/utils/stylingUtils.ts`, which imports [clsx](./clsx.md) and [tailwind-merge](./tailwind-merge.md), and the [@lucide/svelte](./lucide-svelte.md) icons used by the app chrome. [shadcn-svelte](./shadcn-svelte.md)'s `button`, `badge`, `card`, `input` and `dialog` are vendored under `src/lib/components/ui/`, and `button` and `badge` bring `tailwind-variants` with them; the rest of the component set is declared and lockfile-pinned but not bundled. `dialog` is the component that needed [bits-ui](./bits-ui.md), so that dependency and its transitive tree now ship to the browser — measured at +14.9 KB gzip.
 
 ### Framework and build
 
@@ -36,7 +36,7 @@ All frontend packages are declared as `devDependencies` — a packaging conventi
 
 ### Components
 
-The browser-bound half of the frontend set. Of these, only [@lucide/svelte](./lucide-svelte.md) reaches the browser today — three icons in the app chrome — alongside `cn()`'s [clsx](./clsx.md) and [tailwind-merge](./tailwind-merge.md). The shadcn-svelte component set and [bits-ui](./bits-ui.md) ship only once vendored. The two below are the primary decisions:
+The browser-bound half of the frontend set, and as of the profiles delete confirmation all of it ships: the [@lucide/svelte](./lucide-svelte.md) icons, `cn()`'s [clsx](./clsx.md) and [tailwind-merge](./tailwind-merge.md), `tailwind-variants` behind Button and Badge, and [bits-ui](./bits-ui.md) behind the vendored `dialog`. The two below are the primary decisions:
 
 | Library | Decision | Date | Risk (undo) | Risk (security) |
 |---|---|---|---|---|
@@ -48,7 +48,7 @@ The rest were **entailed** by those two rather than chosen independently — ins
 | Library | Decision | Date | Risk (undo) | Risk (security) | Ships JS to browser |
 |---|---|---|---|---|---|
 | [tailwind-merge](./tailwind-merge.md) | adopted | 2026-08-03 | low | low | yes |
-| [tailwind-variants](./tailwind-variants.md) | adopted | 2026-08-03 | low | low | **no** — nothing imports it yet |
+| [tailwind-variants](./tailwind-variants.md) | adopted | 2026-08-03 | low | low | **yes** — Button and Badge call `tv()` |
 | [clsx](./clsx.md) | adopted | 2026-08-03 | low | low | yes |
 | [@lucide/svelte](./lucide-svelte.md) | adopted | 2026-08-03 | low | low | yes (tree-shaken per icon) |
 | [tw-animate-css](./tw-animate-css.md) | adopted | 2026-08-03 | low | low | **no** — CSS only |
