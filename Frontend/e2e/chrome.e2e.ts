@@ -69,3 +69,47 @@ test('a successful login replaces /login rather than stacking /profiles on it', 
 	await expect(page).toHaveURL(/\/profiles$/);
 	expect(await page.evaluate(() => history.length)).toBe(entries);
 });
+
+test('deleting a profile asks first, and confirming does nothing yet', async ({ page }) => {
+	await page.routeWebSocket(WS_ROUTE, (ws) => {
+		ws.onMessage((frame) => {
+			const { $type, Id } = JSON.parse(String(frame));
+			if ($type === 'ListProfilesRequest') {
+				ws.send(
+					JSON.stringify({
+						$type: 'ListProfilesResponse',
+						Id,
+						Profiles: [{ Name: 'Thorin', ProfileId: 'p1' }]
+					})
+				);
+				return;
+			}
+			ws.send(JSON.stringify({ $type: `${$type.replace('Request', '')}Response`, Id }));
+		});
+	});
+
+	await page.goto('/login');
+	await page.getByRole('button', { name: 'Log in' }).click();
+	await expect(page).toHaveURL(/\/profiles$/);
+
+	const trigger = page.getByRole('button', { name: 'Delete' });
+	await trigger.click();
+
+	// The whole point of the vendored dialog is the behaviour underneath it, so
+	// assert that rather than just that some markup appeared: it portals out,
+	// takes focus onto the safe button, and gives focus back on dismissal.
+	const dialog = page.getByRole('dialog');
+	await expect(dialog).toBeVisible();
+	await expect(dialog.getByText('Delete Thorin?')).toBeVisible();
+	await expect(dialog.getByRole('button', { name: 'Cancel' })).toBeFocused();
+
+	await page.keyboard.press('Escape');
+	await expect(dialog).toBeHidden();
+	await expect(trigger).toBeFocused();
+
+	// Confirming is inert by design — no delete message exists on the wire.
+	await trigger.click();
+	await page.getByRole('dialog').getByRole('button', { name: 'Delete' }).click();
+	await expect(page.getByRole('dialog')).toBeHidden();
+	await expect(page.getByText('Thorin')).toBeVisible();
+});

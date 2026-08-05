@@ -10,14 +10,15 @@
 	import { Badge } from '$lib/components/ui/badge';
 	import { Button } from '$lib/components/ui/button';
 	import * as Card from '$lib/components/ui/card';
+	import * as Dialog from '$lib/components/ui/dialog';
 	import type { Profile } from '../data';
 
 	/*
 	 * One save-slot panel from the design system's profiles template: identity
 	 * row with avatar tile and Active badge, stat pills, an inset skill-meter
 	 * well, then Resume/Load and Delete. Selecting is raised to the page, which
-	 * owns the navigation that follows it; Delete has no backend message yet and
-	 * stays inert.
+	 * owns the navigation that follows it; Delete asks for confirmation but has
+	 * no backend message behind it yet.
 	 */
 	interface Props {
 		profile: Profile;
@@ -77,9 +78,52 @@
 			<Play />
 			{selecting ? 'Loading…' : profile.active ? 'Resume' : 'Load'}
 		</Button>
-		<Button variant="danger" class="ml-auto">
-			<Trash2 />
-			Delete
-		</Button>
+		<!--
+			Dialog.Root renders no element of its own, so the trigger Button is still
+			a direct flex child of the footer and keeps pushing itself right.
+		-->
+		<Dialog.Root>
+			<Dialog.Trigger>
+				{#snippet child({ props })}
+					<Button variant="danger" class="ml-auto" {...props}>
+						<Trash2 />
+						Delete
+					</Button>
+				{/snippet}
+			</Dialog.Trigger>
+			<!-- No corner X: with only Cancel and Delete it duplicates Cancel. -->
+			<Dialog.Content showCloseButton={false}>
+				<Dialog.Header>
+					<Dialog.Title>Delete {profile.name}?</Dialog.Title>
+					<Dialog.Description>
+						This deletes the profile and everything on it. It cannot be undone.
+					</Dialog.Description>
+				</Dialog.Header>
+				<Dialog.Footer>
+					<!--
+						Cancel comes first so the focus trap lands on it rather than on the
+						destructive button. Reordering these moves the initial focus.
+					-->
+					<Dialog.Close>
+						{#snippet child({ props })}
+							<Button variant="ghost" {...props}>Cancel</Button>
+						{/snippet}
+					</Dialog.Close>
+					<!--
+						TODO: confirming only dismisses. There is no delete message on the
+						wire or in the backend yet; when one lands, call it here and clear
+						profilesState.selectedProfileId if this profile was the selected one.
+					-->
+					<Dialog.Close>
+						{#snippet child({ props })}
+							<Button variant="danger" {...props}>
+								<Trash2 />
+								Delete
+							</Button>
+						{/snippet}
+					</Dialog.Close>
+				</Dialog.Footer>
+			</Dialog.Content>
+		</Dialog.Root>
 	</Card.Footer>
 </Card.Root>
