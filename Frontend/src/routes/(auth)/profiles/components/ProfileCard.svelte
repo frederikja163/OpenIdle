@@ -15,14 +15,20 @@
 	/*
 	 * One save-slot panel from the design system's profiles template: identity
 	 * row with avatar tile and Active badge, stat pills, an inset skill-meter
-	 * well, then Resume/Load and Delete. Actions are static — purely
-	 * presentational until the game board hooks them up.
+	 * well, then Resume/Load and Delete. Selecting is raised to the page, which
+	 * owns the navigation that follows it; Delete has no backend message yet and
+	 * stays inert.
 	 */
 	interface Props {
 		profile: Profile;
+		onSelect: () => void;
+		/** This card's select is in flight. */
+		selecting?: boolean;
+		/** Some card's select is in flight — only one may run at a time. */
+		disabled?: boolean;
 	}
 
-	let { profile }: Props = $props();
+	let { profile, onSelect, selecting = false, disabled = false }: Props = $props();
 </script>
 
 <Card.Root>
@@ -62,9 +68,14 @@
 	</div>
 
 	<Card.Footer class="mt-(--sp-1) flex-wrap gap-(--gap-stack)">
-		<Button variant={profile.active ? 'primary' : 'secondary'}>
+		<Button
+			variant={profile.active ? 'primary' : 'secondary'}
+			{disabled}
+			aria-busy={selecting}
+			onclick={onSelect}
+		>
 			<Play />
-			{profile.active ? 'Resume' : 'Load'}
+			{selecting ? 'Loading…' : profile.active ? 'Resume' : 'Load'}
 		</Button>
 		<Button variant="danger" class="ml-auto">
 			<Trash2 />

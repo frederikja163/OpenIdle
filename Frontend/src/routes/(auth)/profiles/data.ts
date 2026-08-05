@@ -3,12 +3,8 @@ import Hammer from '@lucide/svelte/icons/hammer';
 import Pickaxe from '@lucide/svelte/icons/pickaxe';
 import Trees from '@lucide/svelte/icons/trees';
 import type { Component } from 'svelte';
+import type { ProfileDto } from '$lib/ws/protocol';
 
-/*
- * Mock save-slot data, verbatim from the design system's profiles template
- * (Profiles.dc.html). The page is static for now: buttons render but carry no
- * handlers, and gold/playtime stay preformatted strings.
- */
 export type IconComponent = Component<{ size?: number | string }>;
 
 export interface Skill {
@@ -18,24 +14,28 @@ export interface Skill {
 }
 
 export interface Profile {
+	profileId: string;
 	name: string;
 	icon: IconComponent;
 	lastPlayed: string;
-	active?: boolean;
+	/** Selected on this connection — client-side knowledge the socket never reports. */
+	active: boolean;
 	totalLevel: number;
 	gold: string;
 	playtime: string;
 	skills: Skill[];
 }
 
-export const slotCapacity = 4;
-
-export const profiles: Profile[] = [
+/*
+ * TODO: every field below is fabricated. ProfileDto carries only Name and
+ * ProfileId, so the icon, stats and skill meters are filler kept verbatim from
+ * the design system's profiles template (Profiles.dc.html) to hold the layout.
+ * Replace each field as the DTO grows one.
+ */
+const fillerStats: Omit<Profile, 'profileId' | 'name' | 'active'>[] = [
 	{
-		name: 'Thorin',
 		icon: Pickaxe,
 		lastPlayed: '2 minutes ago',
-		active: true,
 		totalLevel: 13,
 		gold: '1,284',
 		playtime: '6h 12m',
@@ -47,7 +47,6 @@ export const profiles: Profile[] = [
 		]
 	},
 	{
-		name: 'Willow',
 		icon: Trees,
 		lastPlayed: '3 days ago',
 		totalLevel: 27,
@@ -61,7 +60,6 @@ export const profiles: Profile[] = [
 		]
 	},
 	{
-		name: 'Pike',
 		icon: Fish,
 		lastPlayed: '2 weeks ago',
 		totalLevel: 5,
@@ -75,3 +73,13 @@ export const profiles: Profile[] = [
 		]
 	}
 ];
+
+/** Dresses a server profile in the card's view model, cycling the filler above. */
+export function toProfile(dto: ProfileDto, index: number, active: boolean): Profile {
+	return {
+		profileId: dto.ProfileId,
+		name: dto.Name,
+		...fillerStats[index % fillerStats.length],
+		active
+	};
+}
