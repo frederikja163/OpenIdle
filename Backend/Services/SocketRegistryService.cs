@@ -3,6 +3,7 @@ using System.Collections.Concurrent;
 using System.IO;
 using System.Linq;
 using System.Net.WebSockets;
+using System.Threading;
 using System.Threading.Tasks;
 using Backend.Dtos;
 using Backend.Entities;
@@ -69,9 +70,10 @@ public sealed class SocketRegistryService
         byte[] bytes = SocketJsonSerializer.Serialize(eventBase);
         foreach (Socket socket in sockets.Keys.ToArray())
         {
+            using CancellationTokenSource timeout = new(TimeSpan.FromSeconds(5));
             try
             {
-                await socket.SendMessageAsync(bytes);
+                await socket.SendMessageAsync(bytes, timeout.Token);
             }
             catch (Exception exception) when (IsTransportException(exception))
             {
@@ -91,9 +93,10 @@ public sealed class SocketRegistryService
         byte[] bytes = SocketJsonSerializer.Serialize(eventBase);
         foreach (Socket socket in sockets.Keys.ToArray())
         {
+            using CancellationTokenSource timeout = new(TimeSpan.FromSeconds(5));
             try
             {
-                await socket.SendMessageAsync(bytes);
+                await socket.SendMessageAsync(bytes, timeout.Token);
             }
             catch (Exception exception) when (IsTransportException(exception))
             {
@@ -105,19 +108,19 @@ public sealed class SocketRegistryService
 
     private static bool IsTransportException(Exception exception)
     {
-        return exception is WebSocketException or IOException or ObjectDisposedException;
+        return exception is WebSocketException or IOException or ObjectDisposedException or OperationCanceledException;
     }
 
     private async Task SocketOnMessageReceived(object? sender, MessageReceivedEventArgs e)
     {
-        if (MessageReceived is { } handler) await handler(sender, e);
+        await MessageReceived.InvokeAsync(sender, e);
     }
 
     private async Task SocketOnClose(object? sender, SocketCloseEventArgs e)
     {
         try
         {
-            if (Close is { } handler) await handler(sender, e);
+            await Close.InvokeAsync(sender, e);
         }
         finally
         {

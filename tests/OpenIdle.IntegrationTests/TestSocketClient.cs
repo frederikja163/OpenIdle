@@ -73,10 +73,13 @@ public sealed class TestSocketClient : IDisposable
 
     public async Task<DtoBase> ReceiveUntilAsync(Func<DtoBase, bool> predicate, CancellationToken cancellationToken)
     {
+        using CancellationTokenSource timeout = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+        timeout.CancelAfter(Timeout);
+
         DtoBase response;
         do
         {
-            response = await ReceiveAsync(cancellationToken);
+            response = await ReceiveAsync(timeout.Token);
         }
         while (!predicate(response));
 

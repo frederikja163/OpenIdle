@@ -13,6 +13,8 @@ namespace OpenIdle.IntegrationTests;
 
 public sealed class TestApplication : IDisposable
 {
+    private static readonly TimeSpan InitializationTimeout = TimeSpan.FromSeconds(30);
+
     private readonly WebApplication _app;
     private readonly string _dbPath;
 
@@ -22,17 +24,42 @@ public sealed class TestApplication : IDisposable
     {
         _dbPath = Path.Combine(Path.GetTempPath(), $"openidle-it-{Guid.NewGuid():N}.db");
 
-        WebApplication app = AppHost.CreateApp([], $"Data Source={_dbPath};Pooling=False");
-        app.Urls.Add("http://127.0.0.1:0");
-        AppHost.MigrateDatabaseAsync(app.Services).GetAwaiter().GetResult();
-        app.StartAsync().GetAwaiter().GetResult();
+        WebApplication? app = null;
+        try
+        {
+            using CancellationTokenSource initializationTimeout = new(InitializationTimeout);
 
-        IServerAddressesFeature addresses = app.Services.GetRequiredService<IServer>().Features.Get<IServerAddressesFeature>()
-            ?? throw new InvalidOperationException("Server did not expose its bound addresses.");
-        string baseAddress = addresses.Addresses.First(a => a.StartsWith("http://127.0.0.1"));
+            app = AppHost.CreateApp([], $"Data Source={_dbPath};Pooling=False");
+            app.Urls.Add("http://127.0.0.1:0");
+            AppHost.MigrateDatabaseAsync(app.Services, initializationTimeout.Token).GetAwaiter().GetResult();
+            app.StartAsync(initializationTimeout.Token).GetAwaiter().GetResult();
 
-        _app = app;
-        WsUri = new Uri(baseAddress.Replace("http://", "ws://", StringComparison.Ordinal) + "/ws");
+            IServerAddressesFeature addresses = app.Services.GetRequiredService<IServer>().Features.Get<IServerAddressesFeature>()
+                ?? throw new InvalidOperationException("Server did not expose its bound addresses.");
+            string baseAddress = addresses.Addresses.First(a => a.StartsWith("http://127.0.0.1"));
+
+            _app = app;
+            WsUri = new Uri(baseAddress.Replace("http://", "ws://", StringComparison.Ordinal) + "/ws");
+            app = null;
+        }
+        catch
+        {
+            if (app is not null)
+            {
+                try
+                {
+                    app.StopAsync().GetAwaiter().GetResult();
+                }
+                catch
+                {
+                }
+
+                app.DisposeAsync().AsTask().GetAwaiter().GetResult();
+            }
+
+            DeleteDatabaseFiles();
+            throw;
+        }
     }
 
     public async Task<TestSocketClient> ConnectAsync(CancellationToken externalToken = default)
@@ -49,24 +76,29 @@ public sealed class TestApplication : IDisposable
         }
         finally
         {
-            foreach (string file in new[] { _dbPath, $"{_dbPath}-shm", $"{_dbPath}-wal" })
-            {
-                for (int attempt = 0; attempt < 3; attempt++)
-                {
-                    try
-                    {
-                        File.Delete(file);
-                        break;
-                    }
-                    catch (IOException)
-                    {
-                    }
-                    catch (UnauthorizedAccessException)
-                    {
-                    }
+            DeleteDatabaseFiles();
+        }
+    }
 
-                    Thread.Sleep(100);
+    private void DeleteDatabaseFiles()
+    {
+        foreach (string file in new[] { _dbPath, $"{_dbPath}-shm", $"{_dbPath}-wal" })
+        {
+            for (int attempt = 0; attempt < 3; attempt++)
+            {
+                try
+                {
+                    File.Delete(file);
+                    break;
                 }
+                catch (IOException)
+                {
+                }
+                catch (UnauthorizedAccessException)
+                {
+                }
+
+                Thread.Sleep(100);
             }
         }
     }

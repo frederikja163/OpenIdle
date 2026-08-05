@@ -1,4 +1,5 @@
 using System;
+using System.Threading;
 using System.Threading.Tasks;
 using Backend.Database;
 using Backend.Extensions;
@@ -30,11 +31,11 @@ internal static class AppHost
         return app;
     }
 
-    public static async Task MigrateDatabaseAsync(IServiceProvider services)
+    public static async Task MigrateDatabaseAsync(IServiceProvider services, CancellationToken cancellationToken = default)
     {
         using IServiceScope scope = services.CreateScope();
         IDbContextFactory<GameDbContext> dbContextFactory = scope.ServiceProvider.GetRequiredService<IDbContextFactory<GameDbContext>>();
-        await using GameDbContext dbContext = await dbContextFactory.CreateDbContextAsync();
-        await dbContext.Database.MigrateAsync();
+        await using GameDbContext dbContext = await dbContextFactory.CreateDbContextAsync(cancellationToken);
+        await dbContext.Database.MigrateAsync(cancellationToken);
     }
 }

@@ -1,5 +1,4 @@
 using System;
-using System.Text;
 using System.Text.Json;
 using System.Text.Json.Serialization;
 using Backend.Dtos;
@@ -19,14 +18,12 @@ internal static class SocketJsonSerializer
 
     internal static byte[] Serialize(DtoBase dto)
     {
-        string json = JsonSerializer.Serialize(dto, typeof(DtoBase), Options);
-        return Encoding.UTF8.GetBytes(json);
+        return JsonSerializer.SerializeToUtf8Bytes(dto, typeof(DtoBase), Options);
     }
 
     internal static DtoBase Deserialize(byte[] bytes, int count)
     {
-        string json = Encoding.UTF8.GetString(bytes, 0, count);
-        return JsonSerializer.Deserialize<DtoBase>(json, Options)
+        return JsonSerializer.Deserialize<DtoBase>(bytes.AsSpan(0, count), Options)
                ?? throw new FormatException("Payload was either malformed json or an unrecognized json object.");
     }
 

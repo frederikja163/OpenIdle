@@ -4,6 +4,7 @@ using System.Threading;
 using System.Threading.Tasks;
 using Backend.Dtos;
 using Backend.Entities;
+using Backend.Extensions;
 
 namespace Backend;
 
@@ -80,20 +81,22 @@ internal sealed class Socket : IDisposable
 
     internal async Task SendResponseAsync(ResponseBase response)
     {
-        await SendMessageAsync(SocketJsonSerializer.Serialize(response));
+        using CancellationTokenSource timeout = new(TimeSpan.FromSeconds(5));
+        await SendMessageAsync(SocketJsonSerializer.Serialize(response), timeout.Token);
     }
 
     internal async Task SendEventAsync(EventBase eventBase)
     {
-        await SendMessageAsync(SocketJsonSerializer.Serialize(eventBase));
+        using CancellationTokenSource timeout = new(TimeSpan.FromSeconds(5));
+        await SendMessageAsync(SocketJsonSerializer.Serialize(eventBase), timeout.Token);
     }
 
-    internal async Task SendMessageAsync(byte[] bytes)
+    internal async Task SendMessageAsync(byte[] bytes, CancellationToken cancellationToken)
     {
-        await _sendLock.WaitAsync();
+        await _sendLock.WaitAsync(cancellationToken);
         try
         {
-            await _webSocket.SendAsync(bytes, WebSocketMessageType.Text, true, CancellationToken.None);
+            await _webSocket.SendAsync(bytes, WebSocketMessageType.Text, true, cancellationToken);
         }
         finally
         {
@@ -106,7 +109,7 @@ internal sealed class Socket : IDisposable
         try
         {
             RequestBase dto = SocketJsonSerializer.DeserializeRequest(bytes, count);
-            if (MessageReceived is { } handler) await handler(this, new MessageReceivedEventArgs(dto));
+            await MessageReceived.InvokeAsync(this, new MessageReceivedEventArgs(dto));
         }
         catch (Exception exception)
         {
@@ -132,7 +135,7 @@ internal sealed class Socket : IDisposable
             _webSocket.Abort();
         }
 
-        if (Close is { } handler) await handler(this, new SocketCloseEventArgs());
+        await Close.InvokeAsync(this, new SocketCloseEventArgs());
     }
 
     public void Dispose()
