@@ -15,6 +15,7 @@
 		max?: number;
 		tone?: MeterTone;
 		size?: MeterSize;
+		striped?: boolean;
 		label?: string;
 		class?: string;
 	}
@@ -24,6 +25,7 @@
 		max = 100,
 		tone = 'skill',
 		size = 'md',
+		striped = false,
 		label,
 		class: className
 	}: Props = $props();
@@ -42,6 +44,13 @@
 		action: 'bg-(--meter-action)',
 		danger: 'bg-(--meter-danger)'
 	};
+
+	// The sweep rides on top of the tone rather than replacing it: `bg-(--meter-*)`
+	// sets background-color and this sets background-image, so the two compose and
+	// one stripe declaration serves every tone. The gradient stops stay literal
+	// rgba because a colour stop cannot take Tailwind's `/opacity` shorthand.
+	const stripes =
+		'bg-[image:repeating-linear-gradient(115deg,rgba(255,255,255,.16)_0_6px,transparent_6px_14px)] bg-[length:28px_100%] animate-[oi-sweep_700ms_linear_infinite]';
 </script>
 
 <div
@@ -59,7 +68,8 @@
 	<div
 		class={cn(
 			'h-full rounded-(--radius-full) shadow-[inset_0_1px_0_rgba(255,255,255,.28)] transition-[width] duration-(--dur-tick) ease-linear',
-			tones[tone]
+			tones[tone],
+			striped && stripes
 		)}
 		style:width={`${pct}%`}
 	></div>
