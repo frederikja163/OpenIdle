@@ -33,6 +33,12 @@ export class WsClient {
 	private connectPromise: Promise<void> | null = null;
 	private nextRequestId = 1;
 	private readonly pending = new Map<number, PendingRequest>();
+	/**
+	 * Ids the backend still owes a reply for, oldest first — deliberately not
+	 * the same set as `pending`, which a local timeout abandons while the
+	 * backend carries on working. See the error branch of handleMessage.
+	 */
+	private readonly outstanding: number[] = [];
 	private readonly eventHandlers = new Set<(event: ServerEvent) => void>();
 	private readonly closeHandlers = new Set<() => void>();
 
@@ -70,10 +76,14 @@ export class WsClient {
 		const frame = encodeRequest(type, id, payload);
 		return new Promise((resolve, reject) => {
 			const timer = setTimeout(() => {
+				// Dropped from `pending` but left in `outstanding`: giving up on the
+				// caller does not cancel the request, and the backend still owes a
+				// reply that the error branch has to account for.
 				this.pending.delete(id);
 				reject(new WsError(`${type} timed out after ${this.requestTimeoutMs}ms`));
 			}, this.requestTimeoutMs);
 			this.pending.set(id, { resolve, reject, timer });
+			this.outstanding.push(id);
 			this.socket?.send(frame);
 		});
 	}
@@ -96,6 +106,7 @@ export class WsClient {
 		const classified = classifyMessage(raw);
 		switch (classified.kind) {
 			case 'response': {
+				this.clearOutstanding(classified.id);
 				const pending = this.takePending(classified.id);
 				pending?.resolve(classified.message as never);
 				break;
@@ -103,11 +114,16 @@ export class WsClient {
 			case 'error': {
 				// ErrorResponse.Id is always null on the backend, so it cannot be
 				// matched by id. The backend handles messages FIFO per connection,
-				// so the error belongs to the oldest pending request.
-				const oldestId = this.pending.keys().next().value;
-				if (oldestId !== undefined) {
-					this.takePending(oldestId)?.reject(new WsError(classified.message.Message));
+				// so the error answers the oldest request it has not replied to —
+				// which is why the cursor is `outstanding` and not `pending`.
+				const id = this.outstanding.shift();
+				if (id === undefined) {
+					console.warn('Websocket error with no request to attribute it to:', classified.message);
+					break;
 				}
+				// Absent from `pending` when that request already timed out: this is
+				// its answer, arriving too late for anyone to receive it.
+				this.takePending(id)?.reject(new WsError(classified.message.Message));
 				break;
 			}
 			case 'event': {
@@ -131,9 +147,17 @@ export class WsClient {
 		return pending;
 	}
 
+	private clearOutstanding(id: number): void {
+		const index = this.outstanding.indexOf(id);
+		if (index !== -1) {
+			this.outstanding.splice(index, 1);
+		}
+	}
+
 	private handleClose(): void {
 		this.socket = null;
 		this.connectPromise = null;
+		this.outstanding.length = 0;
 		for (const id of [...this.pending.keys()]) {
 			this.takePending(id)?.reject(new WsError('WebSocket closed'));
 		}
