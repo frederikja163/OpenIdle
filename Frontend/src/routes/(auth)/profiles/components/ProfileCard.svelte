@@ -1,7 +1,6 @@
 <script lang="ts">
 	import ChevronsUp from '@lucide/svelte/icons/chevrons-up';
 	import Coins from '@lucide/svelte/icons/coins';
-	import Download from '@lucide/svelte/icons/download';
 	import Play from '@lucide/svelte/icons/play';
 	import Timer from '@lucide/svelte/icons/timer';
 	import Trash2 from '@lucide/svelte/icons/trash-2';
@@ -16,7 +15,7 @@
 	/*
 	 * One save-slot panel from the design system's profiles template: identity
 	 * row with avatar tile and Active badge, stat pills, an inset skill-meter
-	 * well, then Resume/Load–Export–Delete. Actions are static — purely
+	 * well, then Resume/Load and Delete. Actions are static — purely
 	 * presentational until the game board hooks them up.
 	 */
 	interface Props {
@@ -66,10 +65,6 @@
 		<Button variant={profile.active ? 'primary' : 'secondary'}>
 			<Play />
 			{profile.active ? 'Resume' : 'Load'}
-		</Button>
-		<Button>
-			<Download />
-			Export
 		</Button>
 		<Button variant="danger" class="ml-auto">
 			<Trash2 />
