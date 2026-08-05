@@ -24,3 +24,14 @@ export function cn(...inputs: ClassValue[]) {
  * the type is maintained by hand.
  */
 export type WithElementRef<T, U extends HTMLElement = HTMLElement> = T & { ref?: U | null };
+
+/**
+ * Strip the slot props from a bits-ui component's own props, so a wrapper can
+ * declare its own `children` without colliding with the primitive's.
+ *
+ * Same provenance as `WithElementRef` above: shadcn-svelte's generated
+ * components import it from this module, so the name and shape are the
+ * generator's rather than ours, and it is maintained by hand because the CLI
+ * skips this file.
+ */
+export type WithoutChildrenOrChild<T> = Omit<T, 'children' | 'child'>;
