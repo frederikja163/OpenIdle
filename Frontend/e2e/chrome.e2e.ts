@@ -14,19 +14,23 @@ import { expect, test } from '@playwright/test';
 // against baseURL and so never match a socket on another port.
 const WS_ROUTE = /\/ws$/;
 
+// /login carries a redirectTo query param whenever the (auth) guard bounced a
+// protected route there, so assert on the pathname plus optional query.
+const LOGIN_URL = /\/login(\?.*)?$/;
+
 test('the root route funnels through the auth guards to /login', async ({ page }) => {
 	await page.goto('/');
 
-	await expect(page).toHaveURL(/\/login$/);
+	await expect(page).toHaveURL(LOGIN_URL);
 	await expect(page.getByRole('heading', { level: 1, name: 'Login' })).toBeVisible();
-	await expect(page.getByText('loggedOut', { exact: true })).toBeVisible();
+	await expect(page.getByTestId('login-status')).toHaveText('Signed out');
 	await expect(page.getByRole('button', { name: 'Log in' })).toBeVisible();
 });
 
 test('a protected route bounces to /login when logged out', async ({ page }) => {
 	await page.goto('/game');
 
-	await expect(page).toHaveURL(/\/login$/);
+	await expect(page).toHaveURL(LOGIN_URL);
 });
 
 test('the guard replaces the rejected entry instead of stacking one', async ({ page }) => {
@@ -34,7 +38,7 @@ test('the guard replaces the rejected entry instead of stacking one', async ({ p
 	const entries = await page.evaluate(() => history.length);
 
 	await page.goto('/game');
-	await expect(page).toHaveURL(/\/login$/);
+	await expect(page).toHaveURL(LOGIN_URL);
 
 	// One entry for the /game navigation and none for the bounce, so Back still
 	// leads out of the app instead of to the route the guard just rejected.
@@ -47,7 +51,7 @@ test('logging in surfaces the failure when the socket will not open', async ({ p
 	await page.goto('/login');
 	await page.getByRole('button', { name: 'Log in' }).click();
 
-	await expect(page.getByText('error', { exact: true })).toBeVisible();
+	await expect(page.getByTestId('login-status')).toHaveText('Sign-in failed');
 });
 
 test('a successful login replaces /login rather than stacking /profiles on it', async ({
@@ -68,4 +72,10 @@ test('a successful login replaces /login rather than stacking /profiles on it', 
 
 	await expect(page).toHaveURL(/\/profiles$/);
 	expect(await page.evaluate(() => history.length)).toBe(entries);
+
+	// Logging out drops the socket and runs the auth guard again, which carries
+	// the rejected /profiles back to /login as redirectTo.
+	await page.getByRole('button', { name: 'Log out' }).click();
+	await expect(page).toHaveURL(LOGIN_URL);
+	await expect(page.getByTestId('login-status')).toHaveText('Signed out');
 });

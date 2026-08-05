@@ -1,3 +1,4 @@
+import { dev } from '$app/environment';
 import { env } from '$env/dynamic/public';
 import {
 	classifyMessage,
@@ -219,6 +220,25 @@ export class WsClient {
 let client: WsClient | null = null;
 
 export function getWsClient(): WsClient {
-	client ??= new WsClient({ url: env.PUBLIC_WS_URL || DEFAULT_WS_URL });
+	client ??= new WsClient({ url: resolveWsUrl() });
 	return client;
+}
+
+/**
+ * The development default is only safe for a local backend. In any deployed
+ * build a missing PUBLIC_WS_URL is a configuration error worth failing fast on
+ * rather than silently pointing every client at localhost.
+ */
+function resolveWsUrl(): string {
+	const configured = env.PUBLIC_WS_URL;
+	if (configured) {
+		return configured;
+	}
+	if (dev) {
+		return DEFAULT_WS_URL;
+	}
+	console.warn(
+		'PUBLIC_WS_URL is not set; refusing to fall back to the development default outside development.'
+	);
+	throw new Error('PUBLIC_WS_URL must be configured outside development');
 }

@@ -3,6 +3,9 @@ import { getWsClient, WsError } from '$lib/ws/client';
 
 export type LoginStatus = 'loggedOut' | 'loggingIn' | 'loggedIn' | 'error';
 
+// Module-scoped $state: safe only because it is never touched outside the
+// browser. Do not mutate it during server-side rendering or in request handling,
+// where this single instance is shared across every request.
 export const userState = $state({
 	status: 'loggedOut' as LoginStatus,
 	// TODO: LoginAsTestUserResponse carries no user id yet; populate this once
