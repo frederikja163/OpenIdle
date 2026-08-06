@@ -38,7 +38,7 @@ Adopt **shadcn-svelte 1.5.0**, on the three drivers the owner named: accessible 
 | One `<Button>` | 48.2 KB | **+18.4 KB (+62%)** |
 | `<Button>` + `<Dialog>` | 65.4 KB | **+35.6 KB (+120%)** |
 
-Those figures were measured during evaluation, with `button` and `dialog` vendored. **Neither is vendored now**: the CLI, `components.json`, the dependency set and the token layer are in place, but `src/lib/components/ui/` is empty and components are added on demand with `shadcn-svelte add`. Until the first one is added, none of this reaches the browser — the numbers above are the price of the *first* component, not a cost already being paid.
+Those figures were measured during evaluation, with `button` and `dialog` vendored. **`button` is now vendored** at `src/lib/components/ui/button/`, re-tabled against the design system's own Button spec, so the first-component cost above is being paid. `dialog` is not, and [bits-ui](./bits-ui.md) therefore still reaches nothing; components continue to be added on demand with `shadcn-svelte add`.
 
 The first component is the expensive one: `tailwind-merge` and `tailwind-variants` are a fixed cost paid on first use, not per component. Adding the dialog — and with it [bits-ui](./bits-ui.md) — costs a further 17.2 KB. Doubling baseline client JavaScript for two components is a real price, it is being paid knowingly, and for an idle game whose sessions are long and whose bundle is cached after first load it is judged acceptable. It would not be acceptable for a landing page.
 

@@ -12,3 +12,13 @@ import { twMerge } from 'tailwind-merge';
 export function cn(...inputs: ClassValue[]) {
 	return twMerge(clsx(inputs));
 }
+
+/**
+ * Mirrors the `WithElementRef` from shadcn-svelte's own `utils` registry item.
+ *
+ * Every vendored component imports it from this module by the `utils` alias in
+ * components.json, so the name and shape are fixed by the generator rather than
+ * chosen here. The CLI skips this file because it already exists, which is why
+ * the type is maintained by hand.
+ */
+export type WithElementRef<T, U extends HTMLElement = HTMLElement> = T & { ref?: U | null };

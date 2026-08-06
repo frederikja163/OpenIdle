@@ -14,6 +14,8 @@ Every third-party dependency used (or considered and rejected) by this project i
 | [CommandLineParser](./commandlineparser.md) | adopted | 2026-08-06 | low | low |
 | [Microsoft.CodeAnalysis.CSharp](./microsoft-codeanalysis-csharp.md) | adopted | 2026-08-06 | low | low |
 | [Microsoft.CodeAnalysis.Analyzers](./microsoft-codeanalysis-analyzers.md) | adopted | 2026-08-06 | low | low |
+| [NUnit (test framework)](./nunit.md) | adopted | 2026-08-04 | low | low |
+| [Microsoft.AspNetCore.Mvc.Testing](./mvc-testing.md) | rejected | 2026-08-04 | low | low |
 
 `CommandLineParser` is dev-tooling only — it parses args for the `Generator` console app (never shipped). It replaced an initial `System.CommandLine` 2.0.10 pick; the owner preferred the attribute-based syntax and the zero-dependency footprint, accepting the package's dormancy (no stable release since 2022) for a small fixed CLI. See the alternatives table in its document.
 
@@ -21,7 +23,7 @@ Every third-party dependency used (or considered and rejected) by this project i
 
 ## Frontend
 
-All frontend packages are declared as `devDependencies` — a packaging convention, not a statement about what reaches the browser. The client now ships third-party code in two places: the `cn()` helper at `Frontend/src/lib/utils/stylingUtils.ts`, which imports [clsx](./clsx.md) and [tailwind-merge](./tailwind-merge.md), and the three [@lucide/svelte](./lucide-svelte.md) icons used by the app chrome. The [shadcn-svelte](./shadcn-svelte.md) component set and [bits-ui](./bits-ui.md) are declared and lockfile-pinned but **not yet bundled**: `src/lib/components/ui/` is empty and nothing imports bits-ui until the first `shadcn-svelte add`.
+All frontend packages are declared as `devDependencies` — a packaging convention, not a statement about what reaches the browser. The client now ships third-party code in three places: the `cn()` helper at `Frontend/src/lib/utils/stylingUtils.ts`, which imports [clsx](./clsx.md) and [tailwind-merge](./tailwind-merge.md); the [@lucide/svelte](./lucide-svelte.md) icons used by the app chrome; and [shadcn-svelte](./shadcn-svelte.md)'s vendored `button` at `src/lib/components/ui/button/`, which brings [tailwind-variants](./tailwind-variants.md) with it. The rest of the component set is declared and lockfile-pinned but not bundled, and [bits-ui](./bits-ui.md) stays unimported until a component that needs it is added.
 
 ### Framework and build
 
@@ -45,7 +47,7 @@ All frontend packages are declared as `devDependencies` — a packaging conventi
 
 ### Components
 
-The browser-bound half of the frontend set. Of these, only [@lucide/svelte](./lucide-svelte.md) reaches the browser today — three icons in the app chrome — alongside `cn()`'s [clsx](./clsx.md) and [tailwind-merge](./tailwind-merge.md). The shadcn-svelte component set and [bits-ui](./bits-ui.md) ship only once vendored. The two below are the primary decisions:
+The browser-bound half of the frontend set. Of these, [@lucide/svelte](./lucide-svelte.md) and the vendored [shadcn-svelte](./shadcn-svelte.md) `button` reach the browser today — the app chrome's three icons and the button at `src/lib/components/ui/button/` respectively, the button bringing [tailwind-variants](./tailwind-variants.md) with it alongside `cn()`'s [clsx](./clsx.md) and [tailwind-merge](./tailwind-merge.md). The rest of the shadcn-svelte component set and [bits-ui](./bits-ui.md) ship only once vendored. The two below are the primary decisions:
 
 | Library | Decision | Date | Risk (undo) | Risk (security) |
 |---|---|---|---|---|
@@ -57,7 +59,7 @@ The rest were **entailed** by those two rather than chosen independently — ins
 | Library | Decision | Date | Risk (undo) | Risk (security) | Ships JS to browser |
 |---|---|---|---|---|---|
 | [tailwind-merge](./tailwind-merge.md) | adopted | 2026-08-03 | low | low | yes |
-| [tailwind-variants](./tailwind-variants.md) | adopted | 2026-08-03 | low | low | **no** — nothing imports it yet |
+| [tailwind-variants](./tailwind-variants.md) | adopted | 2026-08-03 | low | low | **yes** — via the vendored `button` |
 | [clsx](./clsx.md) | adopted | 2026-08-03 | low | low | yes |
 | [@lucide/svelte](./lucide-svelte.md) | adopted | 2026-08-03 | low | low | yes (tree-shaken per icon) |
 | [tw-animate-css](./tw-animate-css.md) | adopted | 2026-08-03 | low | low | **no** — CSS only |
