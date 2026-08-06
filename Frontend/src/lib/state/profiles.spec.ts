@@ -1,15 +1,30 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
-const { request } = vi.hoisted(() => ({ request: vi.fn() }));
+const { request, connection } = vi.hoisted(() => ({
+	request: vi.fn(),
+	// The generation the store reads to decide whether a result still belongs to
+	// the live connection. Bumping it here is a socket dropping.
+	connection: { generation: 0 }
+}));
 
-// The module's onClose reset is not exercised here: it registers behind
-// `if (browser)`, which is false in this node project.
 vi.mock('$lib/ws/client', () => ({
-	getWsClient: () => ({ request, onClose: () => () => {} })
+	getWsClient: () => ({
+		request,
+		get generation() {
+			return connection.generation;
+		},
+		onClose: () => () => {},
+		onStatus: () => () => {},
+		reopen: () => {}
+	})
 }));
 
 const { createProfile, loadProfiles, profilesState, selectProfile, validateProfileName } =
 	await import('$lib/state/profiles.svelte');
+// The session reset registers behind `if (browser)` in the real app, which is
+// false in this node project — so it is driven directly here instead, which is
+// what makes it testable at all.
+const { resetSessionState, sessionIntent } = await import('$lib/state/session.svelte');
 
 const THORIN = { Name: 'Thorin', ProfileId: '11111111-1111-1111-1111-111111111111' };
 const BALIN = { Name: 'Balin', ProfileId: '22222222-2222-2222-2222-222222222222' };
@@ -20,14 +35,12 @@ function listResponse(profiles: (typeof THORIN)[]) {
 
 beforeEach(() => {
 	request.mockReset();
-	profilesState.status = 'idle';
-	profilesState.profiles = [];
-	profilesState.error = null;
-	profilesState.creating = false;
-	profilesState.createError = null;
-	profilesState.selectedProfileId = null;
-	profilesState.selectingProfileId = null;
-	profilesState.selectError = null;
+	connection.generation = 0;
+	// One call, no field list: a field added to the store and forgotten here can
+	// no longer leak between cases.
+	resetSessionState();
+	sessionIntent.loggedIn = false;
+	sessionIntent.profileId = null;
 });
 
 describe('loadProfiles', () => {
@@ -184,5 +197,86 @@ describe('selectProfile', () => {
 		expect(request).toHaveBeenCalledTimes(1);
 		release();
 		await first;
+	});
+
+	it('records the selection so a reconnect can restore it', async () => {
+		request.mockResolvedValue({ $type: 'SelectProfileResponse', Id: 1 });
+
+		await selectProfile(THORIN.ProfileId);
+
+		// Outside the session scope on purpose: the reset is what destroys the
+		// evidence of what the session was, and the replay needs it afterwards.
+		resetSessionState();
+		expect(profilesState.selectedProfileId).toBeNull();
+		expect(sessionIntent.profileId).toBe(THORIN.ProfileId);
+	});
+});
+
+/*
+ * The bug this whole mechanism exists for. Rejecting a pending request only
+ * schedules a microtask, so the close handler's reset runs first and the
+ * request's catch runs second — which used to leave `status` on 'error' after
+ * the reset had put it back to 'idle'. The page's only load trigger fires on
+ * 'idle', so the list never loaded again for the life of the page.
+ */
+describe('a connection dropping under a request', () => {
+	function dropDuring<T>(promise: Promise<T>): Promise<T> {
+		resetSessionState();
+		connection.generation++;
+		return promise;
+	}
+
+	it('leaves the list reloadable rather than stuck on an error', async () => {
+		let fail = (): void => {};
+		request.mockReturnValueOnce(
+			new Promise((_, reject) => (fail = () => reject(new Error('WebSocket closed'))))
+		);
+
+		const loading = loadProfiles();
+		expect(profilesState.status).toBe('loading');
+
+		// The socket drops: the reset lands first, the rejection second.
+		const dropped = dropDuring(loading);
+		fail();
+		await dropped;
+
+		expect(profilesState.status).toBe('idle');
+		expect(profilesState.error).toBeNull();
+
+		// And the next attempt actually runs, which is what was impossible before.
+		request.mockResolvedValueOnce(listResponse([THORIN]));
+		await loadProfiles();
+		expect(profilesState.status).toBe('loaded');
+		expect(profilesState.profiles).toEqual([THORIN]);
+	});
+
+	it('does not surface a dead connection failure on the create form', async () => {
+		let fail = (): void => {};
+		request.mockReturnValueOnce(
+			new Promise((_, reject) => (fail = () => reject(new Error('WebSocket closed'))))
+		);
+
+		const creating = createProfile('Thorin');
+		const dropped = dropDuring(creating);
+		fail();
+
+		await expect(dropped).resolves.toBe(false);
+		expect(profilesState.createError).toBeNull();
+		expect(profilesState.creating).toBe(false);
+	});
+
+	it('does not surface a dead connection failure on a select', async () => {
+		let fail = (): void => {};
+		request.mockReturnValueOnce(
+			new Promise((_, reject) => (fail = () => reject(new Error('WebSocket closed'))))
+		);
+
+		const selecting = selectProfile(THORIN.ProfileId);
+		const dropped = dropDuring(selecting);
+		fail();
+
+		await expect(dropped).resolves.toBe(false);
+		expect(profilesState.selectError).toBeNull();
+		expect(profilesState.selectedProfileId).toBeNull();
 	});
 });

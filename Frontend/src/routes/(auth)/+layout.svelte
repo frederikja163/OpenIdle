@@ -10,6 +10,7 @@
 	import githubMark from '$lib/assets/github-mark-white.svg';
 	import Row from '$lib/components/layout/Row.svelte';
 	import { Button } from '$lib/components/ui/button';
+	import { connectionState } from '$lib/state/session.svelte';
 	import { logout, userState } from '$lib/state/user.svelte';
 	import { cn } from '$lib/utils/stylingUtils';
 
@@ -23,10 +24,20 @@
 	// drops mid-session, since that resets userState to 'loggedOut'. 'error'
 	// bounces too — /login is the surface that shows auth errors.
 	//
+	// A drop the client is recovering from is the exception, and holding position
+	// for it is the whole point of reconnecting: bouncing on the reset would put
+	// the visitor on /login before the replay could possibly finish, which is
+	// what used to happen to every momentary blip.
+	//
 	// replaceState because the entry being left is one the visitor was never
 	// allowed to occupy: pushing over it would put the rejected route under the
 	// Back button, and going back only re-runs this effect and bounces again.
+	const recovering = $derived(connectionState.status === 'reconnecting');
+
 	$effect(() => {
+		if (recovering) {
+			return;
+		}
 		if (userState.status === 'loggedOut' || userState.status === 'error') {
 			void goto(resolve('/login'), { replaceState: true });
 		}
@@ -93,6 +104,15 @@
 	</nav>
 
 	<Row class="ml-auto items-center gap-(--sp-2)">
+		<!--
+			role="status" carries an implicit polite live region, so losing the
+			connection is announced rather than only shown. Sentence case in the
+			markup: oi-label-sm applies the uppercase treatment itself.
+		-->
+		{#if recovering}
+			<span role="status" class="oi-label-sm mr-(--sp-3) text-text-muted">Reconnecting…</span>
+		{/if}
+
 		<a
 			href={repository}
 			target="_blank"
@@ -137,6 +157,13 @@
 
 {#if userState.status === 'loggedIn'}
 	{@render children?.()}
+{:else if recovering}
+	<!--
+		The session reset emptied every store, so there is nothing to render yet —
+		but this is a drop being recovered, not a logout, and the guard above is
+		holding position rather than sending the visitor to /login.
+	-->
+	<p class="oi-body-md p-(--gutter-app) text-text-muted">Reconnecting…</p>
 {:else}
 	<!-- SSR and pre-redirect frames: never flash protected page content. -->
 	<p class="oi-body-md p-(--gutter-app) text-text-muted">Redirecting to login…</p>
