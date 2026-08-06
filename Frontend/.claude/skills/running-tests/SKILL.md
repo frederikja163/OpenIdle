@@ -25,7 +25,7 @@ run them — an explicit request always wins.
 When you are actively working *on* a test — writing it, or debugging a failure you already
 know about — run that file alone and iterate:
 
-```
+```shell
 bun run test:unit -- --run src/lib/ws/protocol.spec.ts
 bun run test:e2e e2e/chrome.e2e.ts
 ```
@@ -34,7 +34,7 @@ That is a tight loop on one file, not a suite run, and it stops when the test is
 
 ## What to run at a checkpoint
 
-```
+```shell
 bun run test        # test:unit --run + test:e2e — the full checkpoint
 bun run check       # svelte-check, when types moved
 bun run lint        # prettier + eslint, before a PR

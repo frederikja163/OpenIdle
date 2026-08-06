@@ -39,7 +39,7 @@ behaviour change that depends on them, so each commit in the series is reviewabl
 
 Conventional commits, matching the existing history:
 
-```
+```text
 feat: enforce unique alphanumeric profile names up to 30 chars
 fix: keep the topbar height stable when the tabstrip wraps
 refactor: move entities under Database/Entities folder

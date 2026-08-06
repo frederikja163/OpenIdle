@@ -145,6 +145,56 @@ describe('WsClient', () => {
 		await expect(next).resolves.toEqual({ $type: 'ListProfilesResponse', Id: 2, Profiles: [] });
 	});
 
+	it('charges an error to the live request once an answered one is cleared', async () => {
+		vi.useFakeTimers();
+		const { client, sockets } = makeClient({ requestTimeoutMs: 50 });
+
+		const login = capture(client.request('LoginAsTestUserRequest', {}));
+		await flush();
+		sockets[0].open();
+		await flush();
+		sockets[0].deliver({ $type: 'LoginAsTestUserResponse', Id: 1 });
+		await expect(login).resolves.toMatchObject({ $type: 'LoginAsTestUserResponse' });
+
+		// The counterpart to the case above: the backend has answered id 1, so
+		// the cursor has to have moved off it, or this error is charged to a
+		// settled request and the caller waits out the timeout for nothing.
+		const create = capture(client.request('CreateProfileRequest', { Name: 'Alice' }));
+		await flush();
+		sockets[0].deliver({ $type: 'ErrorResponse', Id: null, Message: 'Profile name already taken' });
+		await vi.advanceTimersByTimeAsync(50);
+
+		const error = await create;
+		expect(error).toBeInstanceOf(WsError);
+		expect((error as WsError).message).toBe('Profile name already taken');
+	});
+
+	it('forgets what the backend owed when the socket drops', async () => {
+		vi.useFakeTimers();
+		const { client, sockets } = makeClient({ requestTimeoutMs: 50 });
+
+		const abandoned = capture(client.request('CreateProfileRequest', { Name: 'Alice' }));
+		await flush();
+		sockets[0].open();
+		await flush();
+		await vi.advanceTimersByTimeAsync(50);
+		expect((await abandoned).toString()).toMatch(/timed out after 50ms/);
+
+		// A tombstone outlives the caller but not the connection: the backend
+		// that owed id 1 is gone, so nothing on the new socket answers it.
+		sockets[0].finishClose();
+		const listed = capture(client.request('ListProfilesRequest', {}));
+		await flush();
+		sockets[1].open();
+		await flush();
+		sockets[1].deliver({ $type: 'ErrorResponse', Id: null, Message: 'Not logged in.' });
+		await vi.advanceTimersByTimeAsync(50);
+
+		const error = await listed;
+		expect(error).toBeInstanceOf(WsError);
+		expect((error as WsError).message).toBe('Not logged in.');
+	});
+
 	it('rejects everything in flight when the socket drops', async () => {
 		vi.useFakeTimers();
 		const { client, sockets } = makeClient();

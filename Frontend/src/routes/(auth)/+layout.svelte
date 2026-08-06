@@ -39,7 +39,12 @@
 			return;
 		}
 		if (userState.status === 'loggedOut' || userState.status === 'error') {
-			void goto(resolve('/login'), { replaceState: true });
+			// Carry the rejected pathname along so the login page can return the
+			// visitor where they were headed once they sign in. resolve() only
+			// covers paths, so the query string sits outside its reach.
+			const redirectTo = new URLSearchParams({ redirectTo: page.url.pathname });
+			// eslint-disable-next-line svelte/no-navigation-without-resolve
+			void goto(`${resolve('/login')}?${redirectTo}`, { replaceState: true });
 		}
 	});
 
@@ -169,5 +174,5 @@
 	<p class="oi-body-md p-(--gutter-app) text-text-muted">Reconnecting…</p>
 {:else}
 	<!-- SSR and pre-redirect frames: never flash protected page content. -->
-	<p class="oi-body-md p-(--gutter-app) text-text-muted">Redirecting to login…</p>
+	<p role="status" class="oi-body-md p-(--gutter-app) text-text-muted">Redirecting to login…</p>
 {/if}

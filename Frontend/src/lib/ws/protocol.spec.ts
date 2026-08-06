@@ -51,6 +51,11 @@ describe('classifyMessage', () => {
 		});
 	});
 
+	it('classifies a known response type with a null Id as unknown, not an event', () => {
+		const raw = '{"$type":"LoginAsTestUserResponse","Id":null}';
+		expect(classifyMessage(raw)).toEqual({ kind: 'unknown', raw });
+	});
+
 	it('classifies malformed or untyped payloads as unknown', () => {
 		expect(classifyMessage('not json')).toEqual({ kind: 'unknown', raw: 'not json' });
 		expect(classifyMessage('{"Id":1}')).toEqual({ kind: 'unknown', raw: '{"Id":1}' });

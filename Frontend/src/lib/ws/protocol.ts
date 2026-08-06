@@ -122,5 +122,21 @@ export function classifyMessage(raw: string): Classified {
 	if (typeof message.Id === 'number') {
 		return { kind: 'response', id: message.Id, message: message as ServerResponse };
 	}
+	// A known response type whose Id is null or otherwise non-numeric is a
+	// malformed response, not a server event: genuine events carry their own
+	// $type and never appear in RESPONSE_TYPES.
+	if (RESPONSE_TYPES.has(message.$type)) {
+		return { kind: 'unknown', raw };
+	}
 	return { kind: 'event', message: message as ServerEvent };
 }
+
+// Keep in sync with the ServerResponse union above: an Id-less frame whose
+// $type is one of these answers a request and must not be read as an event.
+const RESPONSE_TYPES = new Set<string>([
+	'PongResponse',
+	'LoginAsTestUserResponse',
+	'CreateProfileResponse',
+	'ListProfilesResponse',
+	'SelectProfileResponse'
+]);

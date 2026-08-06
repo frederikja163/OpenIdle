@@ -2,12 +2,13 @@
 using System.Linq;
 using System.Threading.Tasks;
 using Backend.Database;
-using Backend.Entities;
+using Backend.Database.Entities;
 using Microsoft.EntityFrameworkCore;
+using SQLitePCL;
 
 namespace Backend.Services;
 
-public sealed class ProfileService(IDbContextFactory<GameDbContext> dbContextFactory)
+public sealed class ProfileService(IDbContextFactory<GameDbContext> dbContextFactory, SocketRegistryService socketRegistry)
 {
     internal async Task<Profile[]> GetProfilesAsync(User user)
     {
@@ -29,6 +30,7 @@ public sealed class ProfileService(IDbContextFactory<GameDbContext> dbContextFac
 
     internal async Task<Profile> CreateProfileAsync(User user, string name)
     {
+        // TODO: Fix name duplication problem here.
         ArgumentException.ThrowIfNullOrWhiteSpace(name);
         if (name.Length > 30)
         {
@@ -40,6 +42,10 @@ public sealed class ProfileService(IDbContextFactory<GameDbContext> dbContextFac
         }
 
         await using GameDbContext dbContext = await dbContextFactory.CreateDbContextAsync();
+        if (await dbContext.Profiles.AnyAsync(p => p.Name == name))
+        {
+            throw new ArgumentException("Profile name is already taken.");
+        }
 
         Profile profile = new Profile()
         {
@@ -55,8 +61,11 @@ public sealed class ProfileService(IDbContextFactory<GameDbContext> dbContextFac
         return profile;
     }
 
-    internal async Task SelectProfileAsync(Socket socket, User user, Guid profileId)
+    internal async Task<Profile> SelectProfileAsync(Socket socket, User user, Guid profileId)
     {
-        socket.Profile = await GetProfileAsync(user, profileId);
+        Profile profile = await GetProfileAsync(user, profileId);
+        socket.Profile = profile;
+        socketRegistry.SetProfile(socket, profile);
+        return profile;
     }
 }

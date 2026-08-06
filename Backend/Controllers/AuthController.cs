@@ -2,37 +2,40 @@
 using System.Linq;
 using System.Threading.Tasks;
 using Backend.Attributes;
-using Backend.Dtos.Auth;
-using Backend.Entities;
+using Backend.Database.Entities;
 using Backend.Services;
+using Backend.Dtos;
 
 namespace Backend.Controllers;
 
 [SocketController]
-public sealed class UserController(UserService userService, ProfileService profileService) : SocketControllerBase
+public sealed class AuthController(UserService userService, ProfileService profileService) : SocketControllerBase
 {
+    private async Task<ProfileDto[]> GetProfiles(User user)
+    {
+        return (await profileService.GetProfilesAsync(user)).Select(p => p.ToDto()).ToArray();
+    }
+    
     [Request]
     public async Task CreateProfile(CreateProfileRequest request)
     {
-        ArgumentNullException.ThrowIfNull(User);
-        await profileService.CreateProfileAsync(User, request.Name);
+        await profileService.CreateProfileAsync(UserOrThrow, request.Name);
+        await SendUserEventAsync(new ProfilesChangedEvent() { Profiles = await GetProfiles(UserOrThrow) });
         await RespondAsync(new CreateProfileResponse());
     }
     
     [Request]
     public async Task ListProfiles(ListProfilesRequest request)
     {
-        ArgumentNullException.ThrowIfNull(User);
-        Profile[] profiles = await profileService.GetProfilesAsync(User);
-        await RespondAsync(new ListProfilesResponse() { Profiles = profiles.Select(p => p.ToDto()).ToArray() });
+        await RespondAsync(new ListProfilesResponse() { Profiles = await GetProfiles(UserOrThrow) });
     }
 
     [Request]
     public async Task LoginAsTestUser(LoginAsTestUserRequest request)
     {
-        if (User is not null)
+        if (Socket.User is not null)
         {
-            throw new Exception("Already logged in.");
+            throw new InvalidOperationException("Already logged in.");
         }
 
         User testUser = await userService.GetTestUserAsync();
@@ -43,8 +46,7 @@ public sealed class UserController(UserService userService, ProfileService profi
     [Request]
     public async Task SelectProfile(SelectProfileRequest request)
     {
-        ArgumentNullException.ThrowIfNull(User);
-        await profileService.SelectProfileAsync(Socket, User, request.ProfileId);
+        await profileService.SelectProfileAsync(Socket, UserOrThrow, request.ProfileId);
         await RespondAsync(new SelectProfileResponse());
     }
 }
