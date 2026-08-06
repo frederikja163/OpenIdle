@@ -87,11 +87,9 @@ public static class Program
 
     private static DtoModel ParseContract(string path)
     {
-        DtoParser parser = new DtoParser();
-        using (FileStream stream = File.OpenRead(path))
-        {
-            parser.Parse(stream);
-        }
+        DtoParser parser = new();
+        using FileStream stream = File.OpenRead(path);
+        parser.Parse(stream);
         return parser.Model;
     }
 
@@ -104,11 +102,8 @@ public static class Program
 
     private static void Emit(Target target, TextWriter writer, DtoModel model)
     {
-        IDtoEmitter emitter = CreateEmitter(target, writer);
-        using (emitter)
-        {
-            emitter.EmitDtos(model);
-        }
+        using IDtoEmitter emitter = CreateEmitter(target, writer);
+        emitter.EmitDtos(model);
     }
 
     private static IDtoEmitter CreateEmitter(Target target, TextWriter writer)

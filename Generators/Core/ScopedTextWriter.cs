@@ -7,15 +7,15 @@ internal sealed class ScopedTextWriter
 {
     private readonly TextWriter _writer;
     private bool _newLine = true;
-    
+
     public ScopedTextWriter(TextWriter writer)
     {
         _writer = writer;
     }
 
     public int SpacesPerTab { get; set; } = 4;
-    
-    public int Indentations { get; set; }
+
+    public int Indentations { get; internal set; }
 
     private void TryWriteIndents()
     {
@@ -45,7 +45,7 @@ internal sealed class ScopedTextWriter
         _newLine = true;
     }
 
-    public Scope Scope(string startText = "", ScopeStyle scopeStyle = ScopeStyle.Curley)
+    public Scope Scope(string startText = "", ScopeStyle scopeStyle = ScopeStyle.Curly)
     {
         WriteLine(startText);
         return new Scope(scopeStyle, this);
@@ -54,7 +54,7 @@ internal sealed class ScopedTextWriter
 
 internal enum ScopeStyle
 {
-    Curley,
+    Curly,
     Parenthesis,
     Square,
     Angle,
@@ -72,7 +72,7 @@ internal sealed class Scope : IDisposable
         _writer = writer;
         switch (style)
         {
-            case ScopeStyle.Curley:
+            case ScopeStyle.Curly:
                 _writer.WriteLine('{');
                 break;
             case ScopeStyle.Parenthesis:
@@ -89,15 +89,15 @@ internal sealed class Scope : IDisposable
             default:
                 throw new ArgumentOutOfRangeException(nameof(style), style, null);
         }
-        _writer.Indentations += 1;
+        _writer.Indentations++;
     }
 
     public void Dispose()
     {
-        _writer.Indentations -= 1;
+        _writer.Indentations--;
         switch (_style)
         {
-            case ScopeStyle.Curley:
+            case ScopeStyle.Curly:
                 _writer.WriteLine('}');
                 break;
             case ScopeStyle.Parenthesis:

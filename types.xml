@@ -1,21 +1,21 @@
-<?xml version="1.0" encoding="utf-8" ?>
+<?xml version="1.0" encoding="utf-8"?>
 <Types>
   <Dto name="Profile">
     <Property name="Name" type="string" />
     <Property name="ProfileId" type="Guid" />
   </Dto>
-  
+
   <Dto name="User">
-    <Property name="UserId" type="Guid"/>
+    <Property name="UserId" type="Guid" />
   </Dto>
-  
+
   <Request name="CreateProfile">
-    <Property name="Name" type="string"/>
-    <Response/>
+    <Property name="Name" type="string" />
+    <Response />
   </Request>
-  
+
   <Event name="ProfilesChanged">
-    <Property name="Profiles" type="Profile" multiple="true"/>
+    <Property name="Profiles" type="Profile" multiple="true" />
   </Event>
 
   <Request name="ListProfiles">
@@ -23,17 +23,17 @@
       <Property name="Profiles" type="Profile" multiple="true" />
     </Response>
   </Request>
-  
+
   <Request name="LoginAsTestUser">
-    <Response/>
+    <Response />
   </Request>
 
   <Request name="SelectProfile">
     <Property name="ProfileId" type="Guid" />
-    <Response/>
+    <Response />
   </Request>
-  
+
   <Response name="Error">
-    <Property name="Message" type="string"/>
+    <Property name="Message" type="string" />
   </Response>
 </Types>

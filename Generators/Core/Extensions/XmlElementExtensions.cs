@@ -1,5 +1,6 @@
 ﻿using System;
 using System.Collections.Generic;
+using System.Linq;
 using System.Xml;
 
 namespace Generator.Core.Extensions;
@@ -8,15 +9,9 @@ internal static class XmlElementExtensions
 {
     public static IEnumerable<XmlElement> GetChildren(this XmlElement element, string name)
     {
-        foreach (XmlElement elementChildNode in element.ChildNodes)
-        {
-            if (elementChildNode.ParentNode == element && elementChildNode.Name == name)
-            {
-                yield return elementChildNode;
-            }
-        }
+        return element.ChildNodes.OfType<XmlElement>().Where(child => child.Name == name);
     }
-    
+
     public static string RequireAttribute(this XmlElement element, string name)
     {
         string attribute = element.GetAttribute(name);

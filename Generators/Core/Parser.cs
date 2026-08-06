@@ -1,6 +1,7 @@
 ﻿using System;
 using System.Collections.Generic;
 using System.IO;
+using System.Linq;
 using System.Xml;
 using Generator.Core.Extensions;
 
@@ -11,10 +12,10 @@ public sealed class ParserException(string message) : Exception(message);
 public sealed class Parser
 {
     public DtoModel Model { get; } = new();
-    
+
     public void Parse(Stream stream)
     {
-        XmlDocument document = new XmlDocument();
+        XmlDocument document = new();
         document.Load(stream);
 
         XmlElement root = document.DocumentElement ?? throw new ParserException("Found no root node.");
@@ -23,7 +24,7 @@ public sealed class Parser
 
     public void Parse(XmlElement root)
     {
-        foreach (XmlElement element in root.ChildNodes)
+        foreach (XmlElement element in root.ChildNodes.OfType<XmlElement>())
         {
             Element(element);
         }
@@ -81,7 +82,7 @@ public sealed class Parser
 
     private Event Event(XmlElement element)
     {
-        Event value = new (element.RequireAttribute("name") + "Event");
+        Event value = new(element.RequireAttribute("name") + "Event");
         value.Properties.AddRange(PropertyCollection(element.GetChildren("Property")));
         return value;
     }

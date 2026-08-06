@@ -18,19 +18,19 @@ public enum PropertyType
 
 public sealed class Property(PropertyType type, string typeStr, string name, bool multiple)
 {
-    public Casing Name { get; } = new (name);
+    public Casing Name { get; } = new(name);
     public PropertyType PropertyType { get; } = type;
-    public Casing PropertyTypeString { get; } = new Casing(typeStr);
+    public Casing PropertyTypeString { get; } = new(typeStr);
     public bool Multiple { get; } = multiple;
 }
 
-public class Object(string name)
+public abstract class Object(string name)
 {
-    public Casing Name { get; } = new Casing(name);
+    public Casing Name { get; } = new(name);
     public List<Property> Properties { get; } = [];
 }
 
-public sealed class Dto(string name): Object(name)
+public sealed class Dto(string name) : Object(name)
 {
 }
 

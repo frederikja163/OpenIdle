@@ -3,16 +3,10 @@ using System.Linq;
 
 namespace Generator.Core;
 
-internal enum CasingStyle
-{
-    UpperCamelCase,
-    LowerCamelCase,
-}
-
 public sealed class Casing
 {
-    private readonly IReadOnlyList<string> _normalized; 
-    
+    private readonly IReadOnlyList<string> _normalized;
+
     public Casing(string str)
     {
         _normalized = Normalize(str).ToList();

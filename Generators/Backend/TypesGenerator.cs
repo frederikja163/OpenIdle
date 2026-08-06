@@ -52,7 +52,7 @@ public sealed class TypesGenerator : IIncrementalGenerator
             try
             {
                 byte[] bytes = Encoding.UTF8.GetBytes(xml[0]);
-                using MemoryStream stream = new MemoryStream(bytes);
+                using MemoryStream stream = new(bytes);
                 parser.Parse(stream);
             }
             catch (ParserException ex)
@@ -62,11 +62,12 @@ public sealed class TypesGenerator : IIncrementalGenerator
                 return;
             }
 
-            using StringWriter writer = new StringWriter();
-            CsEmitter emitter = new CsEmitter(writer);
-            emitter.EmitDtos(parser.Model);
-            emitter.Dispose();
-            
+            using StringWriter writer = new();
+            using (CsEmitter emitter = new(writer))
+            {
+                emitter.EmitDtos(parser.Model);
+            }
+
             productionContext.AddSource(DtoOutputName, SourceText.From(writer.ToString(), Encoding.UTF8));
         });
     }

@@ -7,7 +7,7 @@ namespace Generator.Core;
 internal sealed class TsEmitter : IDtoEmitter
 {
     private readonly ScopedTextWriter _textWriter;
-    
+
     public TsEmitter(TextWriter writer)
     {
         _textWriter = new ScopedTextWriter(writer);
