@@ -1,4 +1,4 @@
-import { expect, test } from '@playwright/test';
+import { expect, test, type WebSocketRoute } from '@playwright/test';
 
 // Runs against `bun run build && bun run preview` (see playwright.config.ts), so
 // this is the production build rather than the dev server — which is the whole
@@ -17,6 +17,26 @@ const WS_ROUTE = /\/ws$/;
 // /login carries a redirectTo query param whenever the (auth) guard bounced a
 // protected route there, so assert on the pathname plus optional query.
 const LOGIN_URL = /\/login(\?.*)?$/;
+
+const THORIN = { Name: 'Thorin', ProfileId: 'p1' };
+
+/**
+ * The whole backend, for tests that only need the socket to say yes: every
+ * request gets the response named after it, and ListProfiles gets a list.
+ */
+function respondToRequests(
+	ws: WebSocketRoute,
+	profiles: (typeof THORIN)[]
+): (frame: string | Buffer) => void {
+	return (frame) => {
+		const { $type, Id } = JSON.parse(String(frame));
+		if ($type === 'ListProfilesRequest') {
+			ws.send(JSON.stringify({ $type: 'ListProfilesResponse', Id, Profiles: profiles }));
+			return;
+		}
+		ws.send(JSON.stringify({ $type: `${$type.replace('Request', '')}Response`, Id }));
+	};
+}
 
 test('the root route funnels through the auth guards to /login', async ({ page }) => {
 	await page.goto('/');
@@ -78,4 +98,85 @@ test('a successful login replaces /login rather than stacking /profiles on it', 
 	await page.getByRole('button', { name: 'Log out' }).click();
 	await expect(page).toHaveURL(LOGIN_URL);
 	await expect(page.getByTestId('login-status')).toHaveText('Signed out');
+});
+
+test('a dropped socket reconnects and replays the session', async ({ page }) => {
+	const sentPerConnection: string[][] = [];
+	let dropTheFirstSocket = (): void => {};
+
+	await page.routeWebSocket(WS_ROUTE, (ws) => {
+		const connection = sentPerConnection.push([]) - 1;
+		if (connection === 0) {
+			dropTheFirstSocket = () => ws.close();
+		}
+		const respond = respondToRequests(ws, [THORIN]);
+		ws.onMessage((frame) => {
+			sentPerConnection[connection].push(JSON.parse(String(frame)).$type);
+			respond(frame);
+		});
+	});
+
+	await page.goto('/login');
+	await page.getByRole('button', { name: 'Log in' }).click();
+	await expect(page).toHaveURL(/\/profiles$/);
+	await expect(page.getByText('Thorin')).toBeVisible();
+
+	// Take the profile into the game, so there is a selection to put back.
+	await page.getByRole('button', { name: 'Load' }).click();
+	await expect(page).toHaveURL(/\/game$/);
+	await page.goBack();
+	await expect(page).toHaveURL(/\/profiles$/);
+
+	dropTheFirstSocket();
+
+	// The guard must hold position: bouncing to /login on a recoverable drop is
+	// what made every blip cost a manual login.
+	await expect(page.getByRole('status')).toHaveText('Reconnecting…');
+	await expect(page).toHaveURL(/\/profiles$/);
+
+	// ...and the list comes back on its own, with no user action at all.
+	await expect(page.getByText('Thorin')).toBeVisible();
+	expect(sentPerConnection).toHaveLength(2);
+	// Order is the point: the socket has to be logged in before it can be
+	// pointed at a profile, and the refetch rides behind both.
+	expect(sentPerConnection[1]).toEqual([
+		'LoginAsTestUserRequest',
+		'SelectProfileRequest',
+		'ListProfilesRequest'
+	]);
+});
+
+test('deleting a profile asks first, and confirming does nothing yet', async ({ page }) => {
+	await page.routeWebSocket(WS_ROUTE, (ws) => ws.onMessage(respondToRequests(ws, [THORIN])));
+
+	await page.goto('/login');
+	await page.getByRole('button', { name: 'Log in' }).click();
+	await expect(page).toHaveURL(/\/profiles$/);
+
+	// Scoped to the card rather than the page: the dialog puts a second Delete
+	// button in the document, and a third would arrive with a second profile. The
+	// panel carries no role of its own, so its data-slot is the handle.
+	const card = page.locator('[data-slot="card"]', { hasText: 'Thorin' });
+	const trigger = card.getByRole('button', { name: 'Delete' });
+	await trigger.click();
+
+	// The whole point of the vendored dialog is the behaviour underneath it, so
+	// assert that rather than just that some markup appeared: it portals out,
+	// takes focus onto the safe button, and gives focus back on dismissal.
+	const dialog = page.getByRole('dialog');
+	await expect(dialog).toBeVisible();
+	await expect(dialog.getByText('Delete Thorin?')).toBeVisible();
+	await expect(dialog.getByRole('button', { name: 'Cancel' })).toBeFocused();
+
+	await page.keyboard.press('Escape');
+	await expect(dialog).toBeHidden();
+	await expect(trigger).toBeFocused();
+
+	// TODO: confirming is inert only because no delete message exists on the wire
+	// yet. When the backend branch lands, wire the request and change the last
+	// assertion below to expect the card to disappear.
+	await trigger.click();
+	await page.getByRole('dialog').getByRole('button', { name: 'Delete' }).click();
+	await expect(page.getByRole('dialog')).toBeHidden();
+	await expect(page.getByText('Thorin')).toBeVisible();
 });

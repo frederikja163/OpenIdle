@@ -3,21 +3,42 @@ import { env } from '$env/dynamic/public';
 import {
 	classifyMessage,
 	encodeRequest,
+	type EventType,
 	type RequestMap,
 	type RequestType,
-	type ServerEvent
+	type ServerEvent,
+	type ServerEventOf
 } from './protocol';
 
 const DEFAULT_WS_URL = 'ws://localhost:5066/ws';
 const DEFAULT_REQUEST_TIMEOUT_MS = 10_000;
 const DEFAULT_CONNECT_TIMEOUT_MS = 5_000;
+const DEFAULT_RECONNECT_BASE_MS = 500;
+const DEFAULT_RECONNECT_MAX_MS = 15_000;
+const DEFAULT_RECONNECT_ATTEMPTS = 8;
 
 export class WsError extends Error {}
+
+/**
+ * `reconnecting` covers the whole recovery window — the wait, the attempt and
+ * the session replay — because every consumer wants the same thing from all
+ * three: hold position and say so, rather than treat the drop as a logout.
+ */
+export type WsStatus = 'closed' | 'connecting' | 'open' | 'reconnecting';
+
+/** Issues a request that bypasses the replay gate. Only session replay gets one. */
+export type PrivilegedSend = <K extends RequestType>(
+	type: K,
+	payload: RequestMap[K]['payload']
+) => Promise<RequestMap[K]['response']>;
 
 export interface WsClientOptions {
 	url: string;
 	requestTimeoutMs?: number;
 	connectTimeoutMs?: number;
+	reconnectBaseMs?: number;
+	reconnectMaxMs?: number;
+	maxReconnectAttempts?: number;
 	socketFactory?: (url: string) => WebSocket;
 }
 
@@ -25,12 +46,22 @@ interface PendingRequest {
 	resolve: (response: never) => void;
 	reject: (error: WsError) => void;
 	timer: ReturnType<typeof setTimeout>;
+	/**
+	 * Whether the frame actually reached a socket. A request still waiting on a
+	 * connection or on the replay gate has not, and must survive the retirement
+	 * of a socket it never rode — including the retirement its own connect
+	 * triggers when it finds a half-closed one.
+	 */
+	sent: boolean;
 }
 
 export class WsClient {
 	private readonly url: string;
 	private readonly requestTimeoutMs: number;
 	private readonly connectTimeoutMs: number;
+	private readonly reconnectBaseMs: number;
+	private readonly reconnectMaxMs: number;
+	private readonly maxReconnectAttempts: number;
 	private readonly socketFactory: (url: string) => WebSocket;
 
 	private socket: WebSocket | null = null;
@@ -43,22 +74,82 @@ export class WsClient {
 	 * backend carries on working. See the error branch of handleMessage.
 	 */
 	private readonly outstanding: number[] = [];
-	private readonly eventHandlers = new Set<(event: ServerEvent) => void>();
+	private readonly eventHandlers = new Map<string, Set<(event: ServerEvent) => void>>();
+	private readonly anyEventHandlers = new Set<(event: ServerEvent) => void>();
 	private readonly closeHandlers = new Set<() => void>();
+	private readonly statusHandlers = new Set<(status: WsStatus) => void>();
+
+	/**
+	 * Bumped every time a connection is retired, so a caller can tell whether the
+	 * connection its result belongs to is still the current one.
+	 *
+	 * This exists because rejecting a pending request only *schedules* a
+	 * microtask: a caller's `catch` therefore always runs after the close
+	 * handlers that were meant to clean up after it, and would otherwise write
+	 * the dead connection's failure over the fresh state they just reset.
+	 */
+	private connectionGeneration = 0;
+	private statusValue: WsStatus = 'closed';
+	private everConnected = false;
+	private deliberatelyClosed = false;
+	private reconnectAttempt = 0;
+	private reconnectTimer: ReturnType<typeof setTimeout> | null = null;
+	private resumeSession: ((send: PrivilegedSend) => Promise<void>) | null = null;
+	private resumeGate: Promise<void> | null = null;
+	private releaseResumeGate: (() => void) | null = null;
 
 	constructor(options: WsClientOptions) {
 		this.url = options.url;
 		this.requestTimeoutMs = options.requestTimeoutMs ?? DEFAULT_REQUEST_TIMEOUT_MS;
 		this.connectTimeoutMs = options.connectTimeoutMs ?? DEFAULT_CONNECT_TIMEOUT_MS;
+		this.reconnectBaseMs = options.reconnectBaseMs ?? DEFAULT_RECONNECT_BASE_MS;
+		this.reconnectMaxMs = options.reconnectMaxMs ?? DEFAULT_RECONNECT_MAX_MS;
+		this.maxReconnectAttempts = options.maxReconnectAttempts ?? DEFAULT_RECONNECT_ATTEMPTS;
 		this.socketFactory = options.socketFactory ?? ((url) => new WebSocket(url));
 	}
 
+	get generation(): number {
+		return this.connectionGeneration;
+	}
+
+	get status(): WsStatus {
+		return this.statusValue;
+	}
+
 	connect(): Promise<void> {
-		if (this.socket?.readyState === WebSocket.OPEN) {
+		const existing = this.socket;
+		if (existing?.readyState === WebSocket.OPEN) {
 			return Promise.resolve();
 		}
-		this.connectPromise ??= new Promise((resolve, reject) => {
-			const socket = this.socketFactory(this.url);
+		// CLOSING and CLOSED only. A socket the server started closing is still
+		// assigned, and its connect promise is still the resolved one from when it
+		// opened, so retiring it here is what lets a replacement be built rather
+		// than a dead connection handed back. A socket that is merely CONNECTING is
+		// the one this call is waiting for, not a corpse to replace.
+		if (existing && existing.readyState > WebSocket.OPEN) {
+			this.retire(existing);
+		}
+		if (this.connectPromise) {
+			return this.connectPromise;
+		}
+		this.setStatus(this.everConnected ? 'reconnecting' : 'connecting');
+		let socket: WebSocket;
+		try {
+			// Constructed outside the promise below, because a throw in an executor
+			// runs before the memo is assigned: clearing it in there would be undone
+			// by the assignment, and the rejection would then be handed to every
+			// later request for the life of the page.
+			socket = this.socketFactory(this.url);
+		} catch (error) {
+			this.setStatus('closed');
+			return Promise.reject(error instanceof WsError ? error : new WsError(String(error)));
+		}
+		this.connectPromise = this.watchSocket(socket);
+		return this.connectPromise;
+	}
+
+	private watchSocket(socket: WebSocket): Promise<void> {
+		return new Promise((resolve, reject) => {
 			this.socket = socket;
 			// A socket whose TCP handshake completes but whose upgrade never does
 			// stays in CONNECTING until the browser's own transport timeout, tens
@@ -67,9 +158,31 @@ export class WsClient {
 			const connectTimer = setTimeout(() => socket.close(), this.connectTimeoutMs);
 			socket.addEventListener('open', () => {
 				clearTimeout(connectTimer);
+				const restoring = this.everConnected;
+				this.everConnected = true;
+				this.reconnectAttempt = 0;
+				this.setStatus('open');
+				// Raised before resolve() so that a request already awaiting this
+				// connect cannot slip onto the socket ahead of the replay: the gate
+				// has to exist by the time their continuation runs.
+				if (restoring) {
+					this.raiseGate();
+				}
 				resolve();
+				if (restoring) {
+					void this.replaySession();
+				}
 			});
-			socket.addEventListener('message', (event) => this.handleMessage(String(event.data)));
+			socket.addEventListener('message', (event) => {
+				// A retired socket can still deliver frames while it is CLOSING, and
+				// its replies belong to a connection nobody is listening to any more.
+				// Without this, an id-less error from the old socket would shift
+				// `outstanding` on the new one and reject an unrelated request.
+				if (this.socket !== socket) {
+					return;
+				}
+				this.handleMessage(String(event.data));
+			});
 			// A failed connection fires both 'error' and 'close'; rejecting an
 			// already-settled promise is a no-op, so no guard is needed.
 			socket.addEventListener('close', () => {
@@ -78,12 +191,19 @@ export class WsClient {
 				this.retire(socket);
 			});
 		});
-		return this.connectPromise;
 	}
 
 	async request<K extends RequestType>(
 		type: K,
 		payload: RequestMap[K]['payload']
+	): Promise<RequestMap[K]['response']> {
+		return this.send(type, payload, false);
+	}
+
+	private send<K extends RequestType>(
+		type: K,
+		payload: RequestMap[K]['payload'],
+		privileged: boolean
 	): Promise<RequestMap[K]['response']> {
 		const id = this.nextRequestId++;
 		const frame = encodeRequest(type, id, payload);
@@ -98,32 +218,89 @@ export class WsClient {
 				this.pending.delete(id);
 				reject(new WsError(`${type} timed out after ${this.requestTimeoutMs}ms`));
 			}, this.requestTimeoutMs);
-			this.pending.set(id, { resolve, reject, timer });
-			this.connect().then(
-				() => {
-					const socket = this.socket;
-					// send() on a CLOSING or CLOSED socket discards the frame and
-					// throws nothing, so this check is the only way the caller hears
-					// about it before the timeout.
-					if (!socket || socket.readyState !== WebSocket.OPEN) {
-						this.takePending(id)?.reject(new WsError('WebSocket is not open'));
-						return;
-					}
-					this.outstanding.push(id);
-					socket.send(frame);
-				},
-				(error: unknown) => {
-					this.takePending(id)?.reject(
-						error instanceof WsError ? error : new WsError(String(error))
-					);
-				}
-			);
+			this.pending.set(id, { resolve, reject, timer, sent: false });
+			void this.dispatch(id, frame, privileged);
 		});
 	}
 
-	onEvent(handler: (event: ServerEvent) => void): () => void {
-		this.eventHandlers.add(handler);
-		return () => this.eventHandlers.delete(handler);
+	private async dispatch(id: number, frame: string, privileged: boolean): Promise<void> {
+		try {
+			await this.connect();
+			// A reconnected socket is unauthenticated — the backend session is the
+			// connection — so ordinary traffic waits behind the replay. The replay's
+			// own requests are privileged, which is what keeps this from deadlocking.
+			if (!privileged && this.resumeGate) {
+				await this.resumeGate;
+			}
+			const socket = this.socket;
+			// send() on a CLOSING or CLOSED socket discards the frame and throws
+			// nothing, so this check is the only way the caller hears about it
+			// before the timeout.
+			if (!socket || socket.readyState !== WebSocket.OPEN) {
+				this.takePending(id)?.reject(new WsError('WebSocket is not open'));
+				return;
+			}
+			const request = this.pending.get(id);
+			if (!request) {
+				// Timed out while it waited for the connection or the replay.
+				return;
+			}
+			request.sent = true;
+			this.outstanding.push(id);
+			socket.send(frame);
+		} catch (error) {
+			this.takePending(id)?.reject(error instanceof WsError ? error : new WsError(String(error)));
+		}
+	}
+
+	/**
+	 * Replays the session onto a freshly reconnected socket before any ordinary
+	 * request reaches it. The callback is handed a send that bypasses the gate it
+	 * is itself holding.
+	 */
+	setResume(resume: (send: PrivilegedSend) => Promise<void>): void {
+		this.resumeSession = resume;
+	}
+
+	private raiseGate(): void {
+		if (this.resumeGate) {
+			return;
+		}
+		this.resumeGate = new Promise<void>((resolve) => (this.releaseResumeGate = resolve));
+	}
+
+	private lowerGate(): void {
+		this.releaseResumeGate?.();
+		this.resumeGate = null;
+		this.releaseResumeGate = null;
+	}
+
+	private async replaySession(): Promise<void> {
+		try {
+			if (this.resumeSession) {
+				await this.resumeSession((type, payload) => this.send(type, payload, true));
+			}
+		} catch {
+			// A failed replay leaves an open but unrestored socket, and the stores
+			// show whatever the session reset left them. Swallowed rather than
+			// rethrown because nothing is awaiting this, but the gate must come down
+			// either way or every queued request hangs until its own timeout.
+		} finally {
+			this.lowerGate();
+		}
+	}
+
+	onEvent<K extends EventType>(type: K, handler: (event: ServerEventOf<K>) => void): () => void {
+		const handlers = this.eventHandlers.get(type) ?? new Set();
+		handlers.add(handler as (event: ServerEvent) => void);
+		this.eventHandlers.set(type, handlers);
+		return () => handlers.delete(handler as (event: ServerEvent) => void);
+	}
+
+	/** Every server-push message, whatever its type. For diagnostics. */
+	onAnyEvent(handler: (event: ServerEvent) => void): () => void {
+		this.anyEventHandlers.add(handler);
+		return () => this.anyEventHandlers.delete(handler);
 	}
 
 	onClose(handler: () => void): () => void {
@@ -131,9 +308,22 @@ export class WsClient {
 		return () => this.closeHandlers.delete(handler);
 	}
 
+	onStatus(handler: (status: WsStatus) => void): () => void {
+		this.statusHandlers.add(handler);
+		return () => this.statusHandlers.delete(handler);
+	}
+
+	/**
+	 * Closes for good: this is the logout, so it must not reconnect. Every other
+	 * way a socket drops is a fault to recover from.
+	 */
 	close(): void {
+		this.deliberatelyClosed = true;
+		this.cancelReconnect();
+		this.lowerGate();
 		const socket = this.socket;
 		if (!socket) {
+			this.setStatus('closed');
 			return;
 		}
 		// Retired before close() returns rather than on the 'close' event, which
@@ -142,6 +332,28 @@ export class WsClient {
 		// memoised promise for a socket that can no longer carry a frame.
 		this.retire(socket);
 		socket.close();
+	}
+
+	/**
+	 * Re-arms the client after a close(). Logging in again is a fresh session
+	 * rather than a recovery, so it also forgets that a connection was ever
+	 * established — a first attempt that fails should surface to the login page,
+	 * not start a background retry loop.
+	 */
+	reopen(): void {
+		this.deliberatelyClosed = false;
+		this.everConnected = false;
+		this.cancelReconnect();
+	}
+
+	private setStatus(status: WsStatus): void {
+		if (this.statusValue === status) {
+			return;
+		}
+		this.statusValue = status;
+		for (const handler of [...this.statusHandlers]) {
+			handler(status);
+		}
 	}
 
 	private handleMessage(raw: string): void {
@@ -168,15 +380,25 @@ export class WsClient {
 				this.takePending(id)?.reject(new WsError(classified.message.Message));
 				break;
 			}
-			case 'event': {
-				for (const handler of this.eventHandlers) {
-					handler(classified.message);
-				}
+			case 'event':
+				this.dispatchEvent(classified.message);
 				break;
-			}
 			case 'unknown':
 				console.warn('Unrecognized websocket message:', classified.raw);
 				break;
+		}
+	}
+
+	private dispatchEvent(event: ServerEvent): void {
+		const handlers = [...(this.eventHandlers.get(event.$type) ?? []), ...this.anyEventHandlers];
+		for (const handler of handlers) {
+			// Isolated so one subscriber throwing cannot rob the rest of the event.
+			// Unlike a request, nobody is awaiting this to notice it went wrong.
+			try {
+				handler(event);
+			} catch (error) {
+				console.error(`Handler for ${event.$type} threw:`, error);
+			}
 		}
 	}
 
@@ -208,12 +430,75 @@ export class WsClient {
 		this.socket = null;
 		this.connectPromise = null;
 		this.outstanding.length = 0;
-		for (const id of [...this.pending.keys()]) {
-			this.takePending(id)?.reject(new WsError('WebSocket closed'));
+		this.connectionGeneration++;
+		for (const [id, request] of [...this.pending]) {
+			if (request.sent) {
+				this.takePending(id)?.reject(new WsError('WebSocket closed'));
+			}
 		}
-		for (const handler of this.closeHandlers) {
+		// Snapshotted like `pending` above, so a handler that subscribes or
+		// unsubscribes during dispatch cannot mutate the set being iterated.
+		for (const handler of [...this.closeHandlers]) {
 			handler();
 		}
+		if (this.deliberatelyClosed || !this.everConnected) {
+			this.setStatus('closed');
+			return;
+		}
+		this.scheduleReconnect();
+	}
+
+	private scheduleReconnect(): void {
+		if (this.reconnectTimer !== null) {
+			return;
+		}
+		if (this.reconnectAttempt >= this.maxReconnectAttempts) {
+			// Out of attempts: stop claiming to be recovering, so the app can treat
+			// this as the session ending rather than hold position for ever.
+			this.lowerGate();
+			this.setStatus('closed');
+			return;
+		}
+		this.setStatus('reconnecting');
+		// Exponential with jitter — without it, every client dropped by one backend
+		// restart would come back in the same instant.
+		const ceiling = Math.min(
+			this.reconnectMaxMs,
+			this.reconnectBaseMs * 2 ** this.reconnectAttempt
+		);
+		const delay = ceiling * (0.5 + Math.random() / 2);
+		this.reconnectAttempt++;
+		this.reconnectTimer = setTimeout(() => {
+			this.reconnectTimer = null;
+			// Reconnecting while the machine is offline just burns an attempt, so
+			// wait for the event that says it is worth trying again.
+			if (typeof navigator !== 'undefined' && navigator.onLine === false) {
+				// cancelReconnect() cannot reach a listener that is already armed, so
+				// the close is re-checked when it fires rather than only when it is set.
+				addEventListener(
+					'online',
+					() => {
+						if (this.deliberatelyClosed) {
+							return;
+						}
+						void this.connect().catch(() => {});
+					},
+					{ once: true }
+				);
+				return;
+			}
+			// The 'open' handler runs the replay; a failure routes through 'close'
+			// and schedules the next attempt from retire().
+			void this.connect().catch(() => {});
+		}, delay);
+	}
+
+	private cancelReconnect(): void {
+		if (this.reconnectTimer !== null) {
+			clearTimeout(this.reconnectTimer);
+			this.reconnectTimer = null;
+		}
+		this.reconnectAttempt = 0;
 	}
 }
 

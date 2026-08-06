@@ -23,7 +23,7 @@ Every third-party dependency used (or considered and rejected) by this project i
 
 ## Frontend
 
-All frontend packages are declared as `devDependencies` — a packaging convention, not a statement about what reaches the browser. The client now ships third-party code in three places: the `cn()` helper at `Frontend/src/lib/utils/stylingUtils.ts`, which imports [clsx](./clsx.md) and [tailwind-merge](./tailwind-merge.md); the [@lucide/svelte](./lucide-svelte.md) icons used by the app chrome; and [shadcn-svelte](./shadcn-svelte.md)'s vendored `button` at `src/lib/components/ui/button/`, which brings [tailwind-variants](./tailwind-variants.md) with it. The rest of the component set is declared and lockfile-pinned but not bundled, and [bits-ui](./bits-ui.md) stays unimported until a component that needs it is added.
+All frontend packages are declared as `devDependencies` — a packaging convention, not a statement about what reaches the browser. The client now ships third-party code in two places: the `cn()` helper at `Frontend/src/lib/utils/stylingUtils.ts`, which imports [clsx](./clsx.md) and [tailwind-merge](./tailwind-merge.md), and the [@lucide/svelte](./lucide-svelte.md) icons used by the app chrome. [shadcn-svelte](./shadcn-svelte.md)'s `button`, `badge`, `card`, `input` and `dialog` are vendored under `src/lib/components/ui/`, and `button` and `badge` bring `tailwind-variants` with them; the rest of the component set is declared and lockfile-pinned but not bundled. `dialog` is the component that needed [bits-ui](./bits-ui.md), so that dependency and its transitive tree now ship to the browser — measured at +14.9 KB gzip.
 
 ### Framework and build
 
@@ -47,7 +47,7 @@ All frontend packages are declared as `devDependencies` — a packaging conventi
 
 ### Components
 
-The browser-bound half of the frontend set. Of these, [@lucide/svelte](./lucide-svelte.md) and the vendored [shadcn-svelte](./shadcn-svelte.md) `button` reach the browser today — the app chrome's three icons and the button at `src/lib/components/ui/button/` respectively, the button bringing [tailwind-variants](./tailwind-variants.md) with it alongside `cn()`'s [clsx](./clsx.md) and [tailwind-merge](./tailwind-merge.md). The rest of the shadcn-svelte component set and [bits-ui](./bits-ui.md) ship only once vendored. The two below are the primary decisions:
+The browser-bound half of the frontend set, and as of the profiles delete confirmation all of it ships: the [@lucide/svelte](./lucide-svelte.md) icons, `cn()`'s [clsx](./clsx.md) and [tailwind-merge](./tailwind-merge.md), `tailwind-variants` behind Button and Badge, and [bits-ui](./bits-ui.md) behind the vendored `dialog`. The two below are the primary decisions:
 
 | Library | Decision | Date | Risk (undo) | Risk (security) |
 |---|---|---|---|---|
@@ -59,7 +59,7 @@ The rest were **entailed** by those two rather than chosen independently — ins
 | Library | Decision | Date | Risk (undo) | Risk (security) | Ships JS to browser |
 |---|---|---|---|---|---|
 | [tailwind-merge](./tailwind-merge.md) | adopted | 2026-08-03 | low | low | yes |
-| [tailwind-variants](./tailwind-variants.md) | adopted | 2026-08-03 | low | low | **yes** — via the vendored `button` |
+| [tailwind-variants](./tailwind-variants.md) | adopted | 2026-08-03 | low | low | **yes** — Button and Badge call `tv()` |
 | [clsx](./clsx.md) | adopted | 2026-08-03 | low | low | yes |
 | [@lucide/svelte](./lucide-svelte.md) | adopted | 2026-08-03 | low | low | yes (tree-shaken per icon) |
 | [tw-animate-css](./tw-animate-css.md) | adopted | 2026-08-03 | low | low | **no** — CSS only |
@@ -137,6 +137,6 @@ Not dependency decisions, but defects found during this audit:
 - **Biome would replace eight packages with one** — [ESLint](./eslint.md), [@eslint/js](./eslint-js.md), [typescript-eslint](./typescript-eslint.md), [eslint-plugin-svelte](./eslint-plugin-svelte.md), [eslint-config-prettier](./eslint-config-prettier.md), [globals](./globals.md), [Prettier](./prettier.md), and [prettier-plugin-svelte](./prettier-plugin-svelte.md). It is blocked today only by the lack of Svelte support. Re-open the lint and format decisions when that lands.
 - **`shadcn-svelte add` writes network-fetched code directly into `src/`**, not into `node_modules`. Its output is therefore a reviewable diff and **must be read before committing** — that review is the mitigation for the registry being a supply-chain entry point. See [shadcn-svelte](./shadcn-svelte.md).
 - **[shadcn-svelte](./shadcn-svelte.md) is scoped to application chrome** — login, profiles, settings, forms, modals. The game UI proper (resource counters, progress bars, inventory grids) stays hand-written against Tailwind's scale. This boundary is a *condition* of the adoption, not a preference: it is what holds the undo risk at `medium`. If it erodes, re-open the decision.
-- **Client bundle weight is now a live concern.** Measured on this project: baseline 29.8 KB gzip, +18.4 KB for the first shadcn component (a fixed `tailwind-merge`/`tailwind-variants` cost), +17.2 KB more for a dialog via [bits-ui](./bits-ui.md). Prefer native `<dialog>`/`<select>` wherever they suffice.
+- **Client bundle weight is now a live concern.** Measured on this project: baseline 29.8 KB gzip, +18.4 KB for the first shadcn component (a fixed `tailwind-merge`/`tailwind-variants` cost), and **+14.9 KB more for the dialog via [bits-ui](./bits-ui.md)** — the figure re-measured when it was actually vendored, a little under the +17.2 KB the evaluation had predicted. Prefer native `<dialog>`/`<select>` wherever they suffice.
 - `svelte-toolbelt` (transitive via [bits-ui](./bits-ui.md)) ships **no `license` field** in its `package.json`; its bundled LICENSE file is MIT under the same maintainer as shadcn-svelte. Harmless, but automated licence tooling will flag it.
 - No install or postinstall scripts exist anywhere in the current dependency tree — **re-verified across the shadcn-svelte additions on 2026-08-03**. Treat the appearance of one as a red flag.

@@ -26,7 +26,9 @@ Adopt **bits-ui 2.18.1**. This is largely an *entailed* decision rather than an 
 
 It is worth recording that it earns its place on its own merits. bits-ui is headless: it supplies behaviour and ARIA wiring and no styling whatsoever, which means it does not compete with [Tailwind CSS](./tailwindcss.md) and leaves the visual layer entirely ours. It is runes-native rather than retrofitted onto Svelte 5, which matters given this project forces runes mode for all non-`node_modules` code. And its own dependencies are well-chosen rather than incidental: `@floating-ui` is the de-facto standard for collision-aware positioning and `tabbable` for focus-order computation, both of which are exactly the fiddly, browser-quirk-laden problems worth delegating.
 
-**It is only pulled in on demand.** Adding `button` alone does not install it — the shadcn-svelte CLI adds it when the first component that needs it is added, which during evaluation was `dialog`. It is declared in `package.json` and resolved in `bun.lock`, but the only vendored component so far, `button`, does not use it, so nothing imports it and it contributes no client bytes today. Confining interactive primitives to application chrome, as [shadcn-svelte](./shadcn-svelte.md) section 3 requires, is what keeps this dependency's blast radius contained once they are.
+**It is only pulled in on demand.** Adding `button` alone does not install it — the shadcn-svelte CLI adds it when the first component that needs it is added, which during evaluation was `dialog`. For a time it was declared in `package.json` and resolved in `bun.lock` while no component imported it, so it contributed no client bytes.
+
+**That is no longer true: bits-ui now ships.** `dialog` was vendored for the delete-confirmation modal on the profiles page, and it is the only thing that imports the library. Re-measured on the app as it stands, it moved total client JavaScript from 67.6 KB to **82.5 KB gzip (+14.9 KB)** — close to, and slightly under, the 17.2 KB this document predicted. Confining interactive primitives to application chrome, as [shadcn-svelte](./shadcn-svelte.md) section 3 requires, is what keeps this dependency's blast radius contained now that it is real.
 
 ### Pros
 
@@ -63,6 +65,8 @@ Buying wins decisively. This is the dependency that justifies the whole [shadcn-
 This is the genuinely sticky half of the shadcn-svelte adoption. The components themselves are vendored source we own and can keep indefinitely, but they `import` bits-ui, and that import cannot be deleted without rewriting the component's behaviour from scratch. Once a number of screens use `<Dialog>`, `<Select>` and dropdown menus, removal means either reimplementing the primitives — the multi-week job section 4 rejected — or migrating to Melt UI, which is a comparable but non-trivial API change.
 
 Held at `medium` rather than `high` by the scope condition: interactive primitives are confined to application chrome, and the game UI proper does not use them. Simple cases should keep preferring native `<dialog>` and `<select>`, which limits how far this spreads.
+
+The delete-confirmation modal on the profile card is a knowing exception to that last sentence, and it is recorded here rather than left to contradict the guidance silently. A confirm step is close to the canonical simple case, and native `<dialog>` would have cost nothing; the owner chose the vendored component anyway, with the +14.9 KB measured and on the table, for composability with the rest of the shadcn set. The guidance still stands for the next one — this is one exception, not a new default, and the count of importers is the number to watch.
 
 ### Security risk — medium
 

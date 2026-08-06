@@ -47,12 +47,29 @@ export type ServerResponse =
 	| ListProfilesResponse
 	| SelectProfileResponse;
 
-// No concrete EventBase subclass exists in the backend yet; this models any
-// future server-push message (no Id).
+// Any server-push message: an EventBase subclass, which carries no Id.
 export interface ServerEvent {
 	$type: string;
 	[key: string]: unknown;
 }
+
+/*
+ * Server-push messages, mirroring RequestMap. The backend names them
+ * `<Noun>ChangedEvent` and puts the full replacement state in them rather than a
+ * delta, so a handler can overwrite its slice without reconciling.
+ *
+ * TODO: ProfilesChangedEvent is typed here ahead of the backend branch that
+ * sends it, so nothing dispatches it yet. Two things about it will matter when
+ * it lands: it arrives *before* the response to the request that caused it, and
+ * it makes createProfile's refetch redundant.
+ */
+export type EventMap = {
+	ProfilesChangedEvent: { Profiles: ProfileDto[] };
+};
+
+export type EventType = keyof EventMap;
+
+export type ServerEventOf<K extends EventType> = { $type: K } & EventMap[K];
 
 export type RequestMap = {
 	PingRequest: { payload: Record<string, never>; response: PongResponse };

@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { WsClient, WsError } from './client';
+import { WsClient, WsError, type WsClientOptions } from './client';
 
 /**
  * Enough of the WebSocket interface for WsClient, plus levers to drive it. A
@@ -57,7 +57,7 @@ class FakeSocket {
 	}
 }
 
-function makeClient(options: { requestTimeoutMs?: number; connectTimeoutMs?: number } = {}) {
+function makeClient(options: Omit<WsClientOptions, 'url' | 'socketFactory'> = {}) {
 	const sockets: FakeSocket[] = [];
 	const client = new WsClient({
 		url: 'ws://test.invalid/ws',
@@ -269,11 +269,13 @@ describe('WsClient', () => {
 		expect((await ping).toString()).toMatch(/PingRequest timed out after 50ms/);
 	});
 
+	// Was written against the untyped onEvent(handler) this replaced; it pins the
+	// same thing through onAnyEvent, which is what that signature became.
 	it('stops calling handlers that have unsubscribed', async () => {
 		vi.useFakeTimers();
 		const { client, sockets } = makeClient();
 		const onEvent = vi.fn();
-		const unsubscribe = client.onEvent(onEvent);
+		const unsubscribe = client.onAnyEvent(onEvent);
 
 		const login = capture(client.request('LoginAsTestUserRequest', {}));
 		await flush();
@@ -289,5 +291,224 @@ describe('WsClient', () => {
 
 		sockets[0].deliver({ $type: 'LoginAsTestUserResponse', Id: 1 });
 		await expect(login).resolves.toMatchObject({ $type: 'LoginAsTestUserResponse' });
+	});
+
+	it('delivers an event only to the handlers subscribed to its type', async () => {
+		vi.useFakeTimers();
+		const { client, sockets } = makeClient();
+		const onProfiles = vi.fn();
+		client.onEvent('ProfilesChangedEvent', onProfiles);
+
+		capture(client.request('PingRequest', {}));
+		await flush();
+		sockets[0].open();
+		await flush();
+
+		sockets[0].deliver({ $type: 'SomeOtherEvent', Value: 1 });
+		expect(onProfiles).not.toHaveBeenCalled();
+
+		const profiles = [{ Name: 'Thorin', ProfileId: 'p1' }];
+		sockets[0].deliver({ $type: 'ProfilesChangedEvent', Profiles: profiles });
+		expect(onProfiles).toHaveBeenCalledWith({ $type: 'ProfilesChangedEvent', Profiles: profiles });
+	});
+
+	it('keeps dispatching an event after one handler throws', async () => {
+		vi.useFakeTimers();
+		vi.spyOn(console, 'error').mockImplementation(() => {});
+		const { client, sockets } = makeClient();
+		const second = vi.fn();
+		client.onEvent('ProfilesChangedEvent', () => {
+			throw new Error('subscriber blew up');
+		});
+		client.onEvent('ProfilesChangedEvent', second);
+
+		capture(client.request('PingRequest', {}));
+		await flush();
+		sockets[0].open();
+		await flush();
+		sockets[0].deliver({ $type: 'ProfilesChangedEvent', Profiles: [] });
+
+		expect(second).toHaveBeenCalledTimes(1);
+	});
+
+	it('bumps the generation when a connection is retired', async () => {
+		vi.useFakeTimers();
+		const { client, sockets } = makeClient();
+
+		const before = client.generation;
+		capture(client.request('LoginAsTestUserRequest', {}));
+		await flush();
+		sockets[0].open();
+		await flush();
+		expect(client.generation).toBe(before);
+
+		sockets[0].finishClose();
+		expect(client.generation).toBe(before + 1);
+	});
+
+	// The bug this whole mechanism exists for: a close handler resets state, and
+	// the rejected request's catch would otherwise run afterwards and overwrite it.
+	it('runs close handlers before the rejections they are meant to clean up after', async () => {
+		vi.useFakeTimers();
+		const { client, sockets } = makeClient();
+		const order: string[] = [];
+		client.onClose(() => order.push('closeHandler'));
+
+		const login = client
+			.request('LoginAsTestUserRequest', {})
+			.catch(() => order.push('requestCatch'));
+		await flush();
+		sockets[0].open();
+		await flush();
+
+		sockets[0].finishClose();
+		await login;
+
+		expect(order).toEqual(['closeHandler', 'requestCatch']);
+	});
+
+	it('does not let a retired socket disturb its successor', async () => {
+		vi.useFakeTimers();
+		const { client, sockets } = makeClient();
+
+		capture(client.request('LoginAsTestUserRequest', {}));
+		await flush();
+		sockets[0].open();
+		await flush();
+
+		// Server-initiated close: the socket is CLOSING but its 'close' event has
+		// not landed, which used to leave connect() handing back the dead memo.
+		sockets[0].close();
+		const next = capture(client.request('ListProfilesRequest', {}));
+		await flush();
+		sockets[1].open();
+		await flush();
+
+		// The old socket answers late with an id-less error. It must not be
+		// charged to the new connection's request.
+		sockets[0].deliver({ $type: 'ErrorResponse', Id: null, Message: 'from the dead socket' });
+		sockets[1].deliver({ $type: 'ListProfilesResponse', Id: 2, Profiles: [] });
+
+		await expect(next).resolves.toMatchObject({ $type: 'ListProfilesResponse' });
+	});
+
+	it('lets two requests made before the socket opens ride the same one', async () => {
+		vi.useFakeTimers();
+		const { client, sockets } = makeClient();
+
+		const first = capture(client.request('LoginAsTestUserRequest', {}));
+		const second = capture(client.request('ListProfilesRequest', {}));
+		await flush();
+
+		// The second request must wait for the connection the first started, not
+		// mistake a socket that is merely CONNECTING for one to replace.
+		expect(sockets).toHaveLength(1);
+		sockets[0].open();
+		await flush();
+
+		expect(sockets[0].sent).toHaveLength(2);
+		sockets[0].deliver({ $type: 'LoginAsTestUserResponse', Id: 1 });
+		sockets[0].deliver({ $type: 'ListProfilesResponse', Id: 2, Profiles: [] });
+		await expect(first).resolves.toMatchObject({ $type: 'LoginAsTestUserResponse' });
+		await expect(second).resolves.toMatchObject({ $type: 'ListProfilesResponse' });
+	});
+
+	it('recovers from a socket factory that throws', async () => {
+		vi.useFakeTimers();
+		const sockets: FakeSocket[] = [];
+		let failNext = true;
+		const client = new WsClient({
+			url: 'ws://test.invalid/ws',
+			socketFactory: () => {
+				if (failNext) {
+					failNext = false;
+					throw new Error('mixed content');
+				}
+				const socket = new FakeSocket();
+				sockets.push(socket);
+				return socket as unknown as WebSocket;
+			}
+		});
+
+		expect((await capture(client.request('PingRequest', {}))).toString()).toMatch(/mixed content/);
+
+		// The memoised rejection must not outlive the attempt that produced it, or
+		// the singleton is bricked for the life of the page.
+		const retry = capture(client.request('PingRequest', {}));
+		await flush();
+		expect(sockets).toHaveLength(1);
+		sockets[0].open();
+		await flush();
+		sockets[0].deliver({ $type: 'PongResponse', Id: 2 });
+
+		await expect(retry).resolves.toMatchObject({ $type: 'PongResponse' });
+	});
+
+	it('reconnects after an unexpected drop but not after close()', async () => {
+		vi.useFakeTimers();
+		const { client, sockets } = makeClient({ reconnectBaseMs: 100, reconnectMaxMs: 100 });
+
+		capture(client.request('LoginAsTestUserRequest', {}));
+		await flush();
+		sockets[0].open();
+		await flush();
+
+		sockets[0].finishClose();
+		expect(client.status).toBe('reconnecting');
+		await vi.advanceTimersByTimeAsync(200);
+		expect(sockets).toHaveLength(2);
+		sockets[1].open();
+		await flush();
+		expect(client.status).toBe('open');
+
+		// A deliberate close is the logout, and must stay closed.
+		client.close();
+		await vi.advanceTimersByTimeAsync(1000);
+		expect(sockets).toHaveLength(2);
+		expect(client.status).toBe('closed');
+	});
+
+	it('holds ordinary requests behind the session replay after a reconnect', async () => {
+		vi.useFakeTimers();
+		const { client, sockets } = makeClient({ reconnectBaseMs: 100, reconnectMaxMs: 100 });
+		let releaseReplay = (): void => {};
+		const replayed: string[] = [];
+		client.setResume(async (send) => {
+			await new Promise<void>((resolve) => (releaseReplay = resolve));
+			await send('LoginAsTestUserRequest', {});
+			replayed.push('login');
+		});
+
+		capture(client.request('PingRequest', {}));
+		await flush();
+		sockets[0].open();
+		await flush();
+		sockets[0].finishClose();
+
+		await vi.advanceTimersByTimeAsync(200);
+		sockets[1].open();
+		await flush();
+
+		// The replay is still blocked, so an ordinary request must not be sent yet.
+		capture(client.request('ListProfilesRequest', {}));
+		await flush();
+		expect(sockets[1].sent).toHaveLength(0);
+
+		releaseReplay();
+		await flush();
+		// The replay's own request is privileged, so it goes out while the gate it
+		// is holding still blocks the queued one.
+		expect(sockets[1].sent.map((frame) => JSON.parse(frame).$type)).toEqual([
+			'LoginAsTestUserRequest'
+		]);
+
+		sockets[1].deliver({ $type: 'LoginAsTestUserResponse', Id: JSON.parse(sockets[1].sent[0]).Id });
+		await flush();
+
+		expect(replayed).toEqual(['login']);
+		expect(sockets[1].sent.map((frame) => JSON.parse(frame).$type)).toEqual([
+			'LoginAsTestUserRequest',
+			'ListProfilesRequest'
+		]);
 	});
 });
