@@ -4,7 +4,7 @@ using System.IO;
 
 namespace Generator.Core;
 
-internal sealed class TsEmitter : IDtoEmitter
+public sealed class TsEmitter : IDtoEmitter
 {
     private readonly ScopedTextWriter _textWriter;
 
