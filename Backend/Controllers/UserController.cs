@@ -2,9 +2,9 @@
 using System.Linq;
 using System.Threading.Tasks;
 using Backend.Attributes;
-using Backend.Dtos.Auth;
-using Backend.Entities;
+using Backend.Database.Entities;
 using Backend.Services;
+using Backend.Dtos;
 
 namespace Backend.Controllers;
 

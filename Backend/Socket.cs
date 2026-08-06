@@ -4,8 +4,8 @@ using System.Text;
 using System.Text.Json;
 using System.Threading;
 using System.Threading.Tasks;
+using Backend.Database.Entities;
 using Backend.Dtos;
-using Backend.Entities;
 
 namespace Backend;
 
@@ -102,7 +102,7 @@ internal sealed class Socket : IDisposable
         }
         catch (Exception exception)
         {
-            await SendResponseAsync(new ErrorResponse(exception.Message));
+            await SendResponseAsync(new ErrorResponse(){Message = exception.Message});
         }
     }
 

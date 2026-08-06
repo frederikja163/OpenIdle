@@ -2,7 +2,7 @@
 using System.Linq;
 using System.Threading.Tasks;
 using Backend.Database;
-using Backend.Entities;
+using Backend.Database.Entities;
 using Microsoft.EntityFrameworkCore;
 
 namespace Backend.Services;

@@ -11,6 +11,9 @@ Every third-party dependency used (or considered and rejected) by this project i
 
 | [EF Core + SQLite](./ef-core.md) | adopted | 2026-08-03 | medium | low |
 | [DTO XML contract](./dto-xml-contract.md) | in-house | 2026-08-04 | medium | low |
+| [CommandLineParser](./commandlineparser.md) | adopted | 2026-08-06 | low | low |
+
+`CommandLineParser` is dev-tooling only — it parses args for the `Generator` console app (never shipped). It replaced an initial `System.CommandLine` 2.0.10 pick; the owner preferred the attribute-based syntax and the zero-dependency footprint, accepting the package's dormancy (no stable release since 2022) for a small fixed CLI. See the alternatives table in its document.
 
 ## Frontend
 

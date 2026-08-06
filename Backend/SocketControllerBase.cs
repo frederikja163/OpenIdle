@@ -1,7 +1,7 @@
 ﻿using System;
 using System.Threading.Tasks;
+using Backend.Database.Entities;
 using Backend.Dtos;
-using Backend.Entities;
 
 namespace Backend;
 
@@ -26,7 +26,7 @@ public abstract class SocketControllerBase
 
     public async Task RespondAsync(ResponseBase response)
     {
-        response.Id = Request.Id;
+        response.RequestId = Request.RequestId;
         await Socket.SendResponseAsync(response);
     }
 }
