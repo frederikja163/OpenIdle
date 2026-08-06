@@ -87,17 +87,17 @@ public sealed class CsEmitter : IDtoEmitter
         _textWriter.WriteLine();
         using (Scope _ = _textWriter.Scope("public abstract class RequestBase : DtoBase"))
         {
-            Property(new Property(PropertyType.String, "string", "RequestId", false), "set");
+            Property(new Property(PropertyType.Int, "int", "RequestId", false), "set");
         }
         _textWriter.WriteLine();
         using (Scope _ = _textWriter.Scope("public abstract class ResponseBase : DtoBase"))
         {
-            Property(new Property(PropertyType.String, "string", "RequestId", false), "set");
+            Property(new Property(PropertyType.Int, "int", "RequestId", false), "set");
         }
         _textWriter.WriteLine();
         using (Scope _ = _textWriter.Scope("public abstract class EventBase : DtoBase"))
         {
-            Property(new Property(PropertyType.String, "string", "EventId", false), "set");
+            Property(new Property(PropertyType.Int, "int", "EventId", false), "set");
         }
         _textWriter.WriteLine();
     }

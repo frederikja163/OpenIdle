@@ -186,11 +186,13 @@ The C# emitter writes a single file, `Dto.g.cs`, into the `Backend.Dtos` namespa
 
 - The concrete classes for every DTO/request/response/event, all `sealed`.
 - `[JsonPolymorphic]` + one `[JsonDerivedType]` per generated type on `abstract class DtoBase`.
-- The three abstract bases: `DtoBase`, `RequestBase` (with `string RequestId`), `ResponseBase` (with `string RequestId`), `EventBase` (with `string EventId`).
+- The three abstract bases: `DtoBase`, `RequestBase` (with `int RequestId`), `ResponseBase` (with `int RequestId`), `EventBase` (with `int EventId`).
 
 All classes are `sealed` and non-partial — **you cannot extend generated types with hand-written members.** If a payload needs a field, it must be declared in `types.xml`.
 
 To inspect `Dto.g.cs` on disk, add `<EmitCompilerGeneratedFiles>true</EmitCompilerGeneratedFiles>` to [`Backend/Backend.csproj`](../../Backend/Backend.csproj) — it lands under `Backend/obj/.../generated/`.
+
+**Generated file naming convention:** Generated files that should be git-ignored use the `*.generated.*` pattern (e.g., `MyFile.generated.cs`, `types.generated.ts`). This is enforced by the root `.gitignore` (`/*.generated.*`). The C# source generator's output (`Dto.g.cs`) follows the Microsoft convention (`*.g.cs`) and lands in `obj/` which is already ignored; the TypeScript CLI output should be written to a `*.generated.ts` path if you want it auto-ignored.
 
 ## 5. Wire format
 
@@ -201,7 +203,7 @@ Client→server (the string keys are the lower-camel-cased property names):
 ```json
 {
   "$type": "CreateProfileRequest",
-  "requestId": "req-1",
+  "requestId": 1,
   "name": "Hero"
 }
 ```
@@ -211,7 +213,7 @@ Server→client response (note `requestId` is echoed back for correlation):
 ```json
 {
   "$type": "CreateProfileResponse",
-  "requestId": "req-1"
+  "requestId": 1
 }
 ```
 
@@ -220,7 +222,7 @@ Server→client event:
 ```json
 {
   "$type": "ProfilesChangedEvent",
-  "eventId": "evt-1",
+  "eventId": 1,
   "profiles": [
     { "name": "Hero", "profileId": "2efd7f6a-..." }
   ]
@@ -252,7 +254,7 @@ Conventions (not enforced — reviewer judgement):
 
 ## 8. Gotchas & known quirks
 
-- **TypeScript `requestId`/`eventId` are `number`, C# is `string`.** The TS emitter hardcodes `requestId: number` / `eventId: number` (`Generators/Core/TsEmitter.cs:20-33`) while the C# bases use `string`. A TS client that sends a numeric `requestId` will fail server-side deserialization. Align these types before wiring the TS socket client.
+- **`requestId`/`eventId` are numeric on both sides.** The C# bases hardcode `int RequestId` / `int EventId` and the TS emitter hardcodes `requestId: number` / `eventId: number` (`Generators/Core/TsEmitter.cs:20-33`). This matches the TS socket client, which assigns client-chosen numeric ids and expects the echoed response to carry the same number. Keep the two sides in lockstep — changing one alone breaks deserialization.
 - **No editor validation.** There is no XSD; typos surface at C# build time or not at all (TS). Copy a nearby block rather than typing from memory.
 - **Unknown top-level elements are silently ignored** by the parser (`Generators/Core/Parser.cs:33-52`).
 - **`GetElementsByTagName("Response")` is recursive** — the response can sit anywhere inside the request element, but keep it as a direct child.
@@ -267,8 +269,8 @@ dotnet build Backend\Backend.csproj
 # 2. Generated C# looks right
 dotnet run --project Generators\Generator -- -i types.xml -t Cs
 
-# 3. TypeScript interfaces look right
-dotnet run --project Generators\Generator -- -i types.xml -t Ts -o Frontend\src\lib\generated\dto.ts
+# 3. TypeScript interfaces look right (output follows *.generated.* convention for git-ignore)
+dotnet run --project Generators\Generator -- -i types.xml -t Ts -o Frontend\src\lib\dto.generated.ts
 ```
 
 ## 10. Related documents

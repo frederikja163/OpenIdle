@@ -24,10 +24,10 @@ public sealed class SocketBroadcastIntegrationTests : IDisposable
     {
         using TestSocketClient socket = await _app.ConnectAsync(ct).ConfigureAwait(false);
 
-        await socket.SendAsync(new LoginAsTestUserRequest { RequestId = "7" }, ct).ConfigureAwait(false);
+        await socket.SendAsync(new LoginAsTestUserRequest { RequestId = 7 }, ct).ConfigureAwait(false);
 
         LoginAsTestUserResponse response = await ReceiveUntilAsync<LoginAsTestUserResponse>(socket, ct);
-        Assert.That(response.RequestId, Is.EqualTo("7"));
+        Assert.That(response.RequestId, Is.EqualTo(7));
     }
 
     [Test]
@@ -85,13 +85,13 @@ public sealed class SocketBroadcastIntegrationTests : IDisposable
 
     private static async Task LoginAsync(TestSocketClient socket, CancellationToken ct)
     {
-        await socket.SendAsync(new LoginAsTestUserRequest { RequestId = "1" }, ct).ConfigureAwait(false);
+        await socket.SendAsync(new LoginAsTestUserRequest { RequestId = 1 }, ct).ConfigureAwait(false);
         await ReceiveUntilAsync<LoginAsTestUserResponse>(socket, ct);
     }
 
     private static async Task<ProfilesChangedEvent> CreateProfileAsync(TestSocketClient socket, string name, CancellationToken ct)
     {
-        await socket.SendAsync(new CreateProfileRequest { RequestId = "2", Name = name }, ct).ConfigureAwait(false);
+        await socket.SendAsync(new CreateProfileRequest { RequestId = 2, Name = name }, ct).ConfigureAwait(false);
         ProfilesChangedEvent evt = await ReceiveUntilAsync<ProfilesChangedEvent>(socket, ct);
         await ReceiveUntilAsync<CreateProfileResponse>(socket, ct);
         return evt;
@@ -99,13 +99,13 @@ public sealed class SocketBroadcastIntegrationTests : IDisposable
 
     private static async Task<ListProfilesResponse> ListProfilesAsync(TestSocketClient socket, CancellationToken ct)
     {
-        await socket.SendAsync(new ListProfilesRequest { RequestId = "3" }, ct).ConfigureAwait(false);
+        await socket.SendAsync(new ListProfilesRequest { RequestId = 3 }, ct).ConfigureAwait(false);
         return await ReceiveUntilAsync<ListProfilesResponse>(socket, ct);
     }
 
     private static async Task<SelectProfileResponse> SelectProfileAsync(TestSocketClient socket, Guid profileId, CancellationToken ct)
     {
-        await socket.SendAsync(new SelectProfileRequest { ProfileId = profileId, RequestId = "4" }, ct).ConfigureAwait(false);
+        await socket.SendAsync(new SelectProfileRequest { ProfileId = profileId, RequestId = 4 }, ct).ConfigureAwait(false);
         return await ReceiveUntilAsync<SelectProfileResponse>(socket, ct);
     }
 
