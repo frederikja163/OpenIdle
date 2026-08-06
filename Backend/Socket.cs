@@ -6,8 +6,8 @@ using System.Text.Json;
 using System.Text.Json.Serialization;
 using System.Threading;
 using System.Threading.Tasks;
+using Backend.Database.Entities;
 using Backend.Dtos;
-using Backend.Entities;
 using Backend.Extensions;
 
 namespace Backend;
@@ -19,15 +19,14 @@ internal sealed class MessageReceivedEventArgs(RequestBase request) : EventArgs
 
 internal sealed class SocketCloseEventArgs : EventArgs
 {
-    
 }
 
 internal sealed class Socket : IDisposable
 {
     private readonly WebSocket _webSocket;
-    private bool _isClosed = false;
-    private readonly SemaphoreSlim _sendLock = new SemaphoreSlim(1, 1);
-    
+    private bool _isClosed;
+    private readonly SemaphoreSlim _sendLock = new(1, 1);
+
     internal Socket(WebSocket webSocket)
     {
         _webSocket = webSocket;
@@ -115,7 +114,7 @@ internal sealed class Socket : IDisposable
         }
         catch (Exception exception)
         {
-            await SendResponseAsync(new ErrorResponse(exception.Message));
+            await SendResponseAsync(new ErrorResponse { Message = exception.Message });
         }
     }
 

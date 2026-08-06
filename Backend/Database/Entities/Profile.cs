@@ -1,10 +1,10 @@
 using System;
 using System.Collections.Generic;
 using System.ComponentModel.DataAnnotations;
-using Backend.Dtos.Auth;
+using Backend.Dtos;
 using Microsoft.EntityFrameworkCore;
 
-namespace Backend.Entities;
+namespace Backend.Database.Entities;
 
 [Index(nameof(Name), IsUnique = true)]
 public sealed class Profile

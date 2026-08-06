@@ -2,7 +2,6 @@ using System.Reflection;
 using Backend;
 using Backend.Attributes;
 using Backend.Dtos;
-using Backend.Dtos.Auth;
 using Backend.Services;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging.Abstractions;
@@ -59,7 +58,7 @@ public sealed class SocketEndpointServiceTests
         service.TryRegisterEndpoint(GetMethod<TestPingController>(nameof(TestPingController.Ping)));
         FakeWebSocket webSocket = RegisterSocket(registry, out Socket socket);
 
-        webSocket.EnqueueReceive(Serialize(new PingRequest() { Id = 42 }));
+        webSocket.EnqueueReceive(Serialize(new CreateProfileRequest() { RequestId = "42" }));
         webSocket.EnqueueClose();
 
         await socket.StartAsync(CancellationToken.None);
@@ -67,8 +66,8 @@ public sealed class SocketEndpointServiceTests
         Assert.Multiple(() =>
         {
             Assert.That(webSocket.FirstSentText, Is.Not.Null);
-            Assert.That(webSocket.FirstSentText, Does.Contain("PongResponse"));
-            Assert.That(webSocket.FirstSentText, Does.Contain("\"id\":42"));
+            Assert.That(webSocket.FirstSentText, Does.Contain("CreateProfileResponse"));
+            Assert.That(webSocket.FirstSentText, Does.Contain("\"requestId\":\"42\""));
         });
     }
 
@@ -101,7 +100,7 @@ public sealed class SocketEndpointServiceTests
         service.TryRegisterEndpoint(GetMethod<SecondTestPingController>(nameof(SecondTestPingController.Ping)));
         FakeWebSocket webSocket = RegisterSocket(registry, out Socket socket);
 
-        webSocket.EnqueueReceive(Serialize(new PingRequest()));
+        webSocket.EnqueueReceive(Serialize(new CreateProfileRequest()));
         webSocket.EnqueueClose();
 
         await socket.StartAsync(CancellationToken.None);
@@ -116,11 +115,11 @@ public sealed class SocketEndpointServiceTests
         await service.StartAsync(CancellationToken.None);
         service.TryRegisterEndpoint(GetMethod<TestUserController>(nameof(TestUserController.Notify)));
         FakeWebSocket webSocket = RegisterSocket(registry, out Socket socket);
-        Backend.Entities.User user = new() { UserId = Guid.NewGuid() };
+        Backend.Database.Entities.User user = new() { UserId = Guid.NewGuid() };
         socket.User = user;
         registry.SetUser(socket, user);
 
-        webSocket.EnqueueReceive(Serialize(new PingRequest()));
+        webSocket.EnqueueReceive(Serialize(new CreateProfileRequest()));
         webSocket.EnqueueClose();
 
         await socket.StartAsync(CancellationToken.None);
@@ -159,9 +158,9 @@ public sealed class SocketEndpointServiceTests
 public sealed class TestPingController : SocketControllerBase
 {
     [Request]
-    public async Task Ping(PingRequest request)
+    public async Task Ping(CreateProfileRequest request)
     {
-        await RespondAsync(new PongResponse());
+        await RespondAsync(new CreateProfileResponse());
     }
 }
 
@@ -169,9 +168,9 @@ public sealed class TestPingController : SocketControllerBase
 public sealed class SecondTestPingController : SocketControllerBase
 {
     [Request]
-    public async Task Ping(PingRequest request)
+    public async Task Ping(CreateProfileRequest request)
     {
-        await RespondAsync(new PongResponse());
+        await RespondAsync(new CreateProfileResponse());
     }
 }
 
@@ -179,7 +178,7 @@ public sealed class SecondTestPingController : SocketControllerBase
 public sealed class TestUserController : SocketControllerBase
 {
     [Request]
-    public async Task Notify(PingRequest request)
+    public async Task Notify(CreateProfileRequest request)
     {
         await SendUserEventAsync(new ProfilesChangedEvent()
         {
@@ -192,7 +191,7 @@ public sealed class ValidationProbeController : SocketControllerBase
 {
     public Task NoParams() => Task.CompletedTask;
 
-    public Task TwoParams(PingRequest first, PingRequest second) => Task.CompletedTask;
+    public Task TwoParams(CreateProfileRequest first, CreateProfileRequest second) => Task.CompletedTask;
 
     public Task WrongParam(string text) => Task.CompletedTask;
 }

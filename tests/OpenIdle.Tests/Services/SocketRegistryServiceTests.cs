@@ -1,7 +1,7 @@
 using System.Net.WebSockets;
 using Backend;
-using Backend.Dtos.Auth;
-using Backend.Entities;
+using Backend.Dtos;
+using Backend.Database.Entities;
 using Backend.Services;
 using Microsoft.Extensions.Logging.Abstractions;
 using OpenIdle.Tests.TestDoubles;

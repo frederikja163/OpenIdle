@@ -5,8 +5,8 @@ using System.Linq;
 using System.Net.WebSockets;
 using System.Threading;
 using System.Threading.Tasks;
+using Backend.Database.Entities;
 using Backend.Dtos;
-using Backend.Entities;
 using Backend.Extensions;
 using Microsoft.Extensions.Logging;
 

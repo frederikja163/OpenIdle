@@ -1,7 +1,6 @@
 using System;
 using System.Linq;
 using Backend.Dtos;
-using Backend.Dtos.Auth;
 
 namespace OpenIdle.IntegrationTests;
 
@@ -21,14 +20,14 @@ public sealed class SocketBroadcastIntegrationTests : IDisposable
 
     [Test]
     [CancelAfter(30_000)]
-    public async Task Ping_ReturnsPongWithSameId(CancellationToken ct)
+    public async Task LoginAsTestUser_ReturnsResponseWithSameRequestId(CancellationToken ct)
     {
         using TestSocketClient socket = await _app.ConnectAsync(ct).ConfigureAwait(false);
 
-        await socket.SendAsync(new PingRequest { Id = 7 }, ct).ConfigureAwait(false);
+        await socket.SendAsync(new LoginAsTestUserRequest { RequestId = "7" }, ct).ConfigureAwait(false);
 
-        PongResponse response = await ReceiveUntilAsync<PongResponse>(socket, ct);
-        Assert.That(response.Id, Is.EqualTo(7));
+        LoginAsTestUserResponse response = await ReceiveUntilAsync<LoginAsTestUserResponse>(socket, ct);
+        Assert.That(response.RequestId, Is.EqualTo("7"));
     }
 
     [Test]
@@ -86,13 +85,13 @@ public sealed class SocketBroadcastIntegrationTests : IDisposable
 
     private static async Task LoginAsync(TestSocketClient socket, CancellationToken ct)
     {
-        await socket.SendAsync(new LoginAsTestUserRequest { Id = 1 }, ct).ConfigureAwait(false);
+        await socket.SendAsync(new LoginAsTestUserRequest { RequestId = "1" }, ct).ConfigureAwait(false);
         await ReceiveUntilAsync<LoginAsTestUserResponse>(socket, ct);
     }
 
     private static async Task<ProfilesChangedEvent> CreateProfileAsync(TestSocketClient socket, string name, CancellationToken ct)
     {
-        await socket.SendAsync(new CreateProfileRequest { Id = 2, Name = name }, ct).ConfigureAwait(false);
+        await socket.SendAsync(new CreateProfileRequest { RequestId = "2", Name = name }, ct).ConfigureAwait(false);
         ProfilesChangedEvent evt = await ReceiveUntilAsync<ProfilesChangedEvent>(socket, ct);
         await ReceiveUntilAsync<CreateProfileResponse>(socket, ct);
         return evt;
@@ -100,13 +99,13 @@ public sealed class SocketBroadcastIntegrationTests : IDisposable
 
     private static async Task<ListProfilesResponse> ListProfilesAsync(TestSocketClient socket, CancellationToken ct)
     {
-        await socket.SendAsync(new ListProfilesRequest { Id = 3 }, ct).ConfigureAwait(false);
+        await socket.SendAsync(new ListProfilesRequest { RequestId = "3" }, ct).ConfigureAwait(false);
         return await ReceiveUntilAsync<ListProfilesResponse>(socket, ct);
     }
 
     private static async Task<SelectProfileResponse> SelectProfileAsync(TestSocketClient socket, Guid profileId, CancellationToken ct)
     {
-        await socket.SendAsync(new SelectProfileRequest { ProfileId = profileId, Id = 4 }, ct).ConfigureAwait(false);
+        await socket.SendAsync(new SelectProfileRequest { ProfileId = profileId, RequestId = "4" }, ct).ConfigureAwait(false);
         return await ReceiveUntilAsync<SelectProfileResponse>(socket, ct);
     }
 

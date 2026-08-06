@@ -1,7 +1,7 @@
 using System;
 using System.Collections.Generic;
 
-namespace Backend.Entities;
+namespace Backend.Database.Entities;
 
 public sealed class User
 {
