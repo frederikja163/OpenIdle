@@ -59,7 +59,7 @@ Buying wins, though less emphatically than for [tailwind-merge](./tailwind-merge
 
 ### Undo risk — low
 
-No import sites today, and the replacement is a local resolver of modest size. The rating is `low` rather than `medium` only because adoption has not started; it scales with the number of variant-bearing components added. Because those components are vendored source we own, replacement is a mechanical edit rather than a fight with a package boundary.
+Two import sites today — `button.svelte` and `badge.svelte` — and the replacement is a local resolver of modest size. The rating is `low` rather than `medium` only because that count is still small; it scales with the number of variant-bearing components added. Because those components are vendored source we own, replacement is a mechanical edit rather than a fight with a package boundary.
 
 ### Security risk — low
 

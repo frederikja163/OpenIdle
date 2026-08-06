@@ -1,4 +1,3 @@
-import { browser } from '$app/environment';
 import { getWsClient, type WsStatus } from '$lib/ws/client';
 
 /*
@@ -101,14 +100,4 @@ export async function sessionRun<T>(
 		handlers.fail(error instanceof Error ? error.message : String(error));
 		return 'failed';
 	}
-}
-
-if (browser) {
-	const client = getWsClient();
-	// The session ends with the connection; a reconnect replays it from the
-	// intent above rather than from whatever the stores were left holding.
-	client.onClose(resetSessionState);
-	client.onStatus((status) => {
-		connectionState.status = status;
-	});
 }

@@ -1,6 +1,11 @@
 import { getWsClient } from '$lib/ws/client';
 import { loadProfiles, profilesState, replayProfileSelection } from './profiles.svelte';
+import { connectionState, resetSessionState } from './session.svelte';
 import { replayLogin } from './user.svelte';
+
+// The client is a singleton and its handler registries only ever grow, so a
+// second call would leave two of everything below on one socket.
+let wired = false;
 
 /**
  * Connects the socket to the stores. Called once from the root layout rather
@@ -13,7 +18,18 @@ import { replayLogin } from './user.svelte';
  * ones after it need.
  */
 export function wireSession(): void {
+	if (wired) {
+		return;
+	}
+	wired = true;
 	const client = getWsClient();
+
+	// The session ends with the connection; a reconnect replays it from
+	// sessionIntent rather than from whatever the stores were left holding.
+	client.onClose(resetSessionState);
+	client.onStatus((status) => {
+		connectionState.status = status;
+	});
 
 	client.setResume(async (send) => {
 		await replayLogin(send);

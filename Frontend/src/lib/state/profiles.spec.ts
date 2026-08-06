@@ -7,8 +7,11 @@ const { request, connection } = vi.hoisted(() => ({
 	connection: { generation: 0 }
 }));
 
-vi.mock('$lib/ws/client', () => ({
-	getWsClient: () => ({
+// One object handed back on every call, like the real singleton: sessionRun
+// compares the generation it captured against the one on the client it fetches
+// later, so a fresh object per call would be testing a contract we do not ship.
+vi.mock('$lib/ws/client', () => {
+	const client = {
 		request,
 		get generation() {
 			return connection.generation;
@@ -16,15 +19,17 @@ vi.mock('$lib/ws/client', () => ({
 		onClose: () => () => {},
 		onStatus: () => () => {},
 		reopen: () => {}
-	})
-}));
+	};
+	return { getWsClient: () => client };
+});
 
 const { createProfile, loadProfiles, profilesState, selectProfile, validateProfileName } =
 	await import('$lib/state/profiles.svelte');
-// The session reset registers behind `if (browser)` in the real app, which is
-// false in this node project — so it is driven directly here instead, which is
-// what makes it testable at all.
-const { resetSessionState, sessionIntent } = await import('$lib/state/session.svelte');
+// wireSession() registers the reset against the socket in the real app; this
+// project never calls it, so the reset is driven directly here instead — which
+// is what makes a connection dropping testable at all.
+const { forgetSessionIntent, resetSessionState, sessionIntent } =
+	await import('$lib/state/session.svelte');
 
 const THORIN = { Name: 'Thorin', ProfileId: '11111111-1111-1111-1111-111111111111' };
 const BALIN = { Name: 'Balin', ProfileId: '22222222-2222-2222-2222-222222222222' };
@@ -36,11 +41,10 @@ function listResponse(profiles: (typeof THORIN)[]) {
 beforeEach(() => {
 	request.mockReset();
 	connection.generation = 0;
-	// One call, no field list: a field added to the store and forgotten here can
-	// no longer leak between cases.
+	// One call each, no field lists: a field added to the store or to the intent
+	// and forgotten here can no longer leak between cases.
 	resetSessionState();
-	sessionIntent.loggedIn = false;
-	sessionIntent.profileId = null;
+	forgetSessionIntent();
 });
 
 describe('loadProfiles', () => {
@@ -69,6 +73,8 @@ describe('loadProfiles', () => {
 describe('validateProfileName', () => {
 	it('accepts a name the backend would accept', () => {
 		expect(validateProfileName('Thorin1')).toBeNull();
+		// The boundary itself, against the rejection of 31 below.
+		expect(validateProfileName('a'.repeat(30))).toBeNull();
 	});
 
 	it.each([
@@ -248,6 +254,23 @@ describe('a connection dropping under a request', () => {
 		await loadProfiles();
 		expect(profilesState.status).toBe('loaded');
 		expect(profilesState.profiles).toEqual([THORIN]);
+	});
+
+	it('discards a list that arrives after the connection carrying it died', async () => {
+		let land = (): void => {};
+		request.mockReturnValueOnce(
+			new Promise((resolve) => (land = () => resolve(listResponse([THORIN]))))
+		);
+
+		const loading = loadProfiles();
+		const dropped = dropDuring(loading);
+		land();
+		await dropped;
+
+		// A success is as unwritable as a failure once its connection is gone: the
+		// list belongs to a session that no longer exists.
+		expect(profilesState.profiles).toEqual([]);
+		expect(profilesState.status).toBe('idle');
 	});
 
 	it('does not surface a dead connection failure on the create form', async () => {

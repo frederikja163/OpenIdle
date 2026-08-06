@@ -48,7 +48,7 @@
 		{/if}
 	</Row>
 	{#if profilesState.error}
-		<p class="oi-body-md text-text-muted">{profilesState.error}</p>
+		<p role="alert" class="oi-body-md text-text-muted">{profilesState.error}</p>
 	{/if}
 	<!--
 		A failed select is a session-level condition ("Profile does not belong to

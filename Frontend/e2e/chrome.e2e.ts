@@ -1,4 +1,4 @@
-import { expect, test } from '@playwright/test';
+import { expect, test, type WebSocketRoute } from '@playwright/test';
 
 // Runs against `bun run build && bun run preview` (see playwright.config.ts), so
 // this is the production build rather than the dev server — which is the whole
@@ -13,6 +13,26 @@ import { expect, test } from '@playwright/test';
 // Matches the URL itself rather than a glob, which Playwright would resolve
 // against baseURL and so never match a socket on another port.
 const WS_ROUTE = /\/ws$/;
+
+const THORIN = { Name: 'Thorin', ProfileId: 'p1' };
+
+/**
+ * The whole backend, for tests that only need the socket to say yes: every
+ * request gets the response named after it, and ListProfiles gets a list.
+ */
+function respondToRequests(
+	ws: WebSocketRoute,
+	profiles: (typeof THORIN)[]
+): (frame: string | Buffer) => void {
+	return (frame) => {
+		const { $type, Id } = JSON.parse(String(frame));
+		if ($type === 'ListProfilesRequest') {
+			ws.send(JSON.stringify({ $type: 'ListProfilesResponse', Id, Profiles: profiles }));
+			return;
+		}
+		ws.send(JSON.stringify({ $type: `${$type.replace('Request', '')}Response`, Id }));
+	};
+}
 
 test('the root route funnels through the auth guards to /login', async ({ page }) => {
 	await page.goto('/');
@@ -79,20 +99,10 @@ test('a dropped socket reconnects and replays the session', async ({ page }) => 
 		if (connection === 0) {
 			dropTheFirstSocket = () => ws.close();
 		}
+		const respond = respondToRequests(ws, [THORIN]);
 		ws.onMessage((frame) => {
-			const { $type, Id } = JSON.parse(String(frame));
-			sentPerConnection[connection].push($type);
-			if ($type === 'ListProfilesRequest') {
-				ws.send(
-					JSON.stringify({
-						$type: 'ListProfilesResponse',
-						Id,
-						Profiles: [{ Name: 'Thorin', ProfileId: 'p1' }]
-					})
-				);
-				return;
-			}
-			ws.send(JSON.stringify({ $type: `${$type.replace('Request', '')}Response`, Id }));
+			sentPerConnection[connection].push(JSON.parse(String(frame)).$type);
+			respond(frame);
 		});
 	});
 
@@ -127,28 +137,17 @@ test('a dropped socket reconnects and replays the session', async ({ page }) => 
 });
 
 test('deleting a profile asks first, and confirming does nothing yet', async ({ page }) => {
-	await page.routeWebSocket(WS_ROUTE, (ws) => {
-		ws.onMessage((frame) => {
-			const { $type, Id } = JSON.parse(String(frame));
-			if ($type === 'ListProfilesRequest') {
-				ws.send(
-					JSON.stringify({
-						$type: 'ListProfilesResponse',
-						Id,
-						Profiles: [{ Name: 'Thorin', ProfileId: 'p1' }]
-					})
-				);
-				return;
-			}
-			ws.send(JSON.stringify({ $type: `${$type.replace('Request', '')}Response`, Id }));
-		});
-	});
+	await page.routeWebSocket(WS_ROUTE, (ws) => ws.onMessage(respondToRequests(ws, [THORIN])));
 
 	await page.goto('/login');
 	await page.getByRole('button', { name: 'Log in' }).click();
 	await expect(page).toHaveURL(/\/profiles$/);
 
-	const trigger = page.getByRole('button', { name: 'Delete' });
+	// Scoped to the card rather than the page: the dialog puts a second Delete
+	// button in the document, and a third would arrive with a second profile. The
+	// panel carries no role of its own, so its data-slot is the handle.
+	const card = page.locator('[data-slot="card"]', { hasText: 'Thorin' });
+	const trigger = card.getByRole('button', { name: 'Delete' });
 	await trigger.click();
 
 	// The whole point of the vendored dialog is the behaviour underneath it, so
@@ -163,7 +162,9 @@ test('deleting a profile asks first, and confirming does nothing yet', async ({ 
 	await expect(dialog).toBeHidden();
 	await expect(trigger).toBeFocused();
 
-	// Confirming is inert by design — no delete message exists on the wire.
+	// TODO: confirming is inert only because no delete message exists on the wire
+	// yet. When the backend branch lands, wire the request and change the last
+	// assertion below to expect the card to disappear.
 	await trigger.click();
 	await page.getByRole('dialog').getByRole('button', { name: 'Delete' }).click();
 	await expect(page.getByRole('dialog')).toBeHidden();

@@ -472,7 +472,18 @@ export class WsClient {
 			// Reconnecting while the machine is offline just burns an attempt, so
 			// wait for the event that says it is worth trying again.
 			if (typeof navigator !== 'undefined' && navigator.onLine === false) {
-				addEventListener('online', () => void this.connect().catch(() => {}), { once: true });
+				// cancelReconnect() cannot reach a listener that is already armed, so
+				// the close is re-checked when it fires rather than only when it is set.
+				addEventListener(
+					'online',
+					() => {
+						if (this.deliberatelyClosed) {
+							return;
+						}
+						void this.connect().catch(() => {});
+					},
+					{ once: true }
+				);
 				return;
 			}
 			// The 'open' handler runs the replay; a failure routes through 'close'

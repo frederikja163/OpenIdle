@@ -139,6 +139,15 @@ export async function replayProfileSelection(send: PrivilegedSend): Promise<void
 	if (profileId === null) {
 		return;
 	}
-	await send('SelectProfileRequest', { ProfileId: profileId });
+	try {
+		await send('SelectProfileRequest', { ProfileId: profileId });
+	} catch (error) {
+		// Unlike selectProfile(), a refusal here leaves the socket on no profile at
+		// all — the connection is new. Forgetting the intent is what stops a profile
+		// the backend will never accept again (a deleted one) from failing the same
+		// way on every future reconnect and aborting the rest of the replay with it.
+		sessionIntent.profileId = null;
+		throw error;
+	}
 	profilesState.selectedProfileId = profileId;
 }

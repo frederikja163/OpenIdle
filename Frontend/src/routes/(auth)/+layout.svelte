@@ -106,12 +106,15 @@
 	<Row class="ml-auto items-center gap-(--sp-2)">
 		<!--
 			role="status" carries an implicit polite live region, so losing the
-			connection is announced rather than only shown. Sentence case in the
-			markup: oi-label-sm applies the uppercase treatment itself.
+			connection is announced rather than only shown. The region itself stays
+			mounted and only its text comes and goes: a live region inserted together
+			with its content is not reliably announced, because assistive technology
+			has nothing to have been watching. Sentence case in the markup:
+			oi-label-sm applies the uppercase treatment itself.
 		-->
-		{#if recovering}
-			<span role="status" class="oi-label-sm mr-(--sp-3) text-text-muted">Reconnecting…</span>
-		{/if}
+		<span role="status" class={cn('oi-label-sm text-text-muted', recovering && 'mr-(--sp-3)')}>
+			{#if recovering}Reconnecting…{/if}
+		</span>
 
 		<a
 			href={repository}

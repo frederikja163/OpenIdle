@@ -65,10 +65,12 @@
 </script>
 
 <script lang="ts">
+	// No defaults for `variant`/`size`: undefined falls through to tv's own
+	// defaultVariants above, so the values live in exactly one place.
 	let {
 		class: className,
-		variant = 'secondary',
-		size = 'md',
+		variant,
+		size,
 		ref = $bindable(null),
 		href = undefined,
 		type = 'button',
