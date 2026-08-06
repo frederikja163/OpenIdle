@@ -60,7 +60,7 @@ public sealed class SocketEndpointService : IHostedService
                 object controller = ActivatorUtilities.CreateInstance(scope.ServiceProvider, registeredEndpoint.ControllerType);
                 if (controller is SocketControllerBase socketControllerBase)
                 {
-                    socketControllerBase.Context = new SocketControllerContext(socket, request);
+                    socketControllerBase.Context = new SocketControllerContext(socket, request, _socketRegistry);
                 }
 
                 object? result = registeredEndpoint.MethodInfo.Invoke(controller, [request]);

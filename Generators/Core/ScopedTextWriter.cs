@@ -36,6 +36,7 @@ internal sealed class ScopedTextWriter
     {
         TryWriteIndents();
         _writer.WriteLine();
+        _newLine = true;
     }
 
     public void WriteLine(object value)

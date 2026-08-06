@@ -1,13 +1,36 @@
 <script lang="ts">
+	import { goto } from '$app/navigation';
 	import { resolve } from '$app/paths';
 	import { page } from '$app/state';
 	import Gamepad2 from '@lucide/svelte/icons/gamepad-2';
 	import InfinityIcon from '@lucide/svelte/icons/infinity';
+	import LogOut from '@lucide/svelte/icons/log-out';
 	import Users from '@lucide/svelte/icons/users';
+	import githubMark from '$lib/assets/github-mark-white.svg';
 	import Row from '$lib/components/layout/Row.svelte';
+	import { Button } from '$lib/components/ui/button';
+	import { logout, userState } from '$lib/state/user.svelte';
 	import { cn } from '$lib/utils/stylingUtils';
 
 	let { children } = $props();
+
+	// Everything in (auth) requires a live login. Also fires when the socket
+	// drops mid-session, since that resets userState to 'loggedOut'. 'error'
+	// bounces too — /login is the surface that shows auth errors.
+	//
+	// replaceState because the entry being left is one the visitor was never
+	// allowed to occupy: pushing over it would put the rejected route under the
+	// Back button, and going back only re-runs this effect and bounces again.
+	$effect(() => {
+		if (userState.status === 'loggedOut' || userState.status === 'error') {
+			// Carry the rejected pathname along so the login page can return the
+			// visitor where they were headed once they sign in. resolve() only
+			// covers paths, so the query string sits outside its reach.
+			const redirectTo = new URLSearchParams({ redirectTo: page.url.pathname });
+			// eslint-disable-next-line svelte/no-navigation-without-resolve
+			void goto(`${resolve('/login')}?${redirectTo}`, { replaceState: true });
+		}
+	});
 
 	// resolve() applies the configured base path and type-checks each pathname
 	// against the real route tree, so a renamed route fails the build here
@@ -76,21 +99,45 @@
 			rel="noreferrer"
 			aria-label="Source"
 			title="Source"
-			class="inline-flex size-6.5 items-center justify-center rounded-sm border border-transparent text-text-muted no-underline transition-[background-color,color] duration-(--dur-fast) ease-out hover:bg-action-quiet hover:text-text-body"
+			class="group inline-flex size-6.5 items-center justify-center rounded-sm border border-transparent no-underline transition-[background-color] duration-(--dur-fast) ease-out hover:bg-action-quiet"
 		>
 			<!--
-				Lucide dropped its brand marks, so there is no `github` icon in
-				@lucide/svelte to import. The mark is inlined instead, filled
-				with currentColor so it still tints from the token layer like
-				every other icon in the chrome.
+				GitHub's Invertocat, shipped verbatim from their own logo pack
+				(https://github.com/logos) — their guidelines forbid recolouring it,
+				so unlike every other icon in the chrome this one cannot tint from
+				the token layer. It stays white and dims to sit at the muted weight
+				of its neighbours instead. The anchor's aria-label already names the
+				link, so the mark itself is decorative.
 			-->
-			<svg width="15" height="15" viewBox="0 0 16 16" fill="currentColor" aria-hidden="true">
-				<path
-					d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27s1.36.09 2 .27c1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.01 8.01 0 0 0 16 8c0-4.42-3.58-8-8-8Z"
-				/>
-			</svg>
+			<img
+				src={githubMark}
+				alt=""
+				class="size-3.75 opacity-50 transition-opacity duration-(--dur-fast) ease-out group-hover:opacity-100"
+			/>
 		</a>
+
+		<!--
+			The design's TopBar sets this rule's own 6px margins on top of the
+			cluster's 4px gap, so the account control clears the links by 10px.
+		-->
+		<span aria-hidden="true" class="mx-(--sp-3) h-5 w-px bg-line-soft"></span>
+
+		<!--
+			Sentence case: `oi-label-sm` inside the button applies the uppercase
+			treatment, and the design system forbids typing it that way. The icon
+			takes its 12px from the `sm` size rather than a Lucide `size` prop, so
+			the two cannot drift apart.
+		-->
+		<Button variant="ghost" size="sm" onclick={logout}>
+			<LogOut />
+			Log out
+		</Button>
 	</Row>
 </header>
 
-{@render children()}
+{#if userState.status === 'loggedIn'}
+	{@render children()}
+{:else}
+	<!-- SSR and pre-redirect frames: never flash protected page content. -->
+	<p role="status" class="oi-body-md p-(--gutter-app) text-text-muted">Redirecting to login…</p>
+{/if}

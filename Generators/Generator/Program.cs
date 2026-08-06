@@ -38,16 +38,15 @@ public static class Program
 
     private static int Run(Options options)
     {
-        if (!File.Exists(options.Input))
-        {
-            Console.Error.WriteLine($"DTO contract file not found: {options.Input}");
-            return 1;
-        }
-
         DtoModel model;
         try
         {
             model = ParseContract(options.Input);
+        }
+        catch (FileNotFoundException)
+        {
+            Console.Error.WriteLine($"DTO contract file not found: {options.Input}");
+            return 1;
         }
         catch (ParserException ex)
         {
@@ -57,6 +56,11 @@ public static class Program
         catch (XmlException ex)
         {
             Console.Error.WriteLine($"Invalid XML: {ex.Message}");
+            return 1;
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+            Console.Error.WriteLine(ex.Message);
             return 1;
         }
 

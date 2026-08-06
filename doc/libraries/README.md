@@ -12,12 +12,18 @@ Every third-party dependency used (or considered and rejected) by this project i
 | [EF Core + SQLite](./ef-core.md) | adopted | 2026-08-03 | medium | low |
 | [DTO XML contract](./dto-xml-contract.md) | in-house | 2026-08-04 | medium | low |
 | [CommandLineParser](./commandlineparser.md) | adopted | 2026-08-06 | low | low |
+| [Microsoft.CodeAnalysis.CSharp](./microsoft-codeanalysis-csharp.md) | adopted | 2026-08-06 | low | low |
+| [Microsoft.CodeAnalysis.Analyzers](./microsoft-codeanalysis-analyzers.md) | adopted | 2026-08-06 | low | low |
+| [NUnit (test framework)](./nunit.md) | adopted | 2026-08-04 | low | low |
+| [Microsoft.AspNetCore.Mvc.Testing](./mvc-testing.md) | rejected | 2026-08-04 | low | low |
 
 `CommandLineParser` is dev-tooling only — it parses args for the `Generator` console app (never shipped). It replaced an initial `System.CommandLine` 2.0.10 pick; the owner preferred the attribute-based syntax and the zero-dependency footprint, accepting the package's dormancy (no stable release since 2022) for a small fixed CLI. See the alternatives table in its document.
 
+`Microsoft.CodeAnalysis.CSharp` and `Microsoft.CodeAnalysis.Analyzers` are build-time only — they are what the [DTO XML contract](./dto-xml-contract.md)'s source generator ([Generator.Backend](../../Generators/Backend)) compiles against, referenced `PrivateAssets="all"` and loaded by the compiler as analyzers. Never shipped to the runtime or the browser. Note the version skew: the generator is built against Roslyn 4.14.0 while the .NET 10 SDK hosts Roslyn 5.0.0 — safe (hosts load older-built analyzers), but the pin must never exceed the host's version on upgrades.
+
 ## Frontend
 
-All frontend packages are declared as `devDependencies` — a packaging convention, not a statement about what reaches the browser. The client now ships third-party code in two places: the `cn()` helper at `Frontend/src/lib/utils/stylingUtils.ts`, which imports [clsx](./clsx.md) and [tailwind-merge](./tailwind-merge.md), and the three [@lucide/svelte](./lucide-svelte.md) icons used by the app chrome. The [shadcn-svelte](./shadcn-svelte.md) component set and [bits-ui](./bits-ui.md) are declared and lockfile-pinned but **not yet bundled**: `src/lib/components/ui/` is empty and nothing imports bits-ui until the first `shadcn-svelte add`.
+All frontend packages are declared as `devDependencies` — a packaging convention, not a statement about what reaches the browser. The client now ships third-party code in three places: the `cn()` helper at `Frontend/src/lib/utils/stylingUtils.ts`, which imports [clsx](./clsx.md) and [tailwind-merge](./tailwind-merge.md); the [@lucide/svelte](./lucide-svelte.md) icons used by the app chrome; and [shadcn-svelte](./shadcn-svelte.md)'s vendored `button` at `src/lib/components/ui/button/`, which brings [tailwind-variants](./tailwind-variants.md) with it. The rest of the component set is declared and lockfile-pinned but not bundled, and [bits-ui](./bits-ui.md) stays unimported until a component that needs it is added.
 
 ### Framework and build
 
@@ -41,7 +47,7 @@ All frontend packages are declared as `devDependencies` — a packaging conventi
 
 ### Components
 
-The browser-bound half of the frontend set. Of these, only [@lucide/svelte](./lucide-svelte.md) reaches the browser today — three icons in the app chrome — alongside `cn()`'s [clsx](./clsx.md) and [tailwind-merge](./tailwind-merge.md). The shadcn-svelte component set and [bits-ui](./bits-ui.md) ship only once vendored. The two below are the primary decisions:
+The browser-bound half of the frontend set. Of these, [@lucide/svelte](./lucide-svelte.md) and the vendored [shadcn-svelte](./shadcn-svelte.md) `button` reach the browser today — the app chrome's three icons and the button at `src/lib/components/ui/button/` respectively, the button bringing [tailwind-variants](./tailwind-variants.md) with it alongside `cn()`'s [clsx](./clsx.md) and [tailwind-merge](./tailwind-merge.md). The rest of the shadcn-svelte component set and [bits-ui](./bits-ui.md) ship only once vendored. The two below are the primary decisions:
 
 | Library | Decision | Date | Risk (undo) | Risk (security) |
 |---|---|---|---|---|
@@ -53,7 +59,7 @@ The rest were **entailed** by those two rather than chosen independently — ins
 | Library | Decision | Date | Risk (undo) | Risk (security) | Ships JS to browser |
 |---|---|---|---|---|---|
 | [tailwind-merge](./tailwind-merge.md) | adopted | 2026-08-03 | low | low | yes |
-| [tailwind-variants](./tailwind-variants.md) | adopted | 2026-08-03 | low | low | **no** — nothing imports it yet |
+| [tailwind-variants](./tailwind-variants.md) | adopted | 2026-08-03 | low | low | **yes** — via the vendored `button` |
 | [clsx](./clsx.md) | adopted | 2026-08-03 | low | low | yes |
 | [@lucide/svelte](./lucide-svelte.md) | adopted | 2026-08-03 | low | low | yes (tree-shaken per icon) |
 | [tw-animate-css](./tw-animate-css.md) | adopted | 2026-08-03 | low | low | **no** — CSS only |
@@ -107,12 +113,12 @@ Two of these are honestly marginal on their own merits and are recorded as such 
 
 ## Open items
 
-Three decisions remain unsettled:
+Four decisions remain unsettled:
 
 1. **[@sveltejs/adapter-auto](./sveltejs-adapter-auto.md)** — a placeholder that detects nothing on a self-hosted VPS and downloads an unpinned adapter at build time, defeating the lockfile. Should be replaced with `@sveltejs/adapter-static` plus `ssr = false`, per the SPA constraint recorded in [SvelteKit](./sveltekit.md).
 2. **[@internationalized/date](./internationalized-date.md)** — declared to satisfy a [bits-ui](./bits-ui.md) peer requirement, but **imported by nothing**. It ships zero bytes today. It can be dropped outright if the project commits to native `<input type="date">` over a custom calendar component; the only consequence is an unmet-peer warning on install. Decide this before any date component is added, since adopting one makes it load-bearing.
 3. **The three typefaces** — [Chakra Petch](./fontsource-chakra-petch.md), [IBM Plex Sans](./fontsource-variable-ibm-plex-sans.md), [IBM Plex Mono](./fontsource-ibm-plex-mono.md) — are substitutions the design system picked in the absence of any supplied font binaries, and it flags them for replacement itself. Settle whether OpenIdle commissions or licenses real brand faces, or promotes these to `adopted`. The swap is cheap either way: each face is named in exactly one `--font-*` declaration in [layout.css](../../Frontend/src/routes/layout.css). Of the three, [IBM Plex Mono](./fontsource-ibm-plex-mono.md) is the most reconsiderable on its own merits — `font-variant-numeric: tabular-nums` on the body face solves most of what it is bought for, at zero bytes.
-4. **[fast-xml-parser](./dto-xml-contract.md)** — the anticipated XML parser for the frontend's TS DTO emitter under the [DTO XML contract](./dto-xml-contract.md). Not yet adopted; the frontend side of that decision (parser choice, `$type` union shape, generated-file location) is pending and will get its own decision document.
+4. **TS output handshake** — the [DTO XML contract](./dto-xml-contract.md) originally anticipated `fast-xml-parser` in the frontend; that idea was dropped when the TS emitter was implemented in C# inside the `Generator` CLI (`-t ts`), so no new frontend dependency exists. What remains unsettled is *how* the generated TS reaches `Frontend/`: a checked-in generated file (regenerate by running the CLI) vs a wired build step. Decide before the first TS DTO is consumed.
 
 ## Configuration fixes
 

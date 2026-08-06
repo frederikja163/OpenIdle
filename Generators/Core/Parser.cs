@@ -61,13 +61,13 @@ public sealed class Parser
     private Request Request(XmlElement element)
     {
         string baseName = element.RequireAttribute("name");
-        XmlNodeList responses = element.GetElementsByTagName("Response");
-        if (responses.Count != 1 || responses[0] is not XmlElement responseElement)
+        List<XmlElement> responses = element.GetChildren("Response").ToList();
+        if (responses.Count != 1)
         {
             throw new ParserException($"Request {baseName} does not have a valid response child tag.");
         }
 
-        Request request = new Request(baseName + "Request", Response(responseElement, baseName));
+        Request request = new Request(baseName + "Request", Response(responses[0], baseName));
         request.Properties.AddRange(PropertyCollection(element.GetChildren("Property")));
         return request;
     }

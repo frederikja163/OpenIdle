@@ -19,17 +19,17 @@ public sealed class TsEmitter : IDtoEmitter
 
         using (Scope _ = _textWriter.Scope("interface RequestBase"))
         {
-            _textWriter.WriteLine("requestId: number;");
+            _textWriter.WriteLine("requestId: string;");
         }
 
         using (Scope _ = _textWriter.Scope("interface ResponseBase"))
         {
-            _textWriter.WriteLine("requestId: number;");
+            _textWriter.WriteLine("requestId: string;");
         }
 
         using (Scope _ = _textWriter.Scope("interface EventBase"))
         {
-            _textWriter.WriteLine("eventId: number;");
+            _textWriter.WriteLine("eventId: string;");
         }
         _textWriter.WriteLine();
     }
