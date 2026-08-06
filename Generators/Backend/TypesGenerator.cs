@@ -2,6 +2,7 @@ using System;
 using System.Collections.Immutable;
 using System.IO;
 using System.Text;
+using System.Xml;
 using Generator.Core;
 using Microsoft.CodeAnalysis;
 using Microsoft.CodeAnalysis.Text;
@@ -56,6 +57,12 @@ public sealed class TypesGenerator : IIncrementalGenerator
                 parser.Parse(stream);
             }
             catch (ParserException ex)
+            {
+                productionContext.ReportDiagnostic(
+                    Diagnostic.Create(ParseError, Location.None, ex.Message));
+                return;
+            }
+            catch (XmlException ex)
             {
                 productionContext.ReportDiagnostic(
                     Diagnostic.Create(ParseError, Location.None, ex.Message));

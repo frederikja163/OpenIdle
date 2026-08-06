@@ -26,13 +26,27 @@ internal static class XmlElementExtensions
     public static T RequireAttribute<T>(this XmlElement element, string name)
         where T : IConvertible
     {
-        return (T)Convert.ChangeType(RequireAttribute(element, name), typeof(T));
+        string value = RequireAttribute(element, name);
+        return ConvertValue<T>(element, name, value);
     }
 
     public static T? GetAttribute<T>(this XmlElement element, string name, T? @default = default)
         where T : IConvertible
     {
         string attribute = element.GetAttribute(name);
-        return string.IsNullOrEmpty(attribute) ? @default : (T)Convert.ChangeType(attribute, typeof(T));
+        return string.IsNullOrEmpty(attribute) ? @default : ConvertValue<T>(element, name, attribute);
+    }
+
+    private static T ConvertValue<T>(XmlElement element, string name, string value)
+        where T : IConvertible
+    {
+        try
+        {
+            return (T)Convert.ChangeType(value, typeof(T));
+        }
+        catch (Exception ex) when (ex is FormatException or InvalidCastException or OverflowException)
+        {
+            throw new ParserException($"Attribute {name} on element {element.Name} has invalid value '{value}'.");
+        }
     }
 }
