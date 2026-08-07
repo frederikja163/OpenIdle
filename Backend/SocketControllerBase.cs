@@ -27,7 +27,7 @@ public abstract class SocketControllerBase
     {
         get
         {
-            field ??= Socket.Profile ?? throw new BackendException("You must select a profile first no selected profile.");
+            field ??= Socket.Profile ?? throw new BackendException("You must select a profile first.");
             return field;
         }
     }
