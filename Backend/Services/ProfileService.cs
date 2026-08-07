@@ -25,7 +25,7 @@ public sealed class ProfileService(IDbContextFactory<GameDbContext> dbContextFac
 
         return await dbContext.Profiles
                    .FirstOrDefaultAsync(p => p.ProfileId == profileId && p.Users.Any(u => u.UserId == user.UserId))
-               ?? throw new InvalidOperationException("Profile does not belong to user.");
+               ?? throw new BackendException("Profile does not belong to user.");
     }
 
     internal async Task<Profile> CreateProfileAsync(User user, string name)
@@ -34,17 +34,17 @@ public sealed class ProfileService(IDbContextFactory<GameDbContext> dbContextFac
         ArgumentException.ThrowIfNullOrWhiteSpace(name);
         if (name.Length > 30)
         {
-            throw new ArgumentException("Profile name must be at most 30 characters.", nameof(name));
+            throw new BackendException("Profile name must be at most 30 characters.");
         }
         if (!name.All(char.IsAsciiLetterOrDigit))
         {
-            throw new ArgumentException("Profile name must be alphanumeric.", nameof(name));
+            throw new BackendException("Profile name must be alphanumeric.");
         }
 
         await using GameDbContext dbContext = await dbContextFactory.CreateDbContextAsync();
         if (await dbContext.Profiles.AnyAsync(p => p.Name == name))
         {
-            throw new ArgumentException("Profile name is already taken.");
+            throw new BackendException("Profile name is already taken.");
         }
 
         Profile profile = new Profile()

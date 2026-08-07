@@ -35,7 +35,7 @@ public sealed class AuthController(UserService userService, ProfileService profi
     {
         if (Socket.User is not null)
         {
-            throw new InvalidOperationException("Already logged in.");
+            throw new BackendException("Already logged in.");
         }
 
         User testUser = await userService.GetTestUserAsync();

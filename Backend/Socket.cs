@@ -112,9 +112,13 @@ internal sealed class Socket : IDisposable
             RequestBase dto = SocketJsonSerializer.DeserializeRequest(bytes, count);
             await MessageReceived.InvokeAsync(this, new MessageReceivedEventArgs(dto));
         }
+        catch (BackendException exception)
+        {
+            await SendResponseAsync(new ErrorResponse() { Message = exception.Message });
+        }
         catch (Exception exception)
         {
-            await SendResponseAsync(new ErrorResponse { Message = exception.Message });
+            await SendResponseAsync(new ErrorResponse { Message = "Internal server error." });
         }
     }
 
