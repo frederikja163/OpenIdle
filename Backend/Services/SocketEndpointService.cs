@@ -47,7 +47,7 @@ public sealed class SocketEndpointService : IHostedService
         Socket socket = ArgumentException.ThrowIfNotOfType<Socket>(sender);
         if (!_endpoints.TryGetValue(request.GetType(), out List<RegisteredEndpoint>? registeredEndpoints))
         {
-            throw new InvalidOperationException("No handler registered for this request type.");
+            throw new BackendException("No handler registered for this request type.");
         }
 
         try
