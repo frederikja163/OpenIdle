@@ -58,7 +58,7 @@ public sealed class SocketEndpointServiceTests
         service.TryRegisterEndpoint(GetMethod<TestPingController>(nameof(TestPingController.Ping)));
         FakeWebSocket webSocket = RegisterSocket(registry, out Socket socket);
 
-        webSocket.EnqueueReceive(Serialize(new CreateProfileRequest() { RequestId = "42" }));
+        webSocket.EnqueueReceive(Serialize(new CreateProfileRequest() { RequestId = 42 }));
         webSocket.EnqueueClose();
 
         await socket.StartAsync(CancellationToken.None);
@@ -67,7 +67,7 @@ public sealed class SocketEndpointServiceTests
         {
             Assert.That(webSocket.FirstSentText, Is.Not.Null);
             Assert.That(webSocket.FirstSentText, Does.Contain("CreateProfileResponse"));
-            Assert.That(webSocket.FirstSentText, Does.Contain("\"requestId\":\"42\""));
+            Assert.That(webSocket.FirstSentText, Does.Contain("\"requestId\":42"));
         });
     }
 

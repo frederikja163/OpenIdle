@@ -18,7 +18,7 @@ public abstract class SocketControllerBase
     {
         get
         {
-            field ??= Socket.User ?? throw new InvalidOperationException("Socket is not signed in.");
+            field ??= Socket.User ?? throw new BackendException("You are not signed in.");
             return field;
         }
     }
@@ -27,7 +27,7 @@ public abstract class SocketControllerBase
     {
         get
         {
-            field ??= Socket.Profile ?? throw new InvalidOperationException("Socket has no selected profile.");
+            field ??= Socket.Profile ?? throw new BackendException("You must select a profile first.");
             return field;
         }
     }

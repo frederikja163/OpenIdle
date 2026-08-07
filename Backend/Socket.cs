@@ -107,14 +107,19 @@ internal sealed class Socket : IDisposable
 
     private async Task HandleTextMessageAsync(byte[] bytes, int count)
     {
+        RequestBase? dto = null;
         try
         {
-            RequestBase dto = SocketJsonSerializer.DeserializeRequest(bytes, count);
+            dto = SocketJsonSerializer.DeserializeRequest(bytes, count);
             await MessageReceived.InvokeAsync(this, new MessageReceivedEventArgs(dto));
+        }
+        catch (BackendException exception)
+        {
+            await SendResponseAsync(new ErrorResponse() { Message = exception.Message, RequestId = dto?.RequestId ?? 0});
         }
         catch (Exception exception)
         {
-            await SendResponseAsync(new ErrorResponse { Message = exception.Message });
+            await SendResponseAsync(new ErrorResponse { Message = "Internal server error.", RequestId = dto?.RequestId ?? 0});
         }
     }
 

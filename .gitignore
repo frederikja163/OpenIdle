@@ -32,4 +32,4 @@ Desktop.ini
 *.db-journal
 
 # Generated DTO preview output (dotnet run --project Generators/Generator)
-/*.generated.*
+**/*.generated.*

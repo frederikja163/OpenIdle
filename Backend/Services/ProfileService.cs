@@ -3,6 +3,7 @@ using System.Linq;
 using System.Threading.Tasks;
 using Backend.Database;
 using Backend.Database.Entities;
+using Microsoft.Data.Sqlite;
 using Microsoft.EntityFrameworkCore;
 using SQLitePCL;
 
@@ -25,27 +26,22 @@ public sealed class ProfileService(IDbContextFactory<GameDbContext> dbContextFac
 
         return await dbContext.Profiles
                    .FirstOrDefaultAsync(p => p.ProfileId == profileId && p.Users.Any(u => u.UserId == user.UserId))
-               ?? throw new InvalidOperationException("Profile does not belong to user.");
+               ?? throw new BackendException("Profile does not belong to user.");
     }
 
     internal async Task<Profile> CreateProfileAsync(User user, string name)
     {
-        // TODO: Fix name duplication problem here.
-        ArgumentException.ThrowIfNullOrWhiteSpace(name);
+        BackendException.ThrowIfNullOrWhiteSpace(name);
         if (name.Length > 30)
         {
-            throw new ArgumentException("Profile name must be at most 30 characters.", nameof(name));
+            throw new BackendException("Profile name must be at most 30 characters.");
         }
         if (!name.All(char.IsAsciiLetterOrDigit))
         {
-            throw new ArgumentException("Profile name must be alphanumeric.", nameof(name));
+            throw new BackendException("Profile name must be alphanumeric.");
         }
 
         await using GameDbContext dbContext = await dbContextFactory.CreateDbContextAsync();
-        if (await dbContext.Profiles.AnyAsync(p => p.Name == name))
-        {
-            throw new ArgumentException("Profile name is already taken.");
-        }
 
         Profile profile = new Profile()
         {
@@ -56,9 +52,29 @@ public sealed class ProfileService(IDbContextFactory<GameDbContext> dbContextFac
         dbContext.Attach(user);
         profile.Users.Add(user);
         dbContext.Profiles.Add(profile);
-        await dbContext.SaveChangesAsync();
+        try
+        {
+            await dbContext.SaveChangesAsync();
+        }
+        catch (DbUpdateException exception) when (IsUniqueNameViolation(exception))
+        {
+            throw new BackendException("Profile name is already taken.");
+        }
 
         return profile;
+    }
+
+    private static bool IsUniqueNameViolation(DbUpdateException exception)
+    {
+        for (Exception? inner = exception.InnerException; inner is not null; inner = inner.InnerException)
+        {
+            if (inner is SqliteException { SqliteExtendedErrorCode: raw.SQLITE_CONSTRAINT_UNIQUE })
+            {
+                return true;
+            }
+        }
+
+        return false;
     }
 
     internal async Task<Profile> SelectProfileAsync(Socket socket, User user, Guid profileId)
