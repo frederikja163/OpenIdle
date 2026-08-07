@@ -16,7 +16,7 @@ All game protocol calls travel over a single WebSocket. A "socket endpoint" is a
 
 ## 1. How the pipeline works
 
-```
+```text
 WebSocket client
    │  JSON frame, e.g. { "$type": "CreateProfileRequest", ... }
    ▼
@@ -50,10 +50,13 @@ When a request arrives, `SocketEndpointService` ([`SocketEndpointService.cs`](..
 
 ## 2. The controller contract
 
-Rules enforced by `TryRegisterEndpoint` (violations throw at startup):
+Discovery filters applied by `MapSocketControllers()` ([`WebApplicationBuilderExtensions.cs`](../../Backend/Extensions/WebApplicationBuilderExtensions.cs), lines 31-35) — a class or method that fails these is **silently excluded** from dispatch; there is no startup error:
 
 1. The class must be `public` and carry `[SocketController]` (discovery uses `GetExportedTypes`).
 2. The method must be `public`, an instance method, and carry `[Request]`.
+
+Signature rules validated by `TryRegisterEndpoint` (violations throw at startup):
+
 3. The method must take **exactly one** parameter.
 4. That parameter must derive from `RequestBase` — i.e. it must be a request type generated from `types.xml`.
 
@@ -61,7 +64,7 @@ Rules implied by the code (violations cause runtime failures, not clean errors):
 
 5. The class must derive `SocketControllerBase` — the dispatcher only sets `Context` when the constructed controller is one ([`SocketEndpointService.cs`](../../Backend/Services/SocketEndpointService.cs), lines 61-64).
 6. The class should be `sealed` and the method should return `Task` (the async pattern; only `Task` results are awaited).
-7. `Request` parameters must be constructed by the dispatcher via the DI container, so any service the controller's constructor asks for must be registered in [`Program.cs`](../../Backend/Program.cs).
+7. The request parameter is the already-deserialized request that `SocketEndpointService` passes straight to the endpoint method — the dispatcher does **not** construct it via DI. Only the controller instance is built from the container, so any service the controller's constructor asks for must be registered in [`Program.cs`](../../Backend/Program.cs).
 
 The canonical shape:
 
@@ -206,16 +209,16 @@ dotnet build Backend\Backend.csproj
 dotnet run --project Backend
 ```
 
-Manual smoke test against a socket client (the server listens on `http://localhost:5066` in the `http` launch profile):
+Manual smoke test against a socket client (the `http` launch profile listens on `http://localhost:5066`, so connect to `ws://localhost:5066/ws`; the `https` profile uses port `7214`, so its TLS equivalent is `wss://localhost:7214/ws`):
 
 ```json
-{ "$type": "CreateProfileRequest", "requestId": "req-1", "name": "Hero" }
+{ "$type": "CreateProfileRequest", "requestId": 1, "name": "Hero" }
 ```
 
 expected reply:
 
 ```json
-{ "$type": "CreateProfileResponse", "requestId": "req-1" }
+{ "$type": "CreateProfileResponse", "requestId": 1 }
 ```
 
 ## 8. Related documents

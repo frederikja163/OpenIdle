@@ -49,7 +49,7 @@ For AI agents: find your task, read the listed documents (fully), then the sourc
 | Path | What it is |
 |---|---|
 | [`Backend/`](../Backend/) | ASP.NET Core app (net10.0): socket protocol, EF Core + SQLite, services. Entry point [`Program.cs`](../Backend/Program.cs). |
-| [`Frontend/`](../Frontend/) | SvelteKit app (Svelte 5, TS, Tailwind). Currently a scaffold; no socket client yet. |
+| [`Frontend/`](../Frontend/) | SvelteKit app (Svelte 5, TS, Tailwind). WebSocket client in [`src/lib/ws/`](../Frontend/src/lib/ws/) (`WsClient`); generated DTOs not wired in yet. |
 | [`Generators/`](../Generators/) | DTO pipeline: [`Core/`](../Generators/Core/) parser + emitters, [`Backend/`](../Generators/Backend/) Roslyn source generator, [`Generator/`](../Generators/Generator/) CLI for the TS output. |
 | [`types.xml`](../types.xml) | Single source of truth for all socket DTOs. |
 | [`doc/libraries/`](./libraries/) | Library decision documents + index + template. |
