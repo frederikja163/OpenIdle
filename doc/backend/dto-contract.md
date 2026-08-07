@@ -7,7 +7,7 @@ The socket protocol's data shapes are defined once, in one XML file, and generat
 - **Single source of truth:** [`types.xml`](../../types.xml) at the repository root.
 - **C# DTOs are generated at build time** by a Roslyn source generator into the `Backend.Dtos` namespace (`Dto.g.cs`). Never write a DTO class by hand.
 - **TypeScript interfaces are generated on demand** by a CLI tool (see [Generation mechanics](#6-generation-mechanics)).
-- **Workflow to add a request/response/event:** edit `types.xml`, rebuild, done (C#). For the frontend, also run the CLI and commit the generated `.ts`.
+- **Workflow to add a request/response/event:** edit `types.xml`, rebuild, done (C#). For the frontend, also run the CLI to regenerate the `.ts` (the output is git-ignored).
 - **Naming:** the emitters append suffixes — `name="Foo"` becomes `FooDto`, `FooRequest`, `FooResponse`, or `FooEvent`. Do **not** write the suffix in the XML name.
 - **Every `<Request>` must contain exactly one `<Response>`** child (possibly empty).
 
@@ -134,10 +134,10 @@ The source generator reads `types.xml` (wired as an `AdditionalFile` in [`Backen
 ### Step 3 — generate the TypeScript (frontend only)
 
 ```powershell
-dotnet run --project Generators\Generator -- -i types.xml -t Ts -o Frontend\src\lib\generated\dto.ts
+dotnet run --project Generators\Generator -- -i types.xml -t Ts -o Frontend\src\lib\dto.generated.ts
 ```
 
-The TS emitter is **not** wired into the frontend build; run the CLI and commit the output. Target `Cs` prints the same output the source generator produces, useful for review:
+The TS emitter is **not** wired into the frontend build; run the CLI to regenerate the output (it follows the `*.generated.ts` convention, so the root `.gitignore` excludes it). Target `Cs` prints the same output the source generator produces, useful for review:
 
 ```powershell
 dotnet run --project Generators\Generator -- -i types.xml -t Cs
@@ -192,7 +192,7 @@ All classes are `sealed` and non-partial — **you cannot extend generated types
 
 To inspect `Dto.g.cs` on disk, add `<EmitCompilerGeneratedFiles>true</EmitCompilerGeneratedFiles>` to [`Backend/Backend.csproj`](../../Backend/Backend.csproj) — it lands under `Backend/obj/.../generated/`.
 
-**Generated file naming convention:** Generated files that should be git-ignored use the `*.generated.*` pattern (e.g., `MyFile.generated.cs`, `types.generated.ts`). This is enforced by the root `.gitignore` (`/*.generated.*`). The C# source generator's output (`Dto.g.cs`) follows the Microsoft convention (`*.g.cs`) and lands in `obj/` which is already ignored; the TypeScript CLI output should be written to a `*.generated.ts` path if you want it auto-ignored.
+**Generated file naming convention:** Generated files that should be git-ignored use the `*.generated.*` pattern (e.g., `MyFile.generated.cs`, `types.generated.ts`). This is enforced by the root `.gitignore` (`**/*.generated.*`, matching at any depth). The C# source generator's output (`Dto.g.cs`) follows the Microsoft convention (`*.g.cs`) and lands in `obj/` which is already ignored; the TypeScript CLI output should be written to a `*.generated.ts` path if you want it auto-ignored.
 
 ## 5. Wire format
 
@@ -254,7 +254,7 @@ Conventions (not enforced — reviewer judgement):
 
 ## 8. Gotchas & known quirks
 
-- **`requestId`/`eventId` are numeric on both sides.** The C# bases hardcode `int RequestId` / `int EventId` and the TS emitter hardcodes `requestId: number` / `eventId: number` (`Generators/Core/TsEmitter.cs:20-33`). This matches the TS socket client, which assigns client-chosen numeric ids and expects the echoed response to carry the same number. Keep the two sides in lockstep — changing one alone breaks deserialization.
+- **`requestId`/`eventId` are numeric on both sides.** The C# bases hardcode `int RequestId` / `int EventId` and the TS emitter hardcodes `requestId: number` / `eventId: number` (`Generators/Core/TsEmitter.cs:20-33`). This matches the TS socket client ([`Frontend/src/lib/ws/client.ts`](../../Frontend/src/lib/ws/client.ts)), which assigns client-chosen numeric ids (`nextRequestId`) and expects the echoed response to carry the same number. Keep the two sides in lockstep — changing one alone breaks deserialization. The contract is strict integers: there is no `JsonNumberHandling` leniency in the backend serializer, so a quoted numeral such as `"requestId": "1"` fails deserialization — clients must send a plain JSON number.
 - **No editor validation.** There is no XSD; typos surface at C# build time or not at all (TS). Copy a nearby block rather than typing from memory.
 - **Unknown top-level elements are silently ignored** by the parser (`Generators/Core/Parser.cs:33-52`).
 - **`GetElementsByTagName("Response")` is recursive** — the response can sit anywhere inside the request element, but keep it as a direct child.

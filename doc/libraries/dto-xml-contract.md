@@ -139,5 +139,5 @@ Open design points (deferred, deliberately):
 - **Validation syntax** — not designed; `Validation="..."` is a placeholder idea, not a commitment.
 - **Optional properties** — every property is currently required; adding `required="false"` (or similar) is a grammar change.
 - **XSD / editor support** — not building an XSD; rely on copy-paste patterns.
-- **Frontend handshake** — how generated TS reaches `Frontend/` (checked-in file vs a build step) is unsettled; today it is a manual CLI run. Generated TS files should use the `*.generated.ts` pattern (e.g., `dto.generated.ts`) so the root `.gitignore` (`/*.generated.*`) excludes them automatically.
+- **Frontend handshake** — how generated TS reaches `Frontend/` (checked-in file vs a build step) is unsettled; today it is a manual CLI run. Generated TS files should use the `*.generated.ts` pattern (e.g., `dto.generated.ts`), which the root `.gitignore` rule `**/*.generated.*` excludes at any depth — including under `Frontend/` — so the output is regenerated on demand rather than committed.
 - Whether the source generator also emits the socket endpoint wiring (currently reflection in `Backend/Services/SocketEndpointService.cs`) — separate follow-up.
