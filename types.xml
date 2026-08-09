@@ -8,9 +8,22 @@
   <Item name="Wood"/>
   <Item name="Food"/>
   
+  <Dto name="Item">
+    <Property name="ProfileId" type="Guid"/>
+    <Property name="ItemId" type="string"/>
+    <Property name="Count" type="int"/>
+  </Dto>
+  
   <Dto name="Profile">
     <Property name="Name" type="string" />
     <Property name="ProfileId" type="Guid" />
+  </Dto>
+  
+  <Dto name="Skill">
+    <Property name="ProfileId" type="Guid"/>
+    <Property name="SkillId" type="string"/>
+    <Property name="Xp" type="int"/>
+    <Property name="Level" type="int"/>
   </Dto>
 
   <Dto name="User">
