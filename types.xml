@@ -1,5 +1,13 @@
 <?xml version="1.0" encoding="utf-8"?>
 <Types>
+  <Skill name="Mining"/>
+  <Skill name="LumberJacking"/>
+  <Skill name="Crafting"/>
+  
+  <Item name="Stone"/>
+  <Item name="Wood"/>
+  <Item name="Food"/>
+  
   <Dto name="Profile">
     <Property name="Name" type="string" />
     <Property name="ProfileId" type="Guid" />

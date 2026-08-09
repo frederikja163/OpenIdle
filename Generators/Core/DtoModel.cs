@@ -1,10 +1,34 @@
 ﻿using System.Collections.Generic;
+using System.Linq;
 
 namespace Generator.Core;
 
 public sealed class DtoModel
 {
-    public List<Object> Objects { get; } = [];
+    public Dictionary<string, Dto> Dtos { get; } = [];
+    public Dictionary<string, Event> Events { get; } = [];
+    public Dictionary<string, Request> Requests { get; } = [];
+    public Dictionary<string, Response> Responses { get; } = [];
+    public Dictionary<string, Item> Items { get; } = [];
+    public Dictionary<string, Skill> Skills { get; } = [];
+
+    public IEnumerable<Object> AllObjects => Dtos.Values.OfType<Object>().Union(Requests.Values).Union(Responses.Values)
+        .Union(Events.Values);
+}
+
+public abstract class NamedType(string name)
+{
+    public Casing Name { get; } = new Casing(name);
+    public string Key { get; } = name;   
+}
+
+public sealed class Skill(string name) : NamedType(name)
+{
+    
+}
+
+public sealed class Item(string name): NamedType(name)
+{
 }
 
 public enum PropertyType
@@ -24,9 +48,8 @@ public sealed class Property(PropertyType type, string typeStr, string name, boo
     public bool Multiple { get; } = multiple;
 }
 
-public abstract class Object(string name)
+public abstract class Object(string name) : NamedType(name)
 {
-    public Casing Name { get; } = new(name);
     public List<Property> Properties { get; } = [];
 }
 

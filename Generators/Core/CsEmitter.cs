@@ -7,7 +7,7 @@ namespace Generator.Core;
 public sealed class CsEmitter : IDtoEmitter
 {
     private readonly ScopedTextWriter _textWriter;
-    private readonly List<string> _typeNames = new();
+    private readonly List<Object> _allObjects = new();
 
     public CsEmitter(TextWriter writer)
     {
@@ -23,16 +23,32 @@ public sealed class CsEmitter : IDtoEmitter
 
     public void EmitDtos(DtoModel model)
     {
-        foreach (Object obj in model.Objects)
+        foreach (Object obj in model.AllObjects)
         {
             EmitClass(obj);
+            _allObjects.Add(obj);
+        }
+
+        using (Scope _ = _textWriter.Scope("public enum ItemId"))
+        {
+            foreach (var item in model.Items.Values)
+            {
+                _textWriter.WriteLine($"{item.Name.UpperCamelCase},");
+            }
+        }
+
+        using (Scope _ = _textWriter.Scope("public enum SkillId"))
+        {
+            foreach (Skill skill in model.Skills.Values)
+            {
+                _textWriter.WriteLine($"{skill.Name.UpperCamelCase},");
+            }
         }
     }
 
     private void EmitClass(Object obj)
     {
-        _typeNames.Add(obj.Name.UpperCamelCase);
-        using (Scope _ = _textWriter.Scope($"public sealed class {obj.Name.UpperCamelCase} : {BaseType(obj)}"))
+        using (Scope _ = _textWriter.Scope($"public sealed class {GetName(obj)} : {BaseType(obj)}"))
         {
             foreach (Property property in obj.Properties)
             {
@@ -52,12 +68,25 @@ public sealed class CsEmitter : IDtoEmitter
     {
         return obj switch
         {
-            Dto dto => "DtoBase",
-            Event @event => "EventBase",
-            Request request => "RequestBase",
-            Response response => "ResponseBase",
+            Dto => "DtoBase",
+            Event => "EventBase",
+            Request => "RequestBase",
+            Response => "ResponseBase",
             _ => throw new ArgumentOutOfRangeException(nameof(obj))
         };
+    }
+
+    private string GetName(Object obj)
+    {
+        string name = obj.Name.UpperCamelCase + obj switch
+        {
+            Dto => "Dto",
+            Event => "Event",
+            Request => "Request",
+            Response => "Response",
+            _ => throw new ArgumentOutOfRangeException(nameof(obj))
+        };
+        return name;
     }
 
     private string GetPropertyType(Property property)
@@ -77,11 +106,11 @@ public sealed class CsEmitter : IDtoEmitter
     public void Dispose()
     {
         _textWriter.WriteLine("[JsonPolymorphic]");
-        foreach (string typeName in _typeNames)
+        foreach (Object obj in _allObjects)
         {
-            _textWriter.WriteLine($"[JsonDerivedType(typeof({typeName}), nameof({typeName}))]");
+            _textWriter.WriteLine($"[JsonDerivedType(typeof({GetName(obj)}), \"{obj.Key}\")]");
         }
-        using (Scope dtoBase = _textWriter.Scope("public abstract class DtoBase"))
+        using (Scope _ = _textWriter.Scope("public abstract class DtoBase"))
         {
         }
         _textWriter.WriteLine();

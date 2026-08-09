@@ -36,9 +36,9 @@ public sealed class TsEmitter : IDtoEmitter
 
     public void EmitDtos(DtoModel model)
     {
-        foreach (Object obj in model.Objects)
+        foreach (Object obj in model.AllObjects)
         {
-            using (Scope _ = _textWriter.Scope($"interface {obj.Name.UpperCamelCase} extends {BaseType(obj)}"))
+            using (Scope _ = _textWriter.Scope($"interface {GetName(obj)} extends {BaseType(obj)}"))
             {
                 foreach (Property property in obj.Properties)
                 {
@@ -53,10 +53,22 @@ public sealed class TsEmitter : IDtoEmitter
     {
         return obj switch
         {
-            Dto dto => "DtoBase",
-            Event @event => "EventBase",
-            Request request => "RequestBase",
-            Response response => "ResponseBase",
+            Dto => "DtoBase",
+            Event => "EventBase",
+            Request => "RequestBase",
+            Response => "ResponseBase",
+            _ => throw new ArgumentOutOfRangeException(nameof(obj))
+        };
+    }
+
+    private string GetName(Object obj)
+    {
+        return obj.Name.UpperCamelCase + obj switch
+        {
+            Dto => "Dto",
+            Event => "Event",
+            Request => "Request",
+            Response => "Response",
             _ => throw new ArgumentOutOfRangeException(nameof(obj))
         };
     }
