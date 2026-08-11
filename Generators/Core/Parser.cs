@@ -60,7 +60,7 @@ public sealed class Parser
                 Model.Responses.Add(response.Key, response);
                 break;
             default:
-                throw new ArgumentOutOfRangeException($"Element name is not recognized '{element.Name}'", nameof(element.Name));
+                throw new ParserException($"Element name is not recognized '{element.Name}'");
         }
     }
 

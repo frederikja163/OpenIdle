@@ -78,7 +78,8 @@ public sealed class TsEmitter : IDtoEmitter
 
     private void Property(Property property)
     {
-        _textWriter.WriteLine($"{property.Name.LowerCamelCase}: {GetPropertyType(property)};");
+        string optional = property.Optional ? "?" : "";
+        _textWriter.WriteLine($"{property.Name.LowerCamelCase}{optional}: {GetPropertyType(property)};");
     }
 
     private string GetPropertyType(Property property)

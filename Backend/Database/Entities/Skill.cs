@@ -1,6 +1,5 @@
 using System;
 using Backend.Dtos;
-using Microsoft.EntityFrameworkCore;
 
 namespace Backend.Database.Entities;
 

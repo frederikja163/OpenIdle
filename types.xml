@@ -1,9 +1,11 @@
 <?xml version="1.0" encoding="utf-8"?>
 <Types>
+  <Skill name="None"/>
   <Skill name="Mining"/>
   <Skill name="LumberJacking"/>
   <Skill name="Crafting"/>
   
+  <Item name="None"/>
   <Item name="Stone"/>
   <Item name="Wood"/>
   <Item name="Food"/>

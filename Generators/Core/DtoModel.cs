@@ -12,8 +12,9 @@ public sealed class DtoModel
     public Dictionary<string, Item> Items { get; } = [];
     public Dictionary<string, Skill> Skills { get; } = [];
 
-    public IEnumerable<Object> AllObjects => Dtos.Values.OfType<Object>().Union(Requests.Values).Union(Responses.Values)
-        .Union(Events.Values);
+    public IEnumerable<Object> AllObjects => Dtos.Values.Union<Object>(Requests.Values)
+        .Union<Object>(Responses.Values)
+        .Union<Object>(Events.Values);
 }
 
 public abstract class NamedType(string name)
