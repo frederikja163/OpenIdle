@@ -4,10 +4,20 @@ using Microsoft.EntityFrameworkCore;
 
 namespace Backend.Database.Entities;
 
-[Index(nameof(ProfileId), additionalPropertyNames: [nameof(SkillId)], IsUnique = true)]
 public sealed class Item
 {
-    public Guid ProfileId { get; init; }
-    public ItemId SkillId { get; init; }
-    public int Count { get; init; }
+    public required Guid ProfileId { get; init; }
+    public required Profile Profile { get; init; }
+    public required ItemId ItemId { get; init; }
+    public int Count { get; set; }
+
+    public ItemDto ToDto()
+    {
+        return new ItemDto()
+        {
+            ProfileId = ProfileId,
+            ItemId = ItemId,
+            Count = Count,
+        };
+    }
 }

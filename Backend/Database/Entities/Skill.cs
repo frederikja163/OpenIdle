@@ -4,13 +4,13 @@ using Microsoft.EntityFrameworkCore;
 
 namespace Backend.Database.Entities;
 
-[Index(nameof(ProfileId), additionalPropertyNames: [nameof(SkillId)], IsUnique = true)]
 public sealed class Skill
 {
-    public Guid ProfileId { get; init; }
-    public SkillId SkillId { get; init; }
-    public int Xp { get; init; }
-    public int Level { get; init; }
+    public required Guid ProfileId { get; init; }
+    public required Profile Profile { get; init; }
+    public required SkillId SkillId { get; init; }
+    public int Xp { get; set; }
+    public int Level { get; set; }
 
     public SkillDto ToDto()
     {
@@ -18,6 +18,8 @@ public sealed class Skill
         {
             ProfileId = ProfileId,
             SkillId = SkillId,
-        }
+            Xp = Xp,
+            Level = Level,
+        };
     }
 }
