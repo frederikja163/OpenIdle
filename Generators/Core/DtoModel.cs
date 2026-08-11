@@ -38,6 +38,10 @@ public enum PropertyType
     Int,
     Float,
     Guid,
+    UserId,
+    ProfileId,
+    ItemId,
+    SkillId,
 }
 
 public sealed class Property(PropertyType type, string typeStr, string name, bool multiple)
@@ -53,17 +57,17 @@ public abstract class Object(string name) : NamedType(name)
     public List<Property> Properties { get; } = [];
 }
 
-public sealed class Dto(string name) : Object(name)
+public sealed class Dto(string name) : Object(name + "Dto")
 {
 }
 
-public sealed class Request(string name, Response response) : Object(name)
+public sealed class Request(string name, Response response) : Object(name + "Request")
 {
     public Response Response { get; } = response;
 }
 
-public sealed class Response(string name) : Object(name)
+public sealed class Response(string name) : Object(name + "Response")
 {
 }
 
-public sealed class Event(string name) : Object(name);
+public sealed class Event(string name) : Object(name + "Event");

@@ -48,7 +48,7 @@ public sealed class CsEmitter : IDtoEmitter
 
     private void EmitClass(Object obj)
     {
-        using (Scope _ = _textWriter.Scope($"public sealed class {GetName(obj)} : {BaseType(obj)}"))
+        using (Scope _ = _textWriter.Scope($"public sealed class {obj.Name.UpperCamelCase} : {BaseType(obj)}"))
         {
             foreach (Property property in obj.Properties)
             {
@@ -76,19 +76,6 @@ public sealed class CsEmitter : IDtoEmitter
         };
     }
 
-    private string GetName(Object obj)
-    {
-        string name = obj.Name.UpperCamelCase + obj switch
-        {
-            Dto => "Dto",
-            Event => "Event",
-            Request => "Request",
-            Response => "Response",
-            _ => throw new ArgumentOutOfRangeException(nameof(obj))
-        };
-        return name;
-    }
-
     private string GetPropertyType(Property property)
     {
         string str = property.PropertyType switch
@@ -98,6 +85,10 @@ public sealed class CsEmitter : IDtoEmitter
             PropertyType.Int => "int",
             PropertyType.Float => "float",
             PropertyType.Guid => "Guid",
+            PropertyType.UserId => "Guid",
+            PropertyType.ProfileId => "Guid",
+            PropertyType.ItemId => "ItemId",
+            PropertyType.SkillId => "SkillId",
             _ => throw new ArgumentOutOfRangeException()
         };
         return property.Multiple ? str + "[]" : str;
@@ -108,7 +99,7 @@ public sealed class CsEmitter : IDtoEmitter
         _textWriter.WriteLine("[JsonPolymorphic]");
         foreach (Object obj in _allObjects)
         {
-            _textWriter.WriteLine($"[JsonDerivedType(typeof({GetName(obj)}), \"{obj.Key}\")]");
+            _textWriter.WriteLine($"[JsonDerivedType(typeof({obj.Name.UpperCamelCase}), nameof({obj.Name.UpperCamelCase}))]");
         }
         using (Scope _ = _textWriter.Scope("public abstract class DtoBase"))
         {

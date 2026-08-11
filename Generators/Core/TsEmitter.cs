@@ -1,6 +1,7 @@
 ﻿using System;
 using System.Collections.Generic;
 using System.IO;
+using System.Linq;
 
 namespace Generator.Core;
 
@@ -47,6 +48,15 @@ public sealed class TsEmitter : IDtoEmitter
             }
             _textWriter.WriteLine();
         }
+
+        if (model.Items.Count > 0)
+        {
+            _textWriter.WriteLine($"type ItemId = {string.Join(" | ", model.Items.Values.Select(i => $"'{i.Name.UpperCamelCase}'"))};");
+        }
+        if (model.Skills.Count > 0)
+        {
+            _textWriter.WriteLine($"type SkillId = {string.Join(" | ", model.Skills.Values.Select(s => $"'{s.Name.UpperCamelCase}'"))};");
+        }
     }
 
     private string BaseType(Object obj)
@@ -63,14 +73,7 @@ public sealed class TsEmitter : IDtoEmitter
 
     private string GetName(Object obj)
     {
-        return obj.Name.UpperCamelCase + obj switch
-        {
-            Dto => "Dto",
-            Event => "Event",
-            Request => "Request",
-            Response => "Response",
-            _ => throw new ArgumentOutOfRangeException(nameof(obj))
-        };
+        return obj.Name.UpperCamelCase;
     }
 
     private void Property(Property property)
@@ -87,6 +90,10 @@ public sealed class TsEmitter : IDtoEmitter
             PropertyType.Int => "number",
             PropertyType.Float => "number",
             PropertyType.Guid => "string",
+            PropertyType.UserId => "string",
+            PropertyType.ProfileId => "string",
+            PropertyType.ItemId => "ItemId",
+            PropertyType.SkillId => "SkillId",
             _ => throw new ArgumentOutOfRangeException()
         };
         return property.Multiple ? str + "[]" : str;

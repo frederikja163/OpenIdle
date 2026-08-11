@@ -35,7 +35,8 @@ public sealed class Parser
         switch (element.Name)
         {
             case "Skill":
-                
+                Skill skill = Skill(element);
+                Model.Skills.Add(skill.Key, skill);
                 break;
             case "Item":
                 Item item = Item(element);
