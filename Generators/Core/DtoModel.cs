@@ -44,12 +44,13 @@ public enum PropertyType
     SkillId,
 }
 
-public sealed class Property(PropertyType type, string typeStr, string name, bool multiple)
+public sealed class Property(PropertyType type, string typeStr, string name, bool multiple, bool optional)
 {
     public Casing Name { get; } = new(name);
     public PropertyType PropertyType { get; } = type;
     public Casing PropertyTypeString { get; } = new(typeStr);
     public bool Multiple { get; } = multiple;
+    public bool Optional { get; } = optional;
 }
 
 public abstract class Object(string name) : NamedType(name)

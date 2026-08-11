@@ -124,7 +124,8 @@ public sealed class Parser
 
             string name = element.RequireAttribute("name");
             bool multiple = element.GetAttribute<bool>("multiple", false);
-            yield return new Property(type, propertyTypeStr, name, multiple);
+            bool optional = element.GetAttribute<bool>("optional", false);
+            yield return new Property(type, propertyTypeStr, name, multiple, optional);
         }
     }
 }
