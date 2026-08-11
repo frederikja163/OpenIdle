@@ -62,7 +62,8 @@ public sealed class CsEmitter : IDtoEmitter
     private void Property(Property property, string setter = "init")
     {
         _textWriter.WriteLine($"[JsonPropertyName(\"{property.Name.LowerCamelCase}\")]");
-        _textWriter.WriteLine($"public {GetPropertyType(property)} {property.Name.UpperCamelCase} {{ get; {setter}; }}");
+        string requiredModifier = IsRequiredReferenceType(property) ? "required " : "";
+        _textWriter.WriteLine($"public {requiredModifier}{GetPropertyType(property)} {property.Name.UpperCamelCase} {{ get; {setter}; }}");
     }
 
     private string BaseType(Object obj)
@@ -74,6 +75,32 @@ public sealed class CsEmitter : IDtoEmitter
             Request => "RequestBase",
             Response => "ResponseBase",
             _ => throw new ArgumentOutOfRangeException(nameof(obj))
+        };
+    }
+
+    private bool IsRequiredReferenceType(Property property)
+    {
+        // Optional properties should not be required
+        if (property.Optional)
+            return false;
+
+        // Arrays are reference types and need required modifier
+        if (property.Multiple)
+            return true;
+
+        // Check if the base type is a reference type
+        return property.PropertyType switch
+        {
+            PropertyType.String => true,
+            PropertyType.Custom => true,
+            PropertyType.Int => false,
+            PropertyType.Float => false,
+            PropertyType.Guid => false,
+            PropertyType.UserId => false,
+            PropertyType.ProfileId => false,
+            PropertyType.ItemId => false,
+            PropertyType.SkillId => false,
+            _ => false
         };
     }
 
