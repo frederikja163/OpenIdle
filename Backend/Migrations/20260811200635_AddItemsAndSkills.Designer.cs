@@ -11,7 +11,7 @@ using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 namespace Backend.Migrations
 {
     [DbContext(typeof(GameDbContext))]
-    [Migration("20260810204711_AddItemsAndSkills")]
+    [Migration("20260811200635_AddItemsAndSkills")]
     partial class AddItemsAndSkills
     {
         /// <inheritdoc />
@@ -25,8 +25,8 @@ namespace Backend.Migrations
                     b.Property<Guid>("ProfileId")
                         .HasColumnType("TEXT");
 
-                    b.Property<int>("ItemId")
-                        .HasColumnType("INTEGER");
+                    b.Property<string>("ItemId")
+                        .HasColumnType("TEXT");
 
                     b.Property<int>("Count")
                         .HasColumnType("INTEGER");
@@ -60,8 +60,8 @@ namespace Backend.Migrations
                     b.Property<Guid>("ProfileId")
                         .HasColumnType("TEXT");
 
-                    b.Property<int>("SkillId")
-                        .HasColumnType("INTEGER");
+                    b.Property<string>("SkillId")
+                        .HasColumnType("TEXT");
 
                     b.Property<int>("Level")
                         .HasColumnType("INTEGER");

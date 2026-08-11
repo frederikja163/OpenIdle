@@ -14,6 +14,7 @@ internal static class SocketJsonSerializer
         DefaultIgnoreCondition = JsonIgnoreCondition.WhenWritingDefault,
         ReadCommentHandling = JsonCommentHandling.Skip,
         PropertyNamingPolicy = JsonNamingPolicy.CamelCase,
+        Converters = { new JsonStringEnumConverter() },
     };
 
     internal static byte[] Serialize(DtoBase dto)
