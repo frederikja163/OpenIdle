@@ -29,19 +29,14 @@ public sealed class CsEmitter : IDtoEmitter
             _allObjects.Add(obj);
         }
 
-        using (Scope _ = _textWriter.Scope("public enum ItemId"))
+        foreach (Enum en in model.Enums.Values)
         {
-            foreach (var item in model.Items.Values)
+            using (Scope _ = _textWriter.Scope($"public enum {en.Name.UpperCamelCase}"))
             {
-                _textWriter.WriteLine($"{item.Name.UpperCamelCase},");
-            }
-        }
-
-        using (Scope _ = _textWriter.Scope("public enum SkillId"))
-        {
-            foreach (Skill skill in model.Skills.Values)
-            {
-                _textWriter.WriteLine($"{skill.Name.UpperCamelCase},");
+                foreach (var item in en.Values.Values)
+                {
+                    _textWriter.WriteLine($"{item.Name.UpperCamelCase},");
+                }
             }
         }
     }

@@ -49,13 +49,12 @@ public sealed class TsEmitter : IDtoEmitter
             _textWriter.WriteLine();
         }
 
-        if (model.Items.Count > 0)
+        foreach (Enum en in model.Enums.Values)
         {
-            _textWriter.WriteLine($"type ItemId = {string.Join(" | ", model.Items.Values.Select(i => $"'{i.Name.UpperCamelCase}'"))};");
-        }
-        if (model.Skills.Count > 0)
-        {
-            _textWriter.WriteLine($"type SkillId = {string.Join(" | ", model.Skills.Values.Select(s => $"'{s.Name.UpperCamelCase}'"))};");
+            if (en.Values.Count > 0)
+            {
+                _textWriter.WriteLine($"type ItemId = {string.Join(" | ", en.Values.Values.Select(i => $"'{i.Name.UpperCamelCase}'"))};");
+            }
         }
     }
 
