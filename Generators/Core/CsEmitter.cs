@@ -88,6 +88,32 @@ public sealed class CsEmitter : IDtoEmitter
         };
     }
 
+    private bool IsRequiredReferenceType(Property property)
+    {
+        // Optional properties should not be required
+        if (property.Optional)
+            return false;
+
+        // Arrays are reference types and need required modifier
+        if (property.Multiple)
+            return true;
+
+        // Check if the base type is a reference type
+        return property.PropertyType switch
+        {
+            PropertyType.String => true,
+            PropertyType.Custom => true,
+            PropertyType.Int => false,
+            PropertyType.Float => false,
+            PropertyType.Guid => false,
+            PropertyType.UserId => false,
+            PropertyType.ProfileId => false,
+            PropertyType.ItemId => false,
+            PropertyType.SkillId => false,
+            _ => false
+        };
+    }
+
     private string GetPropertyType(Property property)
     {
         string str = property.PropertyType switch
