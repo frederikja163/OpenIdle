@@ -117,7 +117,7 @@ internal sealed class Socket : IDisposable
         {
             await SendResponseAsync(new ErrorResponse() { Message = exception.Message, RequestId = dto?.RequestId ?? 0});
         }
-        catch (Exception exception)
+        catch (Exception)
         {
             await SendResponseAsync(new ErrorResponse { Message = "Internal server error.", RequestId = dto?.RequestId ?? 0});
         }

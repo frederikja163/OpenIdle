@@ -62,7 +62,18 @@ public sealed class CsEmitter : IDtoEmitter
     private void Property(Property property, string setter = "init")
     {
         _textWriter.WriteLine($"[JsonPropertyName(\"{property.Name.LowerCamelCase}\")]");
-        _textWriter.WriteLine($"public {GetPropertyType(property)} {property.Name.UpperCamelCase} {{ get; {setter}; }}");
+        _textWriter.WriteLine($"{GetPropertyModifiers(property)} {GetPropertyType(property)} {property.Name.UpperCamelCase} {{ get; {setter}; }}");
+    }
+
+    private string GetPropertyModifiers(Property property)
+    {
+        string str = "public";
+        if (!property.Optional)
+        {
+            str += " required";
+        }
+
+        return str;
     }
 
     private string BaseType(Object obj)
@@ -112,17 +123,17 @@ public sealed class CsEmitter : IDtoEmitter
         _textWriter.WriteLine();
         using (Scope _ = _textWriter.Scope("public abstract class RequestBase : DtoBase"))
         {
-            Property(new Property(PropertyType.Int, "int", "RequestId", false, false), "set");
+            Property(new Property(PropertyType.Int, "int", "RequestId", false, true), "set");
         }
         _textWriter.WriteLine();
         using (Scope _ = _textWriter.Scope("public abstract class ResponseBase : DtoBase"))
         {
-            Property(new Property(PropertyType.Int, "int", "RequestId", false, false), "set");
+            Property(new Property(PropertyType.Int, "int", "RequestId", false, true), "set");
         }
         _textWriter.WriteLine();
         using (Scope _ = _textWriter.Scope("public abstract class EventBase : DtoBase"))
         {
-            Property(new Property(PropertyType.Int, "int", "EventId", false, false), "set");
+            Property(new Property(PropertyType.Int, "int", "EventId", false, true), "set");
         }
         _textWriter.WriteLine();
     }
