@@ -13,7 +13,7 @@ public sealed class SocketJsonSerializerTests
     {
         string json = Serialize(new GetItemsResponse()
         {
-            Items = [new ItemDto() { ItemId = ItemId.Stone, Count = 1 }],
+            Items = [new ItemDto() { ProfileId = Guid.NewGuid(), ItemId = ItemId.Stone, Count = 1 }],
         });
 
         Assert.That(json, Does.Contain("\"itemId\":\"Stone\""));
@@ -24,7 +24,7 @@ public sealed class SocketJsonSerializerTests
     {
         string json = Serialize(new GetSkillsResponse()
         {
-            Skills = [new SkillDto() { SkillId = SkillId.Mining, Xp = 10, Level = 1 }],
+            Skills = [new SkillDto() { ProfileId = Guid.NewGuid(), SkillId = SkillId.Mining, Xp = 10, Level = 1 }],
         });
 
         Assert.That(json, Does.Contain("\"skillId\":\"Mining\""));
@@ -35,7 +35,7 @@ public sealed class SocketJsonSerializerTests
     {
         string json = Serialize(new GetItemsResponse()
         {
-            Items = [new ItemDto() { ItemId = ItemId.None, Count = 1 }],
+            Items = [new ItemDto() { ProfileId = Guid.NewGuid(), ItemId = ItemId.None, Count = 1 }],
         });
 
         Assert.That(json, Does.Not.Contain("itemId"));
@@ -46,7 +46,7 @@ public sealed class SocketJsonSerializerTests
     {
         byte[] bytes = SocketJsonSerializer.Serialize(new GetItemsResponse()
         {
-            Items = [new ItemDto() { ItemId = ItemId.Wood, Count = 2 }],
+            Items = [new ItemDto() { ProfileId = Guid.NewGuid(), ItemId = ItemId.Wood, Count = 2 }],
         });
 
         DtoBase deserialized = SocketJsonSerializer.Deserialize(bytes, bytes.Length);

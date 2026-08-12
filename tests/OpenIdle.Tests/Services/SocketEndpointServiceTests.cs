@@ -58,7 +58,7 @@ public sealed class SocketEndpointServiceTests
         service.TryRegisterEndpoint(GetMethod<TestPingController>(nameof(TestPingController.Ping)));
         FakeWebSocket webSocket = RegisterSocket(registry, out Socket socket);
 
-        webSocket.EnqueueReceive(Serialize(new CreateProfileRequest() { RequestId = 42 }));
+        webSocket.EnqueueReceive(Serialize(new CreateProfileRequest() { Name = "x", RequestId = 42 }));
         webSocket.EnqueueClose();
 
         await socket.StartAsync(CancellationToken.None);
@@ -100,7 +100,7 @@ public sealed class SocketEndpointServiceTests
         service.TryRegisterEndpoint(GetMethod<SecondTestPingController>(nameof(SecondTestPingController.Ping)));
         FakeWebSocket webSocket = RegisterSocket(registry, out Socket socket);
 
-        webSocket.EnqueueReceive(Serialize(new CreateProfileRequest()));
+        webSocket.EnqueueReceive(Serialize(new CreateProfileRequest() { Name = "x" }));
         webSocket.EnqueueClose();
 
         await socket.StartAsync(CancellationToken.None);
@@ -119,7 +119,7 @@ public sealed class SocketEndpointServiceTests
         socket.User = user;
         registry.SetUser(socket, user);
 
-        webSocket.EnqueueReceive(Serialize(new CreateProfileRequest()));
+        webSocket.EnqueueReceive(Serialize(new CreateProfileRequest() { Name = "x" }));
         webSocket.EnqueueClose();
 
         await socket.StartAsync(CancellationToken.None);
