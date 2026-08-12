@@ -53,7 +53,7 @@ public sealed class TsEmitter : IDtoEmitter
         {
             if (en.Values.Count > 0)
             {
-                _textWriter.WriteLine($"type ItemId = {string.Join(" | ", en.Values.Values.Select(i => $"'{i.Name.UpperCamelCase}'"))};");
+                _textWriter.WriteLine($"type {en.Name.UpperCamelCase} = {string.Join(" | ", en.Values.Values.Select(v => $"'{v.Name.UpperCamelCase}'"))};");
             }
         }
     }

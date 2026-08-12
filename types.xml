@@ -16,13 +16,13 @@
   </Enum>
   
   <DropTable name="BrokenRockTable">
-    <Drop item="None" weight="10" count ="0"/>
+    <Drop item="None" weight="10" count="0"/>
     <Drop item="BrokenRock" weight="1" count="1"/>
   </DropTable>
   
   <DropTable name="StoneTable">
     <Drop item="Stone" weight="5" count="2"/>
-    <Drop table="BrokenRock" weight="1" count="1"/>
+    <Drop table="BrokenRockTable" weight="1" count="1"/>
   </DropTable>
   
   <Activity name="Stone" table="StoneTable"/>

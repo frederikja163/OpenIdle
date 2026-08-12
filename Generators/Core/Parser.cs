@@ -11,6 +11,9 @@ public sealed class ParserException(string message) : Exception(message);
 
 public sealed class Parser
 {
+    private const string DropTableIdEnumName = "DropTableId";
+    private const string ActivityIdEnumName = "ActivityId";
+
     public DtoModel Model { get; } = new();
 
     public void Parse(Stream stream)
@@ -41,12 +44,12 @@ public sealed class Parser
             case "DropTable":
                 DropTable dropTable = DropTable(element);
                 Model.DropTables.Add(dropTable.Key, dropTable);
-                GetEnum("DropTableId").Values.Add(dropTable.Key, new EnumValue(dropTable.Key));
+                GetEnum(DropTableIdEnumName).Values.Add(dropTable.Key, new EnumValue(dropTable.Key));
                 break;
             case "Activity":
                 Activity activity = Activity(element);
                 Model.Activities.Add(activity.Key, activity);
-                GetEnum("ActivityId").Values.Add(activity.Key, new EnumValue(activity.Key));
+                GetEnum(ActivityIdEnumName).Values.Add(activity.Key, new EnumValue(activity.Key));
                 break;
             case "Dto":
                 Dto dto = Dto(element);
