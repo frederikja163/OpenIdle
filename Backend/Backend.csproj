@@ -18,10 +18,10 @@
       <ProjectReference Include="..\Generators\Backend\Generator.Backend.csproj"
                         OutputItemType="Analyzer"
                         ReferenceOutputAssembly="false" />
-      <AdditionalFiles Include="..\types.xml" />
       <ProjectReference Include="..\Generators\Core\Generator.Core.csproj"
                         OutputItemType="Analyzer"
                         ReferenceOutputAssembly="false" />
+      <AdditionalFiles Include="..\types.xml" />
       <InternalsVisibleTo Include="OpenIdle.Tests" />
       <InternalsVisibleTo Include="OpenIdle.IntegrationTests" />
     </ItemGroup>

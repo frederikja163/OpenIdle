@@ -14,6 +14,8 @@ public sealed class Profile
     public required Guid ProfileId { get; init; }
 
     public ICollection<User> Users { get; } = [];
+    public ICollection<Skill> Skills { get; } = [];
+    public ICollection<Item> Items { get; } = [];
 
     public ProfileDto ToDto()
     {

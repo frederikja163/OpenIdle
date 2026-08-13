@@ -1,8 +1,31 @@
 <?xml version="1.0" encoding="utf-8"?>
 <Types>
+  <Skill name="None"/>
+  <Skill name="Mining"/>
+  <Skill name="LumberJacking"/>
+  <Skill name="Crafting"/>
+  
+  <Item name="None"/>
+  <Item name="Stone"/>
+  <Item name="Wood"/>
+  <Item name="Food"/>
+  
+  <Dto name="Item">
+    <Property name="ProfileId" type="Guid"/>
+    <Property name="ItemId" type="ItemId"/>
+    <Property name="Count" type="Int"/>
+  </Dto>
+  
   <Dto name="Profile">
-    <Property name="Name" type="string" />
+    <Property name="Name" type="String" />
     <Property name="ProfileId" type="Guid" />
+  </Dto>
+  
+  <Dto name="Skill">
+    <Property name="ProfileId" type="Guid"/>
+    <Property name="SkillId" type="SkillId"/>
+    <Property name="Xp" type="Int"/>
+    <Property name="Level" type="Int"/>
   </Dto>
 
   <Dto name="User">
@@ -10,7 +33,7 @@
   </Dto>
 
   <Request name="CreateProfile">
-    <Property name="Name" type="string" />
+    <Property name="Name" type="String" />
     <Response />
   </Request>
 
@@ -33,7 +56,21 @@
     <Response />
   </Request>
 
+  <Request name="GetSkills">
+    <Property name="SkillIds" type="SkillId" multiple="true" optional="true"/>
+    <Response>
+      <Property name="Skills" type="Skill" multiple="true" />
+    </Response>
+  </Request>
+
+  <Request name="GetItems">
+    <Property name="ItemIds" type="ItemId" multiple="true" optional="true"/>
+    <Response>
+      <Property name="Items" type="Item" multiple="true" />
+    </Response>
+  </Request>
+
   <Response name="Error">
-    <Property name="Message" type="string" />
+    <Property name="Message" type="String" />
   </Response>
 </Types>

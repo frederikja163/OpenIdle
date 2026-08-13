@@ -1,6 +1,7 @@
 ﻿using System;
 using System.Collections.Generic;
 using System.IO;
+using System.Linq;
 
 namespace Generator.Core;
 
@@ -36,9 +37,9 @@ public sealed class TsEmitter : IDtoEmitter
 
     public void EmitDtos(DtoModel model)
     {
-        foreach (Object obj in model.Objects)
+        foreach (Object obj in model.AllObjects)
         {
-            using (Scope _ = _textWriter.Scope($"interface {obj.Name.UpperCamelCase} extends {BaseType(obj)}"))
+            using (Scope _ = _textWriter.Scope($"interface {GetName(obj)} extends {BaseType(obj)}"))
             {
                 foreach (Property property in obj.Properties)
                 {
@@ -47,23 +48,38 @@ public sealed class TsEmitter : IDtoEmitter
             }
             _textWriter.WriteLine();
         }
+
+        if (model.Items.Count > 0)
+        {
+            _textWriter.WriteLine($"type ItemId = {string.Join(" | ", model.Items.Values.Select(i => $"'{i.Name.UpperCamelCase}'"))};");
+        }
+        if (model.Skills.Count > 0)
+        {
+            _textWriter.WriteLine($"type SkillId = {string.Join(" | ", model.Skills.Values.Select(s => $"'{s.Name.UpperCamelCase}'"))};");
+        }
     }
 
     private string BaseType(Object obj)
     {
         return obj switch
         {
-            Dto dto => "DtoBase",
-            Event @event => "EventBase",
-            Request request => "RequestBase",
-            Response response => "ResponseBase",
+            Dto => "DtoBase",
+            Event => "EventBase",
+            Request => "RequestBase",
+            Response => "ResponseBase",
             _ => throw new ArgumentOutOfRangeException(nameof(obj))
         };
     }
 
+    private string GetName(Object obj)
+    {
+        return obj.Name.UpperCamelCase;
+    }
+
     private void Property(Property property)
     {
-        _textWriter.WriteLine($"{property.Name.LowerCamelCase}: {GetPropertyType(property)};");
+        string optional = property.Optional ? "?" : "";
+        _textWriter.WriteLine($"{property.Name.LowerCamelCase}{optional}: {GetPropertyType(property)};");
     }
 
     private string GetPropertyType(Property property)
@@ -75,6 +91,10 @@ public sealed class TsEmitter : IDtoEmitter
             PropertyType.Int => "number",
             PropertyType.Float => "number",
             PropertyType.Guid => "string",
+            PropertyType.UserId => "string",
+            PropertyType.ProfileId => "string",
+            PropertyType.ItemId => "ItemId",
+            PropertyType.SkillId => "SkillId",
             _ => throw new ArgumentOutOfRangeException()
         };
         return property.Multiple ? str + "[]" : str;

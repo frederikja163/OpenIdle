@@ -23,6 +23,8 @@ internal static class AppHost
         builder.Services.AddSocketControllers();
         builder.Services.AddSingleton<UserService>();
         builder.Services.AddSingleton<ProfileService>();
+        builder.Services.AddSingleton<SkillService>();
+        builder.Services.AddSingleton<ItemService>();
 
         WebApplication app = builder.Build();
         app.MapControllers();
