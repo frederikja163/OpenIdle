@@ -1,5 +1,7 @@
 using System;
 using System.Collections.Generic;
+using System.Diagnostics;
+using System.Linq;
 using System.Threading.Tasks;
 using Backend.Database;
 using Backend.Database.Entities;
@@ -8,84 +10,104 @@ using Microsoft.EntityFrameworkCore;
 
 namespace Backend.Services;
 
-public sealed class ActivityService(IDbContextFactory<GameDbContext> dbContextFactory, DropTableService dropTableService)
+public sealed class LevelRequirement(SkillId skillId, int level)
 {
-    private readonly Dictionary<ActivityId, DropTableId> _activities = new();
+    public SkillId SkillId { get; } = skillId;
+    public int Level { get; } = level;
+}
 
-    public void AddActivity(ActivityId activityId, DropTableId dropTableId)
+public sealed class ActivityDefinition(Reward[] rewards, LevelRequirement[] requirements)
+{
+    public Reward[] Rewards { get; } = rewards;
+    public LevelRequirement[] Requirements { get; } = requirements;
+}
+
+public sealed class ActivityService(IDbContextFactory<GameDbContext> dbContextFactory, DropTableService dropTableService,
+    ProfileService profileService, ItemService itemService, SkillService skillService)
+{
+    private readonly Dictionary<ActivityId, ActivityDefinition> _activities = new();
+
+    public void AddActivity(ActivityId activityId, ActivityDefinition definition)
     {
-        _activities.Add(activityId, dropTableId);
+        _activities.Add(activityId, definition);
     }
 
-    internal async Task<Profile> StartActivityAsync(Profile profile, ActivityId activityId)
+    internal async Task<Profile> StartActivityAsync(Guid profileId, ActivityId activityId)
     {
-        if (!_activities.ContainsKey(activityId))
+        if (!_activities.TryGetValue(activityId, out ActivityDefinition? definition))
         {
-            throw new BackendException($"Activity '{activityId}' does not have a valid drop table.");
+            throw new BackendException($"Activity '{activityId}' does not have a valid definition.");
+        }
+
+        Profile profile = await profileService.GetProfileAsync(profileId);
+
+        foreach (LevelRequirement requirement in definition.Requirements)
+        {
+            Skill[] skills = await skillService.GetSkillsAsync(profileId, [requirement.SkillId]);
+            if ((skills.FirstOrDefault()?.Level ?? 0) < requirement.Level)
+            {
+                throw new BackendException($"Activity '{activityId}' requires {requirement.SkillId} level {requirement.Level}.");
+            }
         }
 
         await using GameDbContext dbContext = await dbContextFactory.CreateDbContextAsync();
-
-        Profile dbProfile = await dbContext.Profiles
-            .FirstOrDefaultAsync(p => p.ProfileId == profile.ProfileId)
-            ?? throw new BackendException("Profile does not exist.");
-
-        dbProfile.ActivityId = activityId;
-        dbProfile.ActivityStartTime = DateTime.UtcNow;
+        dbContext.Profiles.Attach(profile);
+        profile.ActivityId = activityId;
+        profile.ActivityStartTime = DateTime.UtcNow;
         await dbContext.SaveChangesAsync();
 
-        return dbProfile;
+        return profile;
     }
 
-    internal async Task<Item[]> ResolveActivityAsync(Profile profile)
+    internal async Task<Reward[]> ResolveActivityAsync(Guid profileId)
     {
-        await using GameDbContext dbContext = await dbContextFactory.CreateDbContextAsync();
+        Profile profile = await profileService.GetProfileAsync(profileId);
 
-        Profile dbProfile = await dbContext.Profiles
-            .FirstOrDefaultAsync(p => p.ProfileId == profile.ProfileId)
-            ?? throw new BackendException("Profile does not exist.");
-
-        if (dbProfile.ActivityId is not ActivityId activityId)
+        if (profile.ActivityId is not ActivityId activityId)
         {
             throw new BackendException("Profile is not doing an activity.");
         }
 
-        if (!_activities.TryGetValue(activityId, out DropTableId dropTableId))
+        if (!_activities.TryGetValue(activityId, out ActivityDefinition? definition))
         {
-            throw new BackendException($"Activity '{activityId}' does not have a valid drop table.");
+            throw new BackendException($"Activity '{activityId}' does not have a valid definition.");
         }
 
-        ItemDrop drop = dropTableService.RollItem(dropTableId);
-        return await AddDropAsync(dbContext, dbProfile, drop);
-    }
+        Reward[] guaranteedRewards = definition.Rewards.Where(r => r.Weight is null).ToArray();
+        Reward[] weightedRewards = definition.Rewards.Where(r => r.Weight is not null).ToArray();
 
-    private static async Task<Item[]> AddDropAsync(GameDbContext dbContext, Profile profile, ItemDrop drop)
-    {
-        if (drop.Count <= 0)
+        List<Reward> grantedRewards = [.. guaranteedRewards];
+        if (weightedRewards.Length > 0)
         {
-            return [];
+            grantedRewards.Add(dropTableService.RollReward(new DropTable(weightedRewards)));
         }
 
-        Item? item = await dbContext.Items
-            .FirstOrDefaultAsync(i => i.ProfileId == profile.ProfileId && i.ItemId == drop.ItemId);
-
-        if (item is null)
+        List<Reward> resolvedRewards = [];
+        foreach (Reward reward in grantedRewards)
         {
-            item = new Item()
+            Reward resolved = reward switch
             {
-                ProfileId = profile.ProfileId,
-                Profile = profile,
-                ItemId = drop.ItemId,
-                Count = drop.Count,
+                TableReward tableReward => dropTableService.RollReward(tableReward.DropTableId),
+                _ => reward,
             };
-            dbContext.Items.Add(item);
-        }
-        else
-        {
-            item.Count += drop.Count;
+
+            switch (resolved)
+            {
+                case ItemReward itemReward when itemReward.Count > 0:
+                    await itemService.AddItemsAsync(profileId, [itemReward]);
+                    resolvedRewards.Add(itemReward);
+                    break;
+                case ItemReward:
+                    break;
+                case XpReward xpReward:
+                    await skillService.AddSkillsAsync(profileId, [xpReward]);
+                    resolvedRewards.Add(xpReward);
+                    break;
+                default:
+                    throw new UnreachableException("Rewards should resolve to an item or xp reward.");
+            }
         }
 
-        await dbContext.SaveChangesAsync();
-        return [item];
+        return [.. resolvedRewards];
     }
 }

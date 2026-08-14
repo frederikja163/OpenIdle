@@ -5,7 +5,6 @@ using System.Linq;
 using System.Net.WebSockets;
 using System.Threading;
 using System.Threading.Tasks;
-using Backend.Database.Entities;
 using Backend.Dtos;
 using Backend.Extensions;
 using Microsoft.Extensions.Logging;
@@ -34,7 +33,7 @@ public sealed class SocketRegistryService
         socket.Close += SocketOnClose;
     }
 
-    internal void SetProfile(Socket socket, Profile profile)
+    internal void SetProfile(Socket socket, Guid profileId)
     {
         if (_profileBySocket.TryRemove(socket, out Guid previousProfileId) &&
             _socketsByProfile.TryGetValue(previousProfileId, out ConcurrentDictionary<Socket, byte>? previousSockets))
@@ -42,12 +41,12 @@ public sealed class SocketRegistryService
             previousSockets.TryRemove(socket, out _);
         }
 
-        _profileBySocket[socket] = profile.ProfileId;
-        ConcurrentDictionary<Socket, byte> sockets = _socketsByProfile.GetOrAdd(profile.ProfileId, _ => new());
+        _profileBySocket[socket] = profileId;
+        ConcurrentDictionary<Socket, byte> sockets = _socketsByProfile.GetOrAdd(profileId, _ => new());
         sockets[socket] = 0;
     }
 
-    internal void SetUser(Socket socket, User user)
+    internal void SetUser(Socket socket, Guid userId)
     {
         if (_userBySocket.TryRemove(socket, out Guid previousUserId) &&
             _socketsByUser.TryGetValue(previousUserId, out ConcurrentDictionary<Socket, byte>? previousSockets))
@@ -55,14 +54,14 @@ public sealed class SocketRegistryService
             previousSockets.TryRemove(socket, out _);
         }
 
-        _userBySocket[socket] = user.UserId;
-        ConcurrentDictionary<Socket, byte> sockets = _socketsByUser.GetOrAdd(user.UserId, _ => new());
+        _userBySocket[socket] = userId;
+        ConcurrentDictionary<Socket, byte> sockets = _socketsByUser.GetOrAdd(userId, _ => new());
         sockets[socket] = 0;
     }
 
-    internal async Task SendToProfileAsync(Profile profile, EventBase eventBase)
+    internal async Task SendToProfileAsync(Guid profileId, EventBase eventBase)
     {
-        if (!_socketsByProfile.TryGetValue(profile.ProfileId, out ConcurrentDictionary<Socket, byte>? sockets))
+        if (!_socketsByProfile.TryGetValue(profileId, out ConcurrentDictionary<Socket, byte>? sockets))
         {
             return;
         }
@@ -83,9 +82,9 @@ public sealed class SocketRegistryService
         }
     }
 
-    internal async Task SendToUserAsync(User user, EventBase eventBase)
+    internal async Task SendToUserAsync(Guid userId, EventBase eventBase)
     {
-        if (!_socketsByUser.TryGetValue(user.UserId, out ConcurrentDictionary<Socket, byte>? sockets))
+        if (!_socketsByUser.TryGetValue(userId, out ConcurrentDictionary<Socket, byte>? sockets))
         {
             return;
         }

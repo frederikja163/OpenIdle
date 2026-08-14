@@ -2,6 +2,7 @@
 using System.Collections.Generic;
 using System.Globalization;
 using System.IO;
+using System.Linq;
 
 namespace Generator.Core;
 
@@ -77,7 +78,10 @@ public sealed class CsEmitter : IDtoEmitter
             {
                 foreach (Activity activity in model.Activities.Values)
                 {
-                    _textWriter.WriteLine($"service.AddActivity(ActivityId.{activity.Name.UpperCamelCase}, DropTableId.{new Casing(activity.Table).UpperCamelCase});");
+                    string rewards = string.Join(", ", activity.Rewards.Select(RewardExpression));
+                    string requirements = string.Join(", ", activity.Requirements.Select(RequirementExpression));
+                    _textWriter.WriteLine(
+                        $"service.AddActivity(ActivityId.{activity.Name.UpperCamelCase}, new ActivityDefinition(rewards: [{rewards}], requirements: [{requirements}]));");
                 }
             }
         }
@@ -86,40 +90,43 @@ public sealed class CsEmitter : IDtoEmitter
     private void EmitDropTable(DropTable dropTable)
     {
         _textWriter.Write($"service.AddDropTable(DropTableId.{dropTable.Name.UpperCamelCase}, new DropTable(");
-        if (dropTable.Drops.Count > 0)
+        if (dropTable.Rewards.Count > 0)
         {
             _textWriter.WriteLine();
             using (Scope ___ = new(ScopeStyle.Indentation, _textWriter))
             {
-                for (int i = 0; i < dropTable.Drops.Count; i++)
+                for (int i = 0; i < dropTable.Rewards.Count; i++)
                 {
-                    string separator = i < dropTable.Drops.Count - 1 ? "," : "";
-                    _textWriter.WriteLine($"{DropExpression(dropTable.Drops[i])}{separator}");
+                    string separator = i < dropTable.Rewards.Count - 1 ? "," : "";
+                    _textWriter.WriteLine($"{RewardExpression(dropTable.Rewards[i])}{separator}");
                 }
             }
         }
         _textWriter.WriteLine("));");
     }
 
-    private static string DropExpression(Drop drop)
+    private static string RewardExpression(Reward reward)
     {
-        if (drop.Item is not null)
+        return reward switch
         {
-            return $"new ItemDrop({drop.Count}, {WeightLiteral(drop.Weight)}, ItemId.{new Casing(drop.Item).UpperCamelCase})";
-        }
-
-        if (drop.Table is not null)
-        {
-            
-            return $"new TableDrop({drop.Count}, {WeightLiteral(drop.Weight)}, DropTableId.{new Casing(drop.Table!).UpperCamelCase})";
-        }
-
-        throw new NotSupportedException("Drop expressions should either drop a table or an item.");
+            ItemReward itemReward =>
+                $"new ItemReward({itemReward.Count}, {WeightLiteral(itemReward.Weight)}, ItemId.{new Casing(itemReward.Item).UpperCamelCase})",
+            TableReward tableReward =>
+                $"new TableReward({tableReward.Count}, {WeightLiteral(tableReward.Weight)}, DropTableId.{new Casing(tableReward.Table).UpperCamelCase})",
+            XpReward xpReward =>
+                $"new XpReward({xpReward.Count}, {WeightLiteral(xpReward.Weight)}, SkillId.{new Casing(xpReward.Skill).UpperCamelCase})",
+            _ => throw new NotSupportedException("Reward expressions should drop a table, an item or xp."),
+        };
     }
 
-    private static string WeightLiteral(float weight)
+    private static string RequirementExpression(LevelRequirement requirement)
     {
-        return weight.ToString(CultureInfo.InvariantCulture) + "f";
+        return $"new LevelRequirement(SkillId.{new Casing(requirement.Skill).UpperCamelCase}, {requirement.Count})";
+    }
+
+    private static string WeightLiteral(float? weight)
+    {
+        return weight is null ? "null" : weight.Value.ToString(CultureInfo.InvariantCulture) + "f";
     }
 
     private void EmitClass(Object obj)

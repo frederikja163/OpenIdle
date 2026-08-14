@@ -29,7 +29,7 @@ public sealed class ItemServiceTests : IDisposable
         await SeedItemAsync(other, ItemId.Food, 9);
 
         ItemService service = new(_db.Factory);
-        Item[] items = await service.GetItemsAsync(profile);
+        Item[] items = await service.GetItemsAsync(profile.ProfileId);
 
         Assert.That(items.Select(i => i.ItemId), Is.EquivalentTo(new[] { ItemId.Stone, ItemId.Wood }));
     }
@@ -43,7 +43,7 @@ public sealed class ItemServiceTests : IDisposable
         await SeedItemAsync(profile, ItemId.Food, 3);
 
         ItemService service = new(_db.Factory);
-        Item[] items = await service.GetItemsAsync(profile, new[] { ItemId.Wood, ItemId.Food });
+        Item[] items = await service.GetItemsAsync(profile.ProfileId, new[] { ItemId.Wood, ItemId.Food });
 
         Assert.That(items.Select(i => i.ItemId), Is.EquivalentTo(new[] { ItemId.Wood, ItemId.Food }));
     }
@@ -57,7 +57,7 @@ public sealed class ItemServiceTests : IDisposable
         await SeedItemAsync(other, ItemId.Wood, 2);
 
         ItemService service = new(_db.Factory);
-        Item[] items = await service.GetItemsAsync(profile, new[] { ItemId.Stone, ItemId.Wood });
+        Item[] items = await service.GetItemsAsync(profile.ProfileId, new[] { ItemId.Stone, ItemId.Wood });
 
         Assert.That(items.Select(i => i.ItemId), Is.EqualTo(new[] { ItemId.Stone }));
     }
@@ -68,9 +68,58 @@ public sealed class ItemServiceTests : IDisposable
         Profile profile = await SeedProfileAsync();
 
         ItemService service = new(_db.Factory);
-        Item[] items = await service.GetItemsAsync(profile);
+        Item[] items = await service.GetItemsAsync(profile.ProfileId);
 
         Assert.That(items, Is.Empty);
+    }
+
+    [Test]
+    public async Task AddItemsAsync_AddsNewItem()
+    {
+        Profile profile = await SeedProfileAsync();
+
+        ItemService service = new(_db.Factory);
+        Item[] added = await service.AddItemsAsync(profile.ProfileId, new[] { new ItemReward(4, null, ItemId.Stone) });
+
+        Assert.Multiple(() =>
+        {
+            Assert.That(added, Has.Length.EqualTo(1));
+            Assert.That(added.Single().ItemId, Is.EqualTo(ItemId.Stone));
+            Assert.That(added.Single().Count, Is.EqualTo(4));
+        });
+        await using GameDbContext dbContext = await _db.Factory.CreateDbContextAsync();
+        Item stored = dbContext.Items.Single(i => i.ProfileId == profile.ProfileId);
+        Assert.That(stored.Count, Is.EqualTo(4));
+    }
+
+    [Test]
+    public async Task AddItemsAsync_IncrementsExistingItem()
+    {
+        Profile profile = await SeedProfileAsync();
+        await SeedItemAsync(profile, ItemId.Stone, 3);
+
+        ItemService service = new(_db.Factory);
+        await service.AddItemsAsync(profile.ProfileId, new[] { new ItemReward(4, null, ItemId.Stone) });
+
+        await using GameDbContext dbContext = await _db.Factory.CreateDbContextAsync();
+        Item stored = dbContext.Items.Single(i => i.ProfileId == profile.ProfileId && i.ItemId == ItemId.Stone);
+        Assert.That(stored.Count, Is.EqualTo(7));
+    }
+
+    [Test]
+    public async Task AddItemsAsync_ZeroCountReward_AddsNothing()
+    {
+        Profile profile = await SeedProfileAsync();
+
+        ItemService service = new(_db.Factory);
+        Item[] added = await service.AddItemsAsync(profile.ProfileId, new[] { new ItemReward(0, null, ItemId.None) });
+
+        Assert.Multiple(() =>
+        {
+            Assert.That(added, Is.Empty);
+        });
+        await using GameDbContext dbContext = await _db.Factory.CreateDbContextAsync();
+        Assert.That(dbContext.Items.Where(i => i.ProfileId == profile.ProfileId), Is.Empty);
     }
 
     [Test]
@@ -82,7 +131,7 @@ public sealed class ItemServiceTests : IDisposable
         await SeedItemAsync(profile, ItemId.Stone, 3);
 
         ItemService service = new(_db.Factory);
-        Item[] items = await service.GetItemsAsync(profile);
+        Item[] items = await service.GetItemsAsync(profile.ProfileId);
 
         Assert.That(items.Select(i => i.ItemId), Is.EqualTo(new[] { ItemId.Food, ItemId.Stone, ItemId.Wood }));
     }

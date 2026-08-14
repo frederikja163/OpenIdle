@@ -38,7 +38,7 @@ Key files:
 | File | Role |
 |---|---|
 | [`Backend/Controllers/Http/WsController.cs`](../../Backend/Controllers/Http/WsController.cs) | The only HTTP endpoint; accepts the WebSocket handshake at `GET /ws`. |
-| [`Backend/Socket.cs`](../../Backend/Socket.cs) | Per-connection state (`User`, `Profile`), message loop, send/close. |
+| [`Backend/Socket.cs`](../../Backend/Socket.cs) | Per-connection state (`UserId`, `ProfileId`), message loop, send/close. |
 | [`Backend/SocketControllerBase.cs`](../../Backend/SocketControllerBase.cs) | Base class exposing `Socket`, `User`, `Profile`, `Request`, and `RespondAsync`. |
 | [`Backend/Services/SocketRegistryService.cs`](../../Backend/Services/SocketRegistryService.cs) | Bridges per-socket events to the endpoint service. |
 | [`Backend/Services/SocketEndpointService.cs`](../../Backend/Services/SocketEndpointService.cs) | Resolves the request type to handlers, invokes them in a DI scope. |
@@ -80,8 +80,7 @@ public sealed class ProfileController(ProfileService profileService) : SocketCon
     [Request]
     public async Task RenameProfile(RenameProfileRequest request)
     {
-        ArgumentNullException.ThrowIfNull(User);
-        await profileService.RenameProfileAsync(User, request.ProfileId, request.NewName);
+        await profileService.RenameProfileAsync(UserId, request.ProfileId, request.NewName);
         await RespondAsync(new RenameProfileResponse());
     }
 }
@@ -111,10 +110,10 @@ Domain logic lives in `Backend/Services/`, not in the controller. Controllers st
 
 ```csharp
 // Backend/Services/ProfileService.cs
-internal async Task<Profile> RenameProfileAsync(User user, Guid profileId, string newName)
+internal async Task<Profile> RenameProfileAsync(Guid userId, Guid profileId, string newName)
 {
     await using GameDbContext dbContext = await dbContextFactory.CreateDbContextAsync();
-    Profile profile = await GetProfileAsync(user, profileId);
+    Profile profile = await GetProfileAsync(userId, profileId);
     // validate + apply + save...
     return profile;
 }
@@ -140,8 +139,7 @@ public sealed class ProfileController(ProfileService profileService) : SocketCon
     [Request]
     public async Task RenameProfile(RenameProfileRequest request)
     {
-        ArgumentNullException.ThrowIfNull(User);
-        Profile profile = await profileService.RenameProfileAsync(User, request.ProfileId, request.NewName);
+        Profile profile = await profileService.RenameProfileAsync(UserId, request.ProfileId, request.NewName);
         await RespondAsync(new RenameProfileResponse() { Profile = profile.ToDto() });
     }
 }
@@ -173,16 +171,16 @@ dotnet run --project Backend
 
 ## 4. State available to a handler
 
-Exposed by `SocketControllerBase` ([`SocketControllerBase.cs`](../../Backend/SocketControllerBase.cs), lines 10-31):
+Exposed by `SocketControllerBase` ([`SocketControllerBase.cs`](../../Backend/SocketControllerBase.cs), lines 10-40):
 
 | Member | Type | Meaning |
 |---|---|---|
 | `Socket` | `Socket` | The connection that sent this request. |
-| `User` | `User?` | Session user, set by `UserService.SignIn` (e.g. `LoginAsTestUser`). **Null before login.** |
-| `Profile` | `Profile?` | Selected profile, set by `ProfileService.SelectProfileAsync`. **Null before selection.** |
+| `UserId` | `Guid` | Id of the session user, set by `UserService.SignIn` (e.g. `LoginAsTestUser`). Throws before login. |
+| `ProfileId` | `Guid` | Id of the selected profile, set by `ProfileService.SelectProfileAsync`. Throws before selection. |
 | `Request` | `RequestBase` | The raw request (same object as the typed parameter). |
 
-Both `User` and `Profile` are per-connection state held on the `Socket`; they are not persisted unless a service writes them to the database. Guard on them with `ArgumentNullException.ThrowIfNull(...)` before use — most game actions require a logged-in user with a selected profile.
+Both `UserId` and `ProfileId` derive from per-connection state held on the `Socket` ([`Socket.cs`](../../Backend/Socket.cs), lines 36-37); they are not persisted unless a service writes them to the database. Services take the ids (`Guid userId` / `Guid profileId`) rather than entity objects — controllers read the ids from `SocketControllerBase` and pass them through.
 
 ## 5. Responding and error handling
 

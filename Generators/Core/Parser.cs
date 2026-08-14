@@ -103,31 +103,70 @@ public sealed class Parser
     private DropTable DropTable(XmlElement element)
     {
         DropTable dropTable = new DropTable(element.RequireAttribute("name"));
-        foreach (XmlElement dropElement in element.GetChildren("Drop"))
+        foreach (XmlElement rewardElement in element.ChildNodes.OfType<XmlElement>())
         {
-            dropTable.Drops.Add(Drop(dropElement));
+            dropTable.Rewards.Add(Reward(rewardElement, requireWeight: true));
         }
         return dropTable;
     }
 
-    private Drop Drop(XmlElement element)
+    private Reward Reward(XmlElement element, bool requireWeight)
     {
-        float weight = element.RequireAttribute<float>("weight");
         int count = element.RequireAttribute<int>("count");
+        float? weight = element.HasAttribute("weight") ? element.GetAttribute<float>("weight") : null;
         string item = element.GetAttribute("item");
         string table = element.GetAttribute("table");
+        string skill = element.GetAttribute("skill");
 
-        if (string.IsNullOrEmpty(item) == string.IsNullOrEmpty(table))
+        if (requireWeight && weight is null)
         {
-            throw new ParserException($"Drop must specify exactly one of 'item' or 'table'.");
+            throw new ParserException($"Reward in a drop table must specify a 'weight'.");
         }
 
-        return new Drop(weight, count, string.IsNullOrEmpty(item) ? null : item, string.IsNullOrEmpty(table) ? null : table);
+        int specified = (string.IsNullOrEmpty(item) ? 0 : 1)
+                        + (string.IsNullOrEmpty(table) ? 0 : 1)
+                        + (string.IsNullOrEmpty(skill) ? 0 : 1);
+        if (specified != 1)
+        {
+            throw new ParserException($"Reward must specify exactly one of 'item', 'table' or 'skill'.");
+        }
+
+        if (!string.IsNullOrEmpty(item))
+        {
+            return new ItemReward(weight, count, item);
+        }
+        if (!string.IsNullOrEmpty(table))
+        {
+            return new TableReward(weight, count, table);
+        }
+        return new XpReward(weight, count, skill);
     }
 
     private Activity Activity(XmlElement element)
     {
-        return new Activity(element.RequireAttribute("name"), element.RequireAttribute("table"));
+        Activity activity = new Activity(element.RequireAttribute("name"));
+        foreach (XmlElement rewardElement in element.ChildNodes.OfType<XmlElement>())
+        {
+            switch (rewardElement.Name)
+            {
+                case "ItemReward":
+                case "TableReward":
+                case "XpReward":
+                    activity.Rewards.Add(Reward(rewardElement, requireWeight: false));
+                    break;
+                case "LevelRequirement":
+                    activity.Requirements.Add(LevelRequirement(rewardElement));
+                    break;
+                default:
+                    throw new ParserException($"Element name is not recognized '{rewardElement.Name}'");
+            }
+        }
+        return activity;
+    }
+
+    private LevelRequirement LevelRequirement(XmlElement element)
+    {
+        return new LevelRequirement(element.RequireAttribute("skill"), element.RequireAttribute<int>("count"));
     }
 
     private Dto Dto(XmlElement element)
