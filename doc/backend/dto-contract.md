@@ -71,7 +71,7 @@ Everything that crosses the WebSocket is a DTO in `Backend.Dtos`, generated from
 | Attribute | Required | Values | Effect |
 |---|---|---|---|
 | `name` | yes | identifier | Property name. Lower-camel-cased in JSON and TS; upper-camel-cased in C#. |
-| `type` | yes | `string` \| `int` \| `float` \| `Guid`, or any other name | A bare built-in, or the **base name of a `Dto`** (suffix omitted). Case-insensitive for the built-ins. Anything else is treated as a custom reference to `{Type}Dto`. |
+| `type` | yes | `string` \| `int` \| `float` \| `Guid`, or the **base name of a declared `Dto`** (suffix omitted) or a **declared `Enum`** | A bare built-in, or a reference to a custom type (see below). Case-insensitive for the built-ins only. |
 | `multiple` | no | `true` | Emits an array type (`T[]`). Absent / `false` = single value. |
 
 Built-in type mapping (verified against the emitter):
@@ -82,7 +82,8 @@ Built-in type mapping (verified against the emitter):
 | `int` | `int` | `number` | `123` |
 | `float` | `float` | `number` | `1.5` |
 | `Guid` | `Guid` | `string` | `"00000000-0000-..."` |
-| anything else | `{Name}Dto` | `{Name}Dto` | object |
+| declared `Dto` (e.g. `Profile`) | `ProfileDto` | `ProfileDto` | object |
+| declared `Enum` (e.g. `ItemId`) | `ItemId` | `ItemId` | number |
 
 ### 2.3 Naming rules (enforced by the emitters)
 
@@ -100,10 +101,11 @@ Built-in type mapping (verified against the emitter):
 
 ### 2.4 Supported property types, precisely
 
-The parser (`Generators/Core/Parser.cs:90-104`) matches `type` against `string`, `int`, `float`, `Guid` (case-insensitive). Every other value becomes `PropertyType.Custom`, and the emitter produces a reference to `{Type}Dto`. Consequences:
+The parser (`Generators/Core/Parser.cs`) matches `type` against `string`, `int`, `float`, `Guid` (case-insensitive). Any other value must name a declared `<Dto>` or `<Enum>` — the parser resolves it to that type and the emitters emit a reference to the generated `{Name}Dto` (for DTOs) or `{Name}` (for enums). Consequences:
 
-- `type="Profile"` → `ProfileDto` (must be defined as a `<Dto name="Profile">` or the generated C# will not compile).
-- A typo such as `type="Gud"` → `GudDto` → C# compile error; the TS emitter will silently reference a missing interface.
+- `type="Profile"` → `ProfileDto` (requires a `<Dto name="Profile">`).
+- `type="ItemId"` → `ItemId` (requires an `<Enum name="ItemId">`).
+- A typo such as `type="Gud"` is a **parse error** (`ParserException`, surfaced as `DTC002` in the backend build / CLI failure) — custom types must resolve to a declared DTO or enum.
 
 ## 3. How to add a DTO
 
@@ -187,8 +189,9 @@ The C# emitter writes a single file, `Dto.g.cs`, into the `Backend.Dtos` namespa
 - The concrete classes for every DTO/request/response/event, all `sealed`.
 - `[JsonPolymorphic]` + one `[JsonDerivedType]` per generated type on `abstract class DtoBase`.
 - The three abstract bases: `DtoBase`, `RequestBase` (with `int RequestId`), `ResponseBase` (with `int RequestId`), `EventBase` (with `int EventId`).
+- `public static class DropTableData` with `public static void AddAll(DropTableService service)` — a seeder that registers every `<DropTable>` from `types.xml` into a `Backend.Services.DropTableService`: `item=` drops become `new ItemDrop(count, weight, ItemId.X)`, `table=` drops become `new TableDrop(count, weight, DropTableId.Y)`. The file also carries `using Backend.Services;` for these hand-written types.
 
-All classes are `sealed` and non-partial — **you cannot extend generated types with hand-written members.** If a payload needs a field, it must be declared in `types.xml`.
+All DTO classes are `sealed` and non-partial — **you cannot extend generated types with hand-written members.** If a payload needs a field, it must be declared in `types.xml`.
 
 To inspect `Dto.g.cs` on disk, add `<EmitCompilerGeneratedFiles>true</EmitCompilerGeneratedFiles>` to [`Backend/Backend.csproj`](../../Backend/Backend.csproj) — it lands under `Backend/obj/.../generated/`.
 
@@ -243,7 +246,7 @@ Enforced by the parser/emitters (violations = build error):
 
 1. A `Request` must have exactly one `Response` child (`Generators/Core/Parser.cs:61-73`).
 2. `Dto`, `Request`, `Event`, top-level `Response`, and every `Property` require a `name`; every `Property` requires a `type` (`Generators/Core/Extensions/XmlElementExtensions.cs`).
-3. Custom `type` values must reference a declared `<Dto name="...">` (else C# won't compile).
+3. Custom `type` values must reference a declared `<Dto name="...">` or `<Enum name="...">` (the parser errors otherwise).
 4. Generated names are unique — two declarations that map to the same class name collide in the single `Dto.g.cs`.
 
 Conventions (not enforced — reviewer judgement):
@@ -255,7 +258,7 @@ Conventions (not enforced — reviewer judgement):
 ## 8. Gotchas & known quirks
 
 - **`requestId`/`eventId` are numeric on both sides.** The C# bases hardcode `int RequestId` / `int EventId` and the TS emitter hardcodes `requestId: number` / `eventId: number` (`Generators/Core/TsEmitter.cs:20-33`). This matches the TS socket client ([`Frontend/src/lib/ws/client.ts`](../../Frontend/src/lib/ws/client.ts)), which assigns client-chosen numeric ids (`nextRequestId`) and expects the echoed response to carry the same number. Keep the two sides in lockstep — changing one alone breaks deserialization. The contract is strict integers: there is no `JsonNumberHandling` leniency in the backend serializer, so a quoted numeral such as `"requestId": "1"` fails deserialization — clients must send a plain JSON number.
-- **No editor validation.** There is no XSD; typos surface at C# build time or not at all (TS). Copy a nearby block rather than typing from memory.
+- **No editor validation.** There is no XSD; typos in `type` values surface at parse time (DTC002 / CLI error) and other mistakes at C# build time or not at all (TS). Copy a nearby block rather than typing from memory.
 - **Unknown top-level elements are silently ignored** by the parser (`Generators/Core/Parser.cs:33-52`).
 - **`GetElementsByTagName("Response")` is recursive** — the response can sit anywhere inside the request element, but keep it as a direct child.
 - **The decision doc differs from reality.** [`../libraries/dto-xml-contract.md`](../libraries/dto-xml-contract.md) proposed `required="true"`, `T[]` type tokens, and a namespaced root. The implemented contract (this document) uses `multiple="true"`, bare type names, and no `required` attribute. This document and the code are authoritative.

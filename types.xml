@@ -1,7 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
 <Types>
   <Enum name="ItemId">
-    <Value name="None"/>
     <Value name="Stone"/>
     <Value name="BrokenRock"/>
     <Value name="Wood"/>
@@ -9,7 +8,6 @@
   </Enum>
   
   <Enum name="SkillId">
-    <Value name="None"/>
     <Value name="Mining"/>
     <Value name="LumberJacking"/>
     <Value name="Crafting"/>

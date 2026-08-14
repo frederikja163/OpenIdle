@@ -29,6 +29,7 @@ internal static class AppHost
         WebApplication app = builder.Build();
         app.MapControllers();
         app.MapSocketControllers();
+        DropTableData.AddAll(app.Services.GetService<DropTableService>());
 
         return app;
     }

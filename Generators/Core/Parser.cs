@@ -44,12 +44,12 @@ public sealed class Parser
             case "DropTable":
                 DropTable dropTable = DropTable(element);
                 Model.DropTables.Add(dropTable.Key, dropTable);
-                GetEnum(DropTableIdEnumName).Values.Add(dropTable.Key, new EnumValue(dropTable.Key));
+                GetEnum(DropTableIdEnumName).AddEnum(new EnumValue(dropTable.Key));
                 break;
             case "Activity":
                 Activity activity = Activity(element);
                 Model.Activities.Add(activity.Key, activity);
-                GetEnum(ActivityIdEnumName).Values.Add(activity.Key, new EnumValue(activity.Key));
+                GetEnum(ActivityIdEnumName).AddEnum(new EnumValue(activity.Key));
                 break;
             case "Dto":
                 Dto dto = Dto(element);
@@ -89,8 +89,7 @@ public sealed class Parser
         Enum en = new Enum(element.RequireAttribute("name"));
         foreach (XmlElement value in element.GetChildren("Value"))
         {
-            EnumValue enumValue = EnumValue(value);
-            en.Values.Add(enumValue.Key, enumValue);
+            en.AddEnum(EnumValue(value));
         }
         return en;
     }
@@ -172,14 +171,25 @@ public sealed class Parser
         foreach (XmlElement element in nodeList)
         {
             string propertyTypeStr = element.RequireAttribute("type");
-            if (!System.Enum.TryParse(propertyTypeStr, true, out PropertyType type))
-            {
-                type = PropertyType.Custom;
-            }
-
             string name = element.RequireAttribute("name");
             bool multiple = element.GetAttribute<bool>("multiple", false);
-            yield return new Property(type, propertyTypeStr, name, multiple);
+
+            if (System.Enum.TryParse(propertyTypeStr, true, out PropertyType type))
+            {
+                yield return new Property(type, propertyTypeStr, name, multiple);
+            }
+            else if (Model.Dtos.TryGetValue(propertyTypeStr + "Dto", out Dto? dto))
+            {
+                yield return new CustomProperty(dto, name, multiple);
+            }
+            else if (Model.Enums.TryGetValue(propertyTypeStr, out Enum? en))
+            {
+                yield return new CustomProperty(en, name, multiple);
+            }
+            else
+            {
+                throw new ParserException($"Property '{name}' has an unknown type '{propertyTypeStr}'.");
+            }
         }
     }
 }

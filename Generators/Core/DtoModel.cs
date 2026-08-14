@@ -23,9 +23,31 @@ public abstract class NamedType(string name)
     public string Key { get; } = name;   
 }
 
-public sealed class Enum(string name) : NamedType(name)
+public sealed class Enum : NamedType
 {
-    public Dictionary<string, EnumValue> Values { get; } = [];
+    private readonly List<EnumValue> _values = [];
+    private readonly Dictionary<string, EnumValue> _valuesByKey = [];
+
+    public Enum(string name) : base(name)
+    {
+        AddEnum(new EnumValue("None"));
+    }
+
+    public void AddEnum(EnumValue value)
+    {
+        _values.Add(value);
+        _valuesByKey.Add(value.Key, value);
+    }
+
+    public EnumValue? GetEnum(string key)
+    {
+        return _valuesByKey.TryGetValue(key, out EnumValue? value) ? value : null;
+    }
+
+    public IEnumerable<EnumValue> GetEnums()
+    {
+        return _values;
+    }
 }
 
 public sealed class EnumValue(string name): NamedType(name)
@@ -59,16 +81,20 @@ public enum PropertyType
     Guid,
     UserId,
     ProfileId,
-    ItemId,
-    SkillId,
 }
 
-public sealed class Property(PropertyType type, string typeStr, string name, bool multiple)
+public class Property(PropertyType type, string typeStr, string name, bool multiple)
 {
     public Casing Name { get; } = new(name);
     public PropertyType PropertyType { get; } = type;
     public Casing PropertyTypeString { get; } = new(typeStr);
     public bool Multiple { get; } = multiple;
+}
+
+public sealed class CustomProperty(NamedType type, string name, bool multiple)
+    : Property(PropertyType.Custom, type.Key, name, multiple)
+{
+    public NamedType Type { get; } = type;
 }
 
 public abstract class Object(string name) : NamedType(name)
