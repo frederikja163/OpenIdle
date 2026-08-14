@@ -2,6 +2,7 @@ using System;
 using System.Threading;
 using System.Threading.Tasks;
 using Backend.Database;
+using Backend.Dtos;
 using Backend.Extensions;
 using Backend.Services;
 using Microsoft.AspNetCore.Builder;
@@ -23,12 +24,14 @@ internal static class AppHost
         builder.Services.AddSocketControllers();
         builder.Services.AddSingleton<UserService>();
         builder.Services.AddSingleton<ProfileService>();
+        builder.Services.AddSingleton<DropTableService>();
         builder.Services.AddSingleton<SkillService>();
         builder.Services.AddSingleton<ItemService>();
 
         WebApplication app = builder.Build();
         app.MapControllers();
         app.MapSocketControllers();
+        DropTableData.AddAll(app.Services.GetRequiredService<DropTableService>());
 
         return app;
     }

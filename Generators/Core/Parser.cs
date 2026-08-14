@@ -11,6 +11,9 @@ public sealed class ParserException(string message) : Exception(message);
 
 public sealed class Parser
 {
+    private const string DropTableIdEnumName = "DropTableId";
+    private const string ActivityIdEnumName = "ActivityId";
+
     public DtoModel Model { get; } = new();
 
     public void Parse(Stream stream)
@@ -34,13 +37,19 @@ public sealed class Parser
     {
         switch (element.Name)
         {
-            case "Skill":
-                Skill skill = Skill(element);
-                Model.Skills.Add(skill.Key, skill);
+            case "Enum":
+                Enum en = Enum(element);
+                Model.Enums.Add(en.Key, en);
                 break;
-            case "Item":
-                Item item = Item(element);
-                Model.Items.Add(item.Key, item);
+            case "DropTable":
+                DropTable dropTable = DropTable(element);
+                Model.DropTables.Add(dropTable.Key, dropTable);
+                GetEnum(DropTableIdEnumName).AddEnum(new EnumValue(dropTable.Key));
+                break;
+            case "Activity":
+                Activity activity = Activity(element);
+                Model.Activities.Add(activity.Key, activity);
+                GetEnum(ActivityIdEnumName).AddEnum(new EnumValue(activity.Key));
                 break;
             case "Dto":
                 Dto dto = Dto(element);
@@ -64,16 +73,61 @@ public sealed class Parser
         }
     }
 
-    private Skill Skill(XmlElement element)
+    private Enum GetEnum(string name)
     {
-        Skill skill = new Skill(element.RequireAttribute("name"));
-        return skill;
+        if (!Model.Enums.TryGetValue(name, out Enum? en))
+        {
+            en = new Enum(name);
+            Model.Enums[name] = en;
+        }
+
+        return en;
     }
 
-    private Item Item(XmlElement element)
+    private Enum Enum(XmlElement element)
     {
-        Item item = new Item(element.RequireAttribute("name"));
-        return item;
+        Enum en = new Enum(element.RequireAttribute("name"));
+        foreach (XmlElement value in element.GetChildren("Value"))
+        {
+            en.AddEnum(EnumValue(value));
+        }
+        return en;
+    }
+
+    private EnumValue EnumValue(XmlElement element)
+    {
+        EnumValue enumValue = new EnumValue(element.RequireAttribute("name"));
+        return enumValue;
+    }
+
+    private DropTable DropTable(XmlElement element)
+    {
+        DropTable dropTable = new DropTable(element.RequireAttribute("name"));
+        foreach (XmlElement dropElement in element.GetChildren("Drop"))
+        {
+            dropTable.Drops.Add(Drop(dropElement));
+        }
+        return dropTable;
+    }
+
+    private Drop Drop(XmlElement element)
+    {
+        float weight = element.RequireAttribute<float>("weight");
+        int count = element.RequireAttribute<int>("count");
+        string item = element.GetAttribute("item");
+        string table = element.GetAttribute("table");
+
+        if (string.IsNullOrEmpty(item) == string.IsNullOrEmpty(table))
+        {
+            throw new ParserException($"Drop must specify exactly one of 'item' or 'table'.");
+        }
+
+        return new Drop(weight, count, string.IsNullOrEmpty(item) ? null : item, string.IsNullOrEmpty(table) ? null : table);
+    }
+
+    private Activity Activity(XmlElement element)
+    {
+        return new Activity(element.RequireAttribute("name"), element.RequireAttribute("table"));
     }
 
     private Dto Dto(XmlElement element)
@@ -117,15 +171,30 @@ public sealed class Parser
         foreach (XmlElement element in nodeList)
         {
             string propertyTypeStr = element.RequireAttribute("type");
-            if (!Enum.TryParse(propertyTypeStr, true, out PropertyType type))
-            {
-                type = PropertyType.Custom;
-            }
-
             string name = element.RequireAttribute("name");
             bool multiple = element.GetAttribute<bool>("multiple", false);
             bool optional = element.GetAttribute<bool>("optional", false);
-            yield return new Property(type, propertyTypeStr, name, multiple, optional);
+
+            if (System.Enum.TryParse(propertyTypeStr, true, out PropertyType type))
+            {
+                if (type == PropertyType.Custom)
+                {
+                    throw new ParserException($"Property '{name}' has an unknown type '{propertyTypeStr}'");
+                }
+                yield return new Property(type, propertyTypeStr, name, multiple, optional);
+            }
+            else if (Model.Dtos.TryGetValue(propertyTypeStr + "Dto", out Dto? dto))
+            {
+                yield return new CustomProperty(dto, name, multiple, optional);
+            }
+            else if (Model.Enums.TryGetValue(propertyTypeStr, out Enum? en))
+            {
+                yield return new CustomProperty(en, name, multiple, optional);
+            }
+            else
+            {
+                throw new ParserException($"Property '{name}' has an unknown type '{propertyTypeStr}'.");
+            }
         }
     }
 }

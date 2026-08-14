@@ -49,13 +49,9 @@ public sealed class TsEmitter : IDtoEmitter
             _textWriter.WriteLine();
         }
 
-        if (model.Items.Count > 0)
+        foreach (Enum en in model.Enums.Values)
         {
-            _textWriter.WriteLine($"type ItemId = {string.Join(" | ", model.Items.Values.Select(i => $"'{i.Name.UpperCamelCase}'"))};");
-        }
-        if (model.Skills.Count > 0)
-        {
-            _textWriter.WriteLine($"type SkillId = {string.Join(" | ", model.Skills.Values.Select(s => $"'{s.Name.UpperCamelCase}'"))};");
+            _textWriter.WriteLine($"type {en.Name.UpperCamelCase} = {string.Join(" | ", en.GetEnums().Select(v => $"'{v.Name.UpperCamelCase}'"))};");
         }
     }
 
@@ -84,20 +80,23 @@ public sealed class TsEmitter : IDtoEmitter
 
     private string GetPropertyType(Property property)
     {
-        string str = property.PropertyType switch
+        if (property is CustomProperty custom)
         {
-            PropertyType.Custom => property.PropertyTypeString.UpperCamelCase + "Dto",
+            string str = custom.Type.Name.UpperCamelCase;
+            return custom.Multiple ? str + "[]" : str;
+        }
+
+        string builtIn = property.PropertyType switch
+        {
             PropertyType.String => "string",
             PropertyType.Int => "number",
             PropertyType.Float => "number",
             PropertyType.Guid => "string",
             PropertyType.UserId => "string",
             PropertyType.ProfileId => "string",
-            PropertyType.ItemId => "ItemId",
-            PropertyType.SkillId => "SkillId",
             _ => throw new ArgumentOutOfRangeException()
         };
-        return property.Multiple ? str + "[]" : str;
+        return property.Multiple ? builtIn + "[]" : builtIn;
     }
 
     public void Dispose()

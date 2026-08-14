@@ -1,5 +1,6 @@
 ﻿using System;
 using System.Collections.Generic;
+using System.Globalization;
 using System.IO;
 
 namespace Generator.Core;
@@ -15,6 +16,7 @@ public sealed class CsEmitter : IDtoEmitter
         writer.WriteLine("#nullable enable");
         writer.WriteLine("using System;");
         writer.WriteLine("using System.Text.Json.Serialization;");
+        writer.WriteLine("using Backend.Services;");
         writer.WriteLine();
         writer.WriteLine("namespace Backend.Dtos;");
         writer.WriteLine();
@@ -30,21 +32,77 @@ public sealed class CsEmitter : IDtoEmitter
             _allObjects.Add(obj);
         }
 
-        using (Scope _ = _textWriter.Scope("public enum ItemId"))
+        EmitEnums(model);
+
+        EmitDropTableData(model);
+    }
+
+    private void EmitEnums(DtoModel model)
+    {
+        foreach (Enum en in model.Enums.Values)
         {
-            foreach (var item in model.Items.Values)
+            using (Scope _ = _textWriter.Scope($"public enum {en.Name.UpperCamelCase}"))
             {
-                _textWriter.WriteLine($"{item.Name.UpperCamelCase},");
+                foreach (EnumValue item in en.GetEnums())
+                {
+                    _textWriter.WriteLine($"{item.Name.UpperCamelCase},");
+                }
             }
+        }
+    }
+
+    private void EmitDropTableData(DtoModel model)
+    {
+        _textWriter.WriteLine();
+        using (Scope _ = _textWriter.Scope("public static class DropTableData"))
+        {
+            using (Scope __ = _textWriter.Scope("public static void AddAll(DropTableService service)"))
+            {
+                foreach (DropTable dropTable in model.DropTables.Values)
+                {
+                    EmitDropTable(dropTable);
+                }
+            }
+        }
+    }
+
+    private void EmitDropTable(DropTable dropTable)
+    {
+        _textWriter.Write($"service.AddDropTable(DropTableId.{dropTable.Name.UpperCamelCase}, new DropTable(");
+        if (dropTable.Drops.Count > 0)
+        {
+            _textWriter.WriteLine();
+            using (Scope ___ = new(ScopeStyle.Indentation, _textWriter))
+            {
+                for (int i = 0; i < dropTable.Drops.Count; i++)
+                {
+                    string separator = i < dropTable.Drops.Count - 1 ? "," : "";
+                    _textWriter.WriteLine($"{DropExpression(dropTable.Drops[i])}{separator}");
+                }
+            }
+        }
+        _textWriter.WriteLine("));");
+    }
+
+    private static string DropExpression(Drop drop)
+    {
+        if (drop.Item is not null)
+        {
+            return $"new ItemDrop({drop.Count}, {WeightLiteral(drop.Weight)}, ItemId.{new Casing(drop.Item).UpperCamelCase})";
         }
 
-        using (Scope _ = _textWriter.Scope("public enum SkillId"))
+        if (drop.Table is not null)
         {
-            foreach (Skill skill in model.Skills.Values)
-            {
-                _textWriter.WriteLine($"{skill.Name.UpperCamelCase},");
-            }
+            
+            return $"new TableDrop({drop.Count}, {WeightLiteral(drop.Weight)}, DropTableId.{new Casing(drop.Table!).UpperCamelCase})";
         }
+
+        throw new NotSupportedException("Drop expressions should either drop a table or an item.");
+    }
+
+    private static string WeightLiteral(float weight)
+    {
+        return weight.ToString(CultureInfo.InvariantCulture) + "f";
     }
 
     private void EmitClass(Object obj)
@@ -88,52 +146,33 @@ public sealed class CsEmitter : IDtoEmitter
         };
     }
 
-    private bool IsRequiredReferenceType(Property property)
-    {
-        // Optional properties should not be required
-        if (property.Optional)
-            return false;
-
-        // Arrays are reference types and need required modifier
-        if (property.Multiple)
-            return true;
-
-        // Check if the base type is a reference type
-        return property.PropertyType switch
-        {
-            PropertyType.String => true,
-            PropertyType.Custom => true,
-            PropertyType.Int => false,
-            PropertyType.Float => false,
-            PropertyType.Guid => false,
-            PropertyType.UserId => false,
-            PropertyType.ProfileId => false,
-            PropertyType.ItemId => false,
-            PropertyType.SkillId => false,
-            _ => false
-        };
-    }
-
     private string GetPropertyType(Property property)
     {
-        string str = property.PropertyType switch
+        if (property is CustomProperty custom)
         {
-            PropertyType.Custom => property.PropertyTypeString.UpperCamelCase + "Dto",
+            string str = custom.Type.Name.UpperCamelCase;
+            if (custom.Multiple)
+                str += "[]";
+            if (custom.Optional)
+                str += "?";
+            return str;
+        }
+
+        string builtIn = property.PropertyType switch
+        {
             PropertyType.String => "string",
             PropertyType.Int => "int",
             PropertyType.Float => "float",
             PropertyType.Guid => "Guid",
             PropertyType.UserId => "Guid",
             PropertyType.ProfileId => "Guid",
-            PropertyType.ItemId => "ItemId",
-            PropertyType.SkillId => "SkillId",
             _ => throw new ArgumentOutOfRangeException()
         };
         if (property.Multiple)
-            str += "[]";
+            builtIn += "[]";
         if (property.Optional)
-            str += "?";
-        return str;
+            builtIn += "?";
+        return builtIn;
     }
 
     public void Dispose()

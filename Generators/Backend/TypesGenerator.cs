@@ -14,6 +14,7 @@ public sealed class TypesGenerator : IIncrementalGenerator
 {
     private const string TypesFileName = "types.xml";
     private const string DtoOutputName = "Dto.g.cs";
+    private const string DropTableDataOutputName = "DropTableData.g.cs";
 
     private static readonly DiagnosticDescriptor DtoFileMissing = new(
         id: "DTC001",

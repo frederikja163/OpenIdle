@@ -1,14 +1,29 @@
 <?xml version="1.0" encoding="utf-8"?>
 <Types>
-  <Skill name="None"/>
-  <Skill name="Mining"/>
-  <Skill name="LumberJacking"/>
-  <Skill name="Crafting"/>
+  <Enum name="ItemId">
+    <Value name="Stone"/>
+    <Value name="BrokenRock"/>
+    <Value name="Wood"/>
+    <Value name="Food"/>
+  </Enum>
   
-  <Item name="None"/>
-  <Item name="Stone"/>
-  <Item name="Wood"/>
-  <Item name="Food"/>
+  <Enum name="SkillId">
+    <Value name="Mining"/>
+    <Value name="LumberJacking"/>
+    <Value name="Crafting"/>
+  </Enum>
+  
+  <DropTable name="BrokenRockTable">
+    <Drop item="None" weight="10" count="0"/>
+    <Drop item="BrokenRock" weight="1" count="1"/>
+  </DropTable>
+  
+  <DropTable name="StoneTable">
+    <Drop item="Stone" weight="5" count="2"/>
+    <Drop table="BrokenRockTable" weight="1" count="1"/>
+  </DropTable>
+  
+  <Activity name="Stone" table="StoneTable"/>
   
   <Dto name="Item">
     <Property name="ProfileId" type="Guid"/>
