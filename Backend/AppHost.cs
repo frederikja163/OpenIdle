@@ -25,11 +25,13 @@ internal static class AppHost
         builder.Services.AddSingleton<UserService>();
         builder.Services.AddSingleton<ProfileService>();
         builder.Services.AddSingleton<DropTableService>();
+        builder.Services.AddSingleton<SkillService>();
+        builder.Services.AddSingleton<ItemService>();
 
         WebApplication app = builder.Build();
         app.MapControllers();
         app.MapSocketControllers();
-        DropTableData.AddAll(app.Services.GetService<DropTableService>());
+        DropTableData.AddAll(app.Services.GetRequiredService<DropTableService>());
 
         return app;
     }

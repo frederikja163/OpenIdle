@@ -13,8 +13,9 @@ public sealed class DtoModel
     public Dictionary<string, DropTable> DropTables { get; } = [];
     public Dictionary<string, Activity> Activities { get; } = [];
 
-    public IEnumerable<Object> AllObjects => Dtos.Values.OfType<Object>().Union(Requests.Values).Union(Responses.Values)
-        .Union(Events.Values);
+    public IEnumerable<Object> AllObjects => Dtos.Values.Union<Object>(Requests.Values)
+        .Union<Object>(Responses.Values)
+        .Union<Object>(Events.Values);
 }
 
 public abstract class NamedType(string name)
@@ -83,16 +84,17 @@ public enum PropertyType
     ProfileId,
 }
 
-public class Property(PropertyType type, string typeStr, string name, bool multiple)
+public class Property(PropertyType type, string typeStr, string name, bool multiple, bool optional)
 {
     public Casing Name { get; } = new(name);
     public PropertyType PropertyType { get; } = type;
     public Casing PropertyTypeString { get; } = new(typeStr);
     public bool Multiple { get; } = multiple;
+    public bool Optional { get; } = optional;
 }
 
-public sealed class CustomProperty(NamedType type, string name, bool multiple)
-    : Property(PropertyType.Custom, type.Key, name, multiple)
+public sealed class CustomProperty(NamedType type, string name, bool multiple, bool optional)
+    : Property(PropertyType.Custom, type.Key, name, multiple, optional)
 {
     public NamedType Type { get; } = type;
 }

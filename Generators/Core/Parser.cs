@@ -69,7 +69,7 @@ public sealed class Parser
                 Model.Responses.Add(response.Key, response);
                 break;
             default:
-                throw new ArgumentOutOfRangeException($"Element name is not recognized '{element.Name}'", nameof(element.Name));
+                throw new ParserException($"Element name is not recognized '{element.Name}'");
         }
     }
 
@@ -173,18 +173,23 @@ public sealed class Parser
             string propertyTypeStr = element.RequireAttribute("type");
             string name = element.RequireAttribute("name");
             bool multiple = element.GetAttribute<bool>("multiple", false);
+            bool optional = element.GetAttribute<bool>("optional", false);
 
             if (System.Enum.TryParse(propertyTypeStr, true, out PropertyType type))
             {
-                yield return new Property(type, propertyTypeStr, name, multiple);
+                if (type == PropertyType.Custom)
+                {
+                    throw new ParserException($"Property '{name}' has an unknown type '{propertyTypeStr}'");
+                }
+                yield return new Property(type, propertyTypeStr, name, multiple, optional);
             }
             else if (Model.Dtos.TryGetValue(propertyTypeStr + "Dto", out Dto? dto))
             {
-                yield return new CustomProperty(dto, name, multiple);
+                yield return new CustomProperty(dto, name, multiple, optional);
             }
             else if (Model.Enums.TryGetValue(propertyTypeStr, out Enum? en))
             {
-                yield return new CustomProperty(en, name, multiple);
+                yield return new CustomProperty(en, name, multiple, optional);
             }
             else
             {

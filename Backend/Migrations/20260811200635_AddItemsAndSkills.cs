@@ -16,7 +16,7 @@ namespace Backend.Migrations
                 columns: table => new
                 {
                     ProfileId = table.Column<Guid>(type: "TEXT", nullable: false),
-                    ItemId = table.Column<int>(type: "INTEGER", nullable: false),
+                    ItemId = table.Column<string>(type: "TEXT", nullable: false),
                     Count = table.Column<int>(type: "INTEGER", nullable: false)
                 },
                 constraints: table =>
@@ -35,7 +35,7 @@ namespace Backend.Migrations
                 columns: table => new
                 {
                     ProfileId = table.Column<Guid>(type: "TEXT", nullable: false),
-                    SkillId = table.Column<int>(type: "INTEGER", nullable: false),
+                    SkillId = table.Column<string>(type: "TEXT", nullable: false),
                     Xp = table.Column<int>(type: "INTEGER", nullable: false),
                     Level = table.Column<int>(type: "INTEGER", nullable: false)
                 },

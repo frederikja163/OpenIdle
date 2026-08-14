@@ -71,6 +71,20 @@
     <Response />
   </Request>
 
+  <Request name="GetSkills">
+    <Property name="SkillIds" type="SkillId" multiple="true" optional="true"/>
+    <Response>
+      <Property name="Skills" type="Skill" multiple="true" />
+    </Response>
+  </Request>
+
+  <Request name="GetItems">
+    <Property name="ItemIds" type="ItemId" multiple="true" optional="true"/>
+    <Response>
+      <Property name="Items" type="Item" multiple="true" />
+    </Response>
+  </Request>
+
   <Response name="Error">
     <Property name="Message" type="String" />
   </Response>

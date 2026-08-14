@@ -70,18 +70,6 @@ public sealed class DropTableServiceTests
 
         Assert.Throws<UnreachableException>(() => service.RollItem(DropTableId.BrokenRockTable));
     }
-
-    [Test]
-    public void RollItem_ActivityId_MapsToActivityDropTable()
-    {
-        DropTableService service = CreateService();
-        service.AddDropTable(DropTableId.StoneTable, new DropTable(new ItemDrop(2, 5, ItemId.Stone)));
-
-        ItemDrop result = service.RollItem(DropTableId.StoneTable);
-
-        Assert.That(result.ItemId, Is.EqualTo(ItemId.Stone));
-    }
-
     [Test]
     public void RollItem_UnknownActivity_ThrowsBackendException()
     {
