@@ -35,6 +35,8 @@ public sealed class CsEmitter : IDtoEmitter
         EmitEnums(model);
 
         EmitDropTableData(model);
+
+        EmitActivityData(model);
     }
 
     private void EmitEnums(DtoModel model)
@@ -61,6 +63,21 @@ public sealed class CsEmitter : IDtoEmitter
                 foreach (DropTable dropTable in model.DropTables.Values)
                 {
                     EmitDropTable(dropTable);
+                }
+            }
+        }
+    }
+
+    private void EmitActivityData(DtoModel model)
+    {
+        _textWriter.WriteLine();
+        using (Scope _ = _textWriter.Scope("public static class ActivityData"))
+        {
+            using (Scope __ = _textWriter.Scope("public static void AddAll(ActivityService service)"))
+            {
+                foreach (Activity activity in model.Activities.Values)
+                {
+                    _textWriter.WriteLine($"service.AddActivity(ActivityId.{activity.Name.UpperCamelCase}, DropTableId.{new Casing(activity.Table).UpperCamelCase});");
                 }
             }
         }

@@ -189,7 +189,9 @@ The C# emitter writes a single file, `Dto.g.cs`, into the `Backend.Dtos` namespa
 - The concrete classes for every DTO/request/response/event, all `sealed`.
 - `[JsonPolymorphic]` + one `[JsonDerivedType]` per generated type on `abstract class DtoBase`.
 - The three abstract bases: `DtoBase`, `RequestBase` (with `int RequestId`), `ResponseBase` (with `int RequestId`), `EventBase` (with `int EventId`).
-- `public static class DropTableData` with `public static void AddAll(DropTableService service)` — a seeder that registers every `<DropTable>` from `types.xml` into a `Backend.Services.DropTableService`: `item=` drops become `new ItemDrop(count, weight, ItemId.X)`, `table=` drops become `new TableDrop(count, weight, DropTableId.Y)`. The file also carries `using Backend.Services;` for these hand-written types.
+- `public static class DropTableData` with `public static void AddAll(DropTableService service)` — a seeder that registers every `<DropTable>` from `types.xml` into a `Backend.Services.DropTableService`: `item=` drops become `new ItemDrop(count, weight, ItemId.X)`, `table=` drops become `new TableDrop(count, weight, DropTableId.Y)`.
+- `public static class ActivityData` with `public static void AddAll(ActivityService service)` — a seeder that registers every `<Activity>` from `types.xml` into a `Backend.Services.ActivityService`: each activity's `table=` attribute becomes `service.AddActivity(ActivityId.X, DropTableId.Y)`.
+The file also carries `using Backend.Services;` for these hand-written types.
 
 All DTO classes are `sealed` and non-partial — **you cannot extend generated types with hand-written members.** If a payload needs a field, it must be declared in `types.xml`.
 
