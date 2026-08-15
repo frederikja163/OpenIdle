@@ -18,8 +18,16 @@ public sealed class LevelRequirement(SkillId skillId, int level)
 
 public sealed class ActivityDefinition(Reward[] rewards, LevelRequirement[] requirements)
 {
-    public Reward[] Rewards { get; } = rewards;
+    public Reward[] Rewards { get; } = rewards.Where(r => r.Weight is null).ToArray();
+    public DropTable? DropTable { get; } = CreateDropTable(rewards);
+    
     public LevelRequirement[] Requirements { get; } = requirements;
+    
+    private static DropTable? CreateDropTable(Reward[] rewards)
+    {
+        rewards = rewards.Where(r => r.Weight is not null).ToArray();
+        return rewards.Length == 0 ? null : new DropTable(rewards);
+    }
 }
 
 public sealed class ActivityService(IDbContextFactory<GameDbContext> dbContextFactory, DropTableService dropTableService,
@@ -73,16 +81,14 @@ public sealed class ActivityService(IDbContextFactory<GameDbContext> dbContextFa
             throw new BackendException($"Activity '{activityId}' does not have a valid definition.");
         }
 
-        Reward[] guaranteedRewards = definition.Rewards.Where(r => r.Weight is null).ToArray();
-        Reward[] weightedRewards = definition.Rewards.Where(r => r.Weight is not null).ToArray();
-
-        List<Reward> grantedRewards = [.. guaranteedRewards];
-        if (weightedRewards.Length > 0)
+        List<Reward> grantedRewards = [.. definition.Rewards];
+        if (definition.DropTable is {})
         {
-            grantedRewards.Add(dropTableService.RollReward(new DropTable(weightedRewards)));
+            grantedRewards.Add(dropTableService.RollReward(definition.DropTable));
         }
 
         List<Reward> resolvedRewards = [];
+        await using GameDbContext dbContext = await dbContextFactory.CreateDbContextAsync();
         foreach (Reward reward in grantedRewards)
         {
             Reward resolved = reward switch
@@ -94,20 +100,23 @@ public sealed class ActivityService(IDbContextFactory<GameDbContext> dbContextFa
             switch (resolved)
             {
                 case ItemReward itemReward when itemReward.Count > 0:
-                    await itemService.AddItemsAsync(profileId, [itemReward]);
+                    await itemService.AddItemsAsync(dbContext, profileId, [itemReward]);
                     resolvedRewards.Add(itemReward);
                     break;
                 case ItemReward:
                     break;
-                case XpReward xpReward:
-                    await skillService.AddSkillsAsync(profileId, [xpReward]);
+                case XpReward xpReward when xpReward.Count > 0:
+                    await skillService.AddSkillsAsync(dbContext, profileId, [xpReward]);
                     resolvedRewards.Add(xpReward);
+                    break;
+                case XpReward:
                     break;
                 default:
                     throw new UnreachableException("Rewards should resolve to an item or xp reward.");
             }
         }
 
+        await dbContext.SaveChangesAsync();
         return [.. resolvedRewards];
     }
 }

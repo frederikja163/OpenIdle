@@ -35,9 +35,21 @@ public sealed class SkillService(IDbContextFactory<GameDbContext> dbContextFacto
     {
         await using GameDbContext dbContext = await dbContextFactory.CreateDbContextAsync();
 
+        Skill[] skills = await AddSkillsAsync(dbContext, profileId, rewards);
+        await dbContext.SaveChangesAsync();
+        return skills;
+    }
+
+    internal async Task<Skill[]> AddSkillsAsync(GameDbContext dbContext, Guid profileId, IEnumerable<XpReward> rewards)
+    {
         List<Skill> skills = [];
         foreach (XpReward reward in rewards)
         {
+            if (reward.Count <= 0)
+            {
+                continue;
+            }
+
             Skill? skill = await dbContext.Skills
                 .FirstOrDefaultAsync(s => s.ProfileId == profileId && s.SkillId == reward.SkillId);
 
@@ -60,7 +72,6 @@ public sealed class SkillService(IDbContextFactory<GameDbContext> dbContextFacto
             skills.Add(skill);
         }
 
-        await dbContext.SaveChangesAsync();
         return skills.ToArray();
     }
 }

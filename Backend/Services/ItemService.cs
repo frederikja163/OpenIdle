@@ -35,6 +35,13 @@ public sealed class ItemService(IDbContextFactory<GameDbContext> dbContextFactor
     {
         await using GameDbContext dbContext = await dbContextFactory.CreateDbContextAsync();
 
+        Item[] items = await AddItemsAsync(dbContext, profileId, rewards);
+        await dbContext.SaveChangesAsync();
+        return items;
+    }
+
+    internal async Task<Item[]> AddItemsAsync(GameDbContext dbContext, Guid profileId, IEnumerable<ItemReward> rewards)
+    {
         List<Item> items = [];
         foreach (ItemReward reward in rewards)
         {
@@ -64,7 +71,6 @@ public sealed class ItemService(IDbContextFactory<GameDbContext> dbContextFactor
             items.Add(item);
         }
 
-        await dbContext.SaveChangesAsync();
         return items.ToArray();
     }
 }

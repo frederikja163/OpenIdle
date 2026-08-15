@@ -116,7 +116,7 @@ public sealed class ActivityServiceTests : IDisposable
 
         Reward[] rewards = await service.ResolveActivityAsync(profile.ProfileId);
 
-        Assert.Multiple(async () =>
+        await Assert.MultipleAsync(async () =>
         {
             Assert.That(rewards, Has.Length.EqualTo(2));
             ItemReward itemReward = rewards.OfType<ItemReward>().Single();
@@ -149,7 +149,7 @@ public sealed class ActivityServiceTests : IDisposable
         await service.ResolveActivityAsync(profile.ProfileId);
         await service.ResolveActivityAsync(profile.ProfileId);
 
-        Assert.Multiple(async () =>
+        await Assert.MultipleAsync(async () =>
         {
             Item item = (await GetItemsAsync(profile.ProfileId)).Single();
             Assert.That(item.Count, Is.EqualTo(9));
@@ -172,7 +172,7 @@ public sealed class ActivityServiceTests : IDisposable
 
         Reward[] rewards = await service.ResolveActivityAsync(profile.ProfileId);
 
-        Assert.Multiple(async () =>
+        await Assert.MultipleAsync(async () =>
         {
             Assert.That(rewards, Has.Length.EqualTo(1));
             Assert.That(rewards.Single(), Is.InstanceOf<ItemReward>());
@@ -213,7 +213,7 @@ public sealed class ActivityServiceTests : IDisposable
 
         Reward[] rewards = await service.ResolveActivityAsync(profile.ProfileId);
 
-        Assert.Multiple(async () =>
+        await Assert.MultipleAsync(async () =>
         {
             Assert.That(rewards, Has.Length.EqualTo(2));
             ItemReward itemReward = rewards.OfType<ItemReward>().Single(r => r.ItemId == ItemId.Stone);
@@ -235,7 +235,7 @@ public sealed class ActivityServiceTests : IDisposable
 
         Reward[] rewards = await service.ResolveActivityAsync(profile.ProfileId);
 
-        Assert.Multiple(async () =>
+        await Assert.MultipleAsync(async () =>
         {
             Assert.That(rewards, Is.Empty);
             Assert.That(await GetItemsAsync(profile.ProfileId), Is.Empty);

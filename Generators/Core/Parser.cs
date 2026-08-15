@@ -114,32 +114,40 @@ public sealed class Parser
     {
         int count = element.RequireAttribute<int>("count");
         float? weight = element.HasAttribute("weight") ? element.GetAttribute<float>("weight") : null;
-        string item = element.GetAttribute("item");
-        string table = element.GetAttribute("table");
-        string skill = element.GetAttribute("skill");
 
         if (requireWeight && weight is null)
         {
             throw new ParserException($"Reward in a drop table must specify a 'weight'.");
         }
 
-        int specified = (string.IsNullOrEmpty(item) ? 0 : 1)
-                        + (string.IsNullOrEmpty(table) ? 0 : 1)
-                        + (string.IsNullOrEmpty(skill) ? 0 : 1);
+        string targetAttribute = element.Name switch
+        {
+            "ItemReward" => "item",
+            "TableReward" => "table",
+            "XpReward" => "skill",
+            _ => throw new ParserException($"Element name is not recognized '{element.Name}'"),
+        };
+
+        int specified = (element.HasAttribute("item") ? 1 : 0)
+                        + (element.HasAttribute("table") ? 1 : 0)
+                        + (element.HasAttribute("skill") ? 1 : 0);
         if (specified != 1)
         {
             throw new ParserException($"Reward must specify exactly one of 'item', 'table' or 'skill'.");
         }
 
-        if (!string.IsNullOrEmpty(item))
+        if (!element.HasAttribute(targetAttribute))
         {
-            return new ItemReward(weight, count, item);
+            throw new ParserException($"Reward element '{element.Name}' must specify the matching '{targetAttribute}' attribute.");
         }
-        if (!string.IsNullOrEmpty(table))
+
+        string target = element.GetAttribute(targetAttribute);
+        return element.Name switch
         {
-            return new TableReward(weight, count, table);
-        }
-        return new XpReward(weight, count, skill);
+            "ItemReward" => new ItemReward(weight, count, target),
+            "TableReward" => new TableReward(weight, count, target),
+            _ => new XpReward(weight, count, target),
+        };
     }
 
     private Activity Activity(XmlElement element)

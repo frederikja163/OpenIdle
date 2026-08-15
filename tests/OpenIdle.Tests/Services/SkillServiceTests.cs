@@ -97,6 +97,40 @@ public sealed class SkillServiceTests : IDisposable
     }
 
     [Test]
+    public async Task AddSkillsAsync_ZeroCountReward_AddsNothing()
+    {
+        Profile profile = await SeedProfileAsync();
+
+        SkillService service = new(_db.Factory);
+        Skill[] added = await service.AddSkillsAsync(profile.ProfileId, new[] { new XpReward(0, null, SkillId.Mining) });
+
+        Assert.Multiple(() =>
+        {
+            Assert.That(added, Is.Empty);
+        });
+        await using GameDbContext dbContext = await _db.Factory.CreateDbContextAsync();
+        Assert.That(dbContext.Skills.Where(s => s.ProfileId == profile.ProfileId), Is.Empty);
+    }
+
+    [Test]
+    public async Task AddSkillsAsync_NegativeCountReward_AddsNothing()
+    {
+        Profile profile = await SeedProfileAsync();
+        await SeedSkillAsync(profile, SkillId.Mining, xp: 5, level: 1);
+
+        SkillService service = new(_db.Factory);
+        Skill[] added = await service.AddSkillsAsync(profile.ProfileId, new[] { new XpReward(-3, null, SkillId.Mining) });
+
+        Assert.Multiple(() =>
+        {
+            Assert.That(added, Is.Empty);
+        });
+        await using GameDbContext dbContext = await _db.Factory.CreateDbContextAsync();
+        Skill stored = dbContext.Skills.Single(s => s.ProfileId == profile.ProfileId && s.SkillId == SkillId.Mining);
+        Assert.That(stored.Xp, Is.EqualTo(5));
+    }
+
+    [Test]
     public async Task GetSkillsAsync_OrdersBySkillId()
     {
         Profile profile = await SeedProfileAsync();
