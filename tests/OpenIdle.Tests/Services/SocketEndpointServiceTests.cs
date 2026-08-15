@@ -115,9 +115,9 @@ public sealed class SocketEndpointServiceTests
         await service.StartAsync(CancellationToken.None);
         service.TryRegisterEndpoint(GetMethod<TestUserController>(nameof(TestUserController.Notify)));
         FakeWebSocket webSocket = RegisterSocket(registry, out Socket socket);
-        Backend.Database.Entities.User user = new() { UserId = Guid.NewGuid() };
-        socket.User = user;
-        registry.SetUser(socket, user);
+        Guid userId = Guid.NewGuid();
+        socket.UserId = userId;
+        registry.SetUser(socket, userId);
 
         webSocket.EnqueueReceive(Serialize(new CreateProfileRequest() { Name = "x" }));
         webSocket.EnqueueClose();

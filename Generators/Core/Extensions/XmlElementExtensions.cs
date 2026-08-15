@@ -37,6 +37,11 @@ internal static class XmlElementExtensions
         return string.IsNullOrEmpty(attribute) ? @default : ConvertValue<T>(element, name, attribute);
     }
 
+    public static bool HasAttribute(this XmlElement element, string name)
+    {
+        return !string.IsNullOrEmpty(element.GetAttribute(name));
+    }
+
     private static T ConvertValue<T>(XmlElement element, string name, string value)
         where T : IConvertible
     {

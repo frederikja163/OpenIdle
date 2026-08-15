@@ -1,7 +1,6 @@
 using System.Net.WebSockets;
 using Backend;
 using Backend.Dtos;
-using Backend.Database.Entities;
 using Backend.Services;
 using Microsoft.Extensions.Logging.Abstractions;
 using OpenIdle.Tests.TestDoubles;
@@ -11,11 +10,11 @@ namespace OpenIdle.Tests.Services;
 [TestFixture]
 public sealed class SocketRegistryServiceTests
 {
-    private static readonly User UserA = new() { UserId = Guid.NewGuid() };
-    private static readonly User UserB = new() { UserId = Guid.NewGuid() };
+    private static readonly Guid UserA = Guid.NewGuid();
+    private static readonly Guid UserB = Guid.NewGuid();
 
-    private static readonly Profile ProfileA = new() { ProfileId = Guid.NewGuid(), Name = "A" };
-    private static readonly Profile ProfileB = new() { ProfileId = Guid.NewGuid(), Name = "B" };
+    private static readonly Guid ProfileA = Guid.NewGuid();
+    private static readonly Guid ProfileB = Guid.NewGuid();
 
     [Test]
     public async Task SendToUserAsync_DeliversEventToAllSocketsOfUser()

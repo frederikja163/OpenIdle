@@ -6,10 +6,10 @@ using Backend.Dtos;
 
 namespace Backend.Services;
 
-public abstract class WeightedDrop(int count, float weight)
+public abstract class Reward(int count, float? weight)
 {
     public int Count { get; } = count;
-    public float Weight { get; } = weight;
+    public float? Weight { get; } = weight;
 
     protected abstract string DisplayId { get; }
 
@@ -19,28 +19,35 @@ public abstract class WeightedDrop(int count, float weight)
     }
 }
 
-public sealed class TableDrop(int count, float weight, DropTableId dropTableId) : WeightedDrop(count, weight)
+public sealed class TableReward(int count, float? weight, DropTableId dropTableId) : Reward(count, weight)
 {
     public DropTableId DropTableId { get; } = dropTableId;
 
     protected override string DisplayId => DropTableId.ToString();
 }
 
-public sealed class ItemDrop(int count, float weight, ItemId itemId) : WeightedDrop(count, weight)
+public sealed class ItemReward(int count, float? weight, ItemId itemId) : Reward(count, weight)
 {
     public ItemId ItemId { get; } = itemId;
 
     protected override string DisplayId => ItemId.ToString();
 }
 
-public sealed class DropTable(params WeightedDrop[] drops)
+public sealed class XpReward(int count, float? weight, SkillId skillId) : Reward(count, weight)
 {
-    public WeightedDrop[] Drops { get; } = drops;
-    public float TotalWeight { get; } = drops.Sum(d => d.Weight);
+    public SkillId SkillId { get; } = skillId;
+
+    protected override string DisplayId => SkillId.ToString();
+}
+
+public sealed class DropTable(params Reward[] rewards)
+{
+    public Reward[] Rewards { get; } = rewards;
+    public float TotalWeight { get; } = rewards.Sum(r => r.Weight ?? 0);
 
     public override string ToString()
     {
-        return $"{{{string.Join(",", Drops)}}}";
+        return $"{{{string.Join(",", Rewards)}}}";
     }
 }
 
@@ -53,37 +60,39 @@ public sealed class DropTableService
         _dropTables.Add(dropTableId, dropTable);
     }
 
-    public ItemDrop RollItem(DropTableId dropTableId)
+    public Reward RollReward(DropTableId dropTableId)
     {
         if (!_dropTables.TryGetValue(dropTableId, out DropTable? dropTable))
         {
             throw new BackendException($"Drop table id '{dropTableId}' does not have a valid drop table.");
         }
 
-        WeightedDrop drop = GetItem(dropTable);
-        switch (drop)
-        {
-            case TableDrop tableDrop:
-                return RollItem(tableDrop.DropTableId);
-            case ItemDrop itemDrop:
-                return itemDrop;
-            default:
-                throw new UnreachableException("Drop should only be able to be TableDrop or ItemDrop");
-        }
+        return RollReward(dropTable);
     }
 
-    private static WeightedDrop GetItem(DropTable dropTable)
+    public Reward RollReward(DropTable dropTable)
+    {
+        Reward reward = PickReward(dropTable);
+        if (reward is TableReward tableReward)
+        {
+            return RollReward(tableReward.DropTableId);
+        }
+
+        return reward;
+    }
+
+    private static Reward PickReward(DropTable dropTable)
     {
         float randomValue = Random.Shared.NextSingle() * dropTable.TotalWeight;
-        foreach (WeightedDrop drop in dropTable.Drops)
+        foreach (Reward reward in dropTable.Rewards)
         {
-            randomValue -= drop.Weight;
+            randomValue -= reward.Weight ?? 0;
             if (randomValue < 0)
             {
-                return drop;
+                return reward;
             }
         }
 
-        throw new UnreachableException("We should always pick a drop because randomValue is <= totalWeight.");
+        throw new UnreachableException("We should always pick a reward because randomValue is <= totalWeight.");
     }
 }

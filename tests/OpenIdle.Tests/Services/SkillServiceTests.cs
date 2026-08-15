@@ -29,7 +29,7 @@ public sealed class SkillServiceTests : IDisposable
         await SeedSkillAsync(other, SkillId.LumberJacking, xp: 10, level: 1);
 
         SkillService service = new(_db.Factory);
-        Skill[] skills = await service.GetSkillsAsync(profile);
+        Skill[] skills = await service.GetSkillsAsync(profile.ProfileId);
 
         Assert.That(skills.Select(s => s.SkillId), Is.EquivalentTo(new[] { SkillId.Mining, SkillId.Crafting }));
     }
@@ -43,7 +43,7 @@ public sealed class SkillServiceTests : IDisposable
         await SeedSkillAsync(profile, SkillId.LumberJacking, xp: 10, level: 1);
 
         SkillService service = new(_db.Factory);
-        Skill[] skills = await service.GetSkillsAsync(profile, new[] { SkillId.Mining, SkillId.LumberJacking });
+        Skill[] skills = await service.GetSkillsAsync(profile.ProfileId, new[] { SkillId.Mining, SkillId.LumberJacking });
 
         Assert.That(skills.Select(s => s.SkillId), Is.EquivalentTo(new[] { SkillId.Mining, SkillId.LumberJacking }));
     }
@@ -54,9 +54,80 @@ public sealed class SkillServiceTests : IDisposable
         Profile profile = await SeedProfileAsync();
 
         SkillService service = new(_db.Factory);
-        Skill[] skills = await service.GetSkillsAsync(profile);
+        Skill[] skills = await service.GetSkillsAsync(profile.ProfileId);
 
         Assert.That(skills, Is.Empty);
+    }
+
+    [Test]
+    public async Task AddSkillsAsync_AddsNewSkill()
+    {
+        Profile profile = await SeedProfileAsync();
+
+        SkillService service = new(_db.Factory);
+        Skill[] added = await service.AddSkillsAsync(profile.ProfileId, new[] { new XpReward(10, null, SkillId.Mining) });
+
+        Assert.Multiple(() =>
+        {
+            Assert.That(added, Has.Length.EqualTo(1));
+            Assert.That(added.Single().SkillId, Is.EqualTo(SkillId.Mining));
+            Assert.That(added.Single().Xp, Is.EqualTo(10));
+        });
+        await using GameDbContext dbContext = await _db.Factory.CreateDbContextAsync();
+        Skill stored = dbContext.Skills.Single(s => s.ProfileId == profile.ProfileId);
+        Assert.That(stored.Xp, Is.EqualTo(10));
+    }
+
+    [Test]
+    public async Task AddSkillsAsync_IncrementsExistingSkillXp()
+    {
+        Profile profile = await SeedProfileAsync();
+        await SeedSkillAsync(profile, SkillId.Mining, xp: 5, level: 1);
+
+        SkillService service = new(_db.Factory);
+        await service.AddSkillsAsync(profile.ProfileId, new[] { new XpReward(10, null, SkillId.Mining) });
+
+        await using GameDbContext dbContext = await _db.Factory.CreateDbContextAsync();
+        Skill stored = dbContext.Skills.Single(s => s.ProfileId == profile.ProfileId && s.SkillId == SkillId.Mining);
+        Assert.Multiple(() =>
+        {
+            Assert.That(stored.Xp, Is.EqualTo(15));
+            Assert.That(stored.Level, Is.EqualTo(1));
+        });
+    }
+
+    [Test]
+    public async Task AddSkillsAsync_ZeroCountReward_AddsNothing()
+    {
+        Profile profile = await SeedProfileAsync();
+
+        SkillService service = new(_db.Factory);
+        Skill[] added = await service.AddSkillsAsync(profile.ProfileId, new[] { new XpReward(0, null, SkillId.Mining) });
+
+        Assert.Multiple(() =>
+        {
+            Assert.That(added, Is.Empty);
+        });
+        await using GameDbContext dbContext = await _db.Factory.CreateDbContextAsync();
+        Assert.That(dbContext.Skills.Where(s => s.ProfileId == profile.ProfileId), Is.Empty);
+    }
+
+    [Test]
+    public async Task AddSkillsAsync_NegativeCountReward_AddsNothing()
+    {
+        Profile profile = await SeedProfileAsync();
+        await SeedSkillAsync(profile, SkillId.Mining, xp: 5, level: 1);
+
+        SkillService service = new(_db.Factory);
+        Skill[] added = await service.AddSkillsAsync(profile.ProfileId, new[] { new XpReward(-3, null, SkillId.Mining) });
+
+        Assert.Multiple(() =>
+        {
+            Assert.That(added, Is.Empty);
+        });
+        await using GameDbContext dbContext = await _db.Factory.CreateDbContextAsync();
+        Skill stored = dbContext.Skills.Single(s => s.ProfileId == profile.ProfileId && s.SkillId == SkillId.Mining);
+        Assert.That(stored.Xp, Is.EqualTo(5));
     }
 
     [Test]
@@ -68,7 +139,7 @@ public sealed class SkillServiceTests : IDisposable
         await SeedSkillAsync(profile, SkillId.Crafting, xp: 50, level: 1);
 
         SkillService service = new(_db.Factory);
-        Skill[] skills = await service.GetSkillsAsync(profile);
+        Skill[] skills = await service.GetSkillsAsync(profile.ProfileId);
 
         Assert.That(skills.Select(s => s.SkillId), Is.EqualTo(new[] { SkillId.Crafting, SkillId.LumberJacking, SkillId.Mining }));
     }

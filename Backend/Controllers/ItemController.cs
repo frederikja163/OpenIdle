@@ -14,8 +14,8 @@ public sealed class ItemController(ItemService itemService) : SocketControllerBa
     public async Task GetItems(GetItemsRequest request)
     {
         Item[] items = request.ItemIds is null
-            ? await itemService.GetItemsAsync(ProfileOrThrow)
-            : await itemService.GetItemsAsync(ProfileOrThrow, request.ItemIds);
+            ? await itemService.GetItemsAsync(ProfileId)
+            : await itemService.GetItemsAsync(ProfileId, request.ItemIds);
         ItemDto[] itemDtos = items.Select(i => i.ToDto()).ToArray();
         await RespondAsync(new GetItemsResponse() { Items = itemDtos });
     }

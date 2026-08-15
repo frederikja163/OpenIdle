@@ -16,5 +16,6 @@ public sealed class GameDbContext(DbContextOptions<GameDbContext> options) : DbC
         modelBuilder.Entity<Item>().Property(e => e.ItemId).HasConversion<string>();
         modelBuilder.Entity<Skill>().HasKey(e => new { e.ProfileId, e.SkillId });
         modelBuilder.Entity<Skill>().Property(e => e.SkillId).HasConversion<string>();
+        modelBuilder.Entity<Profile>().Property(e => e.ActivityId).HasConversion<string>();
     }
 }

@@ -6,7 +6,7 @@ namespace Backend.Database.Entities;
 public sealed class Skill
 {
     public required Guid ProfileId { get; init; }
-    public required Profile Profile { get; init; }
+    public Profile? Profile { get; init; }
     public required SkillId SkillId { get; init; }
     public int Xp { get; set; }
     public int Level { get; set; }

@@ -57,20 +57,40 @@ public sealed class EnumValue(string name): NamedType(name)
 
 public sealed class DropTable(string name) : NamedType(name)
 {
-    public List<Drop> Drops { get; } = [];
+    public List<Reward> Rewards { get; } = [];
 }
 
-public sealed class Drop(float weight, int count, string? item, string? table)
+public abstract class Reward(float? weight, int count)
 {
-    public float Weight { get; } = weight;
+    public float? Weight { get; } = weight;
     public int Count { get; } = count;
-    public string? Item { get; } = item;
-    public string? Table { get; } = table;
 }
 
-public sealed class Activity(string name, string table) : NamedType(name)
+public sealed class ItemReward(float? weight, int count, string item) : Reward(weight, count)
+{
+    public string Item { get; } = item;
+}
+
+public sealed class TableReward(float? weight, int count, string table) : Reward(weight, count)
 {
     public string Table { get; } = table;
+}
+
+public sealed class XpReward(float? weight, int count, string skill) : Reward(weight, count)
+{
+    public string Skill { get; } = skill;
+}
+
+public sealed class LevelRequirement(string skill, int count)
+{
+    public string Skill { get; } = skill;
+    public int Count { get; } = count;
+}
+
+public sealed class Activity(string name) : NamedType(name)
+{
+    public List<Reward> Rewards { get; } = [];
+    public List<LevelRequirement> Requirements { get; } = [];
 }
 
 public enum PropertyType

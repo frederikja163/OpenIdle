@@ -6,7 +6,6 @@ using System.Text.Json;
 using System.Text.Json.Serialization;
 using System.Threading;
 using System.Threading.Tasks;
-using Backend.Database.Entities;
 using Backend.Dtos;
 using Backend.Extensions;
 
@@ -34,8 +33,8 @@ internal sealed class Socket : IDisposable
 
     internal WebSocketState State => _webSocket.State;
     
-    internal User? User { get; set; }
-    internal Profile? Profile { get; set; }
+    internal Guid? UserId { get; set; }
+    internal Guid? ProfileId { get; set; }
 
     internal event AsyncEventHandler<MessageReceivedEventArgs>? MessageReceived;
     internal event AsyncEventHandler<SocketCloseEventArgs>? Close;

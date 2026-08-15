@@ -14,8 +14,8 @@ public sealed class SkillController(SkillService skillService) : SocketControlle
     public async Task GetSkills(GetSkillsRequest request)
     {
         Skill[] skills = request.SkillIds is null
-            ? await skillService.GetSkillsAsync(ProfileOrThrow)
-            : await skillService.GetSkillsAsync(ProfileOrThrow, request.SkillIds);
+            ? await skillService.GetSkillsAsync(ProfileId)
+            : await skillService.GetSkillsAsync(ProfileId, request.SkillIds);
         SkillDto[] skillDtos = skills.Select(s => s.ToDto()).ToArray();
         await RespondAsync(new GetSkillsResponse() { Skills = skillDtos });
     }

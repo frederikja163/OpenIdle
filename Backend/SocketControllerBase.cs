@@ -1,6 +1,5 @@
 ﻿using System;
 using System.Threading.Tasks;
-using Backend.Database.Entities;
 using Backend.Dtos;
 using Backend.Services;
 
@@ -14,21 +13,29 @@ public abstract class SocketControllerBase
     internal RequestBase Request => Context.Request;
     internal SocketRegistryService SocketRegistry => Context.SocketRegistry;
 
-    internal User UserOrThrow
+    internal Guid UserId
     {
         get
         {
-            field ??= Socket.User ?? throw new BackendException("You are not signed in.");
-            return field;
+            Guid? userId = Socket.UserId;
+            if (userId is null)
+            {
+                throw new BackendException("You are not signed in.");
+            }
+            return userId.Value;
         }
     }
 
-    internal Profile ProfileOrThrow
+    internal Guid ProfileId
     {
         get
         {
-            field ??= Socket.Profile ?? throw new BackendException("You must select a profile first.");
-            return field;
+            Guid? profileId = Socket.ProfileId;
+            if (profileId is null)
+            {
+                throw new BackendException("You must select a profile first.");
+            }
+            return profileId.Value;
         }
     }
 
@@ -50,11 +57,11 @@ public abstract class SocketControllerBase
 
     public async Task SendProfileEventAsync(EventBase eventBase)
     {
-        await SocketRegistry.SendToProfileAsync(ProfileOrThrow, eventBase);
+        await SocketRegistry.SendToProfileAsync(ProfileId, eventBase);
     }
 
     public async Task SendUserEventAsync(EventBase eventBase)
     {
-        await SocketRegistry.SendToUserAsync(UserOrThrow, eventBase);
+        await SocketRegistry.SendToUserAsync(UserId, eventBase);
     }
 }

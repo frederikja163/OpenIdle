@@ -11,25 +11,34 @@ namespace Backend.Services;
 
 public sealed class ProfileService(IDbContextFactory<GameDbContext> dbContextFactory, SocketRegistryService socketRegistry)
 {
-    internal async Task<Profile[]> GetProfilesAsync(User user)
+    internal async Task<Profile[]> GetProfilesAsync(Guid userId)
     {
         await using GameDbContext dbContext = await dbContextFactory.CreateDbContextAsync();
 
         return await dbContext.Profiles
-            .Where(p => p.Users.Any(u => u.UserId == user.UserId))
+            .Where(p => p.Users.Any(u => u.UserId == userId))
             .ToArrayAsync();
     }
 
-    internal async Task<Profile> GetProfileAsync(User user, Guid profileId)
+    internal async Task<Profile> GetProfileAsync(Guid userId, Guid profileId)
     {
         await using GameDbContext dbContext = await dbContextFactory.CreateDbContextAsync();
 
         return await dbContext.Profiles
-                   .FirstOrDefaultAsync(p => p.ProfileId == profileId && p.Users.Any(u => u.UserId == user.UserId))
+                   .FirstOrDefaultAsync(p => p.ProfileId == profileId && p.Users.Any(u => u.UserId == userId))
                ?? throw new BackendException("Profile does not belong to user.");
     }
 
-    internal async Task<Profile> CreateProfileAsync(User user, string name)
+    internal async Task<Profile> GetProfileAsync(Guid profileId)
+    {
+        await using GameDbContext dbContext = await dbContextFactory.CreateDbContextAsync();
+
+        return await dbContext.Profiles
+                   .FirstOrDefaultAsync(p => p.ProfileId == profileId)
+               ?? throw new BackendException("Profile does not exist.");
+    }
+
+    internal async Task<Profile> CreateProfileAsync(Guid userId, string name)
     {
         BackendException.ThrowIfNullOrWhiteSpace(name);
         if (name.Length > 30)
@@ -43,6 +52,7 @@ public sealed class ProfileService(IDbContextFactory<GameDbContext> dbContextFac
 
         await using GameDbContext dbContext = await dbContextFactory.CreateDbContextAsync();
 
+        User user = new() { UserId = userId };
         Profile profile = new Profile()
         {
             ProfileId = Guid.NewGuid(),
@@ -77,11 +87,11 @@ public sealed class ProfileService(IDbContextFactory<GameDbContext> dbContextFac
         return false;
     }
 
-    internal async Task<Profile> SelectProfileAsync(Socket socket, User user, Guid profileId)
+    internal async Task<Profile> SelectProfileAsync(Socket socket, Guid userId, Guid profileId)
     {
-        Profile profile = await GetProfileAsync(user, profileId);
-        socket.Profile = profile;
-        socketRegistry.SetProfile(socket, profile);
+        Profile profile = await GetProfileAsync(userId, profileId);
+        socket.ProfileId = profileId;
+        socketRegistry.SetProfile(socket, profileId);
         return profile;
     }
 }
