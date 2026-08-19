@@ -41,10 +41,11 @@ export function wireSession(): void {
 		void loadProfiles();
 	});
 
-	// TODO: nothing sends this yet — the backend branch that does is unmerged.
-	// It carries the full list rather than a delta, so it can simply overwrite.
+	// Sent by AuthController.CreateProfile, ahead of the response to the request
+	// that caused it. It carries the full list rather than a delta, so it can
+	// simply overwrite.
 	client.onEvent('ProfilesChangedEvent', (event) => {
-		profilesState.profiles = event.Profiles;
+		profilesState.profiles = event.profiles;
 		profilesState.status = 'loaded';
 	});
 }
