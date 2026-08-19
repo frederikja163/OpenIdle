@@ -40,7 +40,7 @@ public sealed class ActivityService(IDbContextFactory<GameDbContext> dbContextFa
         _activities.Add(activityId, definition);
     }
 
-    internal async Task<Profile> StartActivityAsync(Guid profileId, ActivityId activityId)
+    internal async Task<Profile> StartActivityAsync(ProfileId profileId, ActivityId activityId)
     {
         if (!_activities.TryGetValue(activityId, out ActivityDefinition? definition))
         {
@@ -61,13 +61,13 @@ public sealed class ActivityService(IDbContextFactory<GameDbContext> dbContextFa
         await using GameDbContext dbContext = await dbContextFactory.CreateDbContextAsync();
         dbContext.Profiles.Attach(profile);
         profile.ActivityId = activityId;
-        profile.ActivityStartTime = DateTime.UtcNow;
+        profile.ActivityStartTime = DateTime.Now;
         await dbContext.SaveChangesAsync();
 
         return profile;
     }
 
-    internal async Task<Reward[]> ResolveActivityAsync(Guid profileId)
+    internal async Task<Reward[]> ResolveActivityAsync(ProfileId profileId)
     {
         Profile profile = await profileService.GetProfileAsync(profileId);
 

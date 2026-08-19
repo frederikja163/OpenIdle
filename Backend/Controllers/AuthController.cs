@@ -10,7 +10,7 @@ namespace Backend.Controllers;
 [SocketController]
 public sealed class AuthController(UserService userService, ProfileService profileService) : SocketControllerBase
 {
-    private async Task<ProfileDto[]> GetProfiles(Guid userId)
+    private async Task<ProfileDto[]> GetProfiles(UserId userId)
     {
         return (await profileService.GetProfilesAsync(userId)).Select(p => p.ToDto()).ToArray();
     }
@@ -37,7 +37,7 @@ public sealed class AuthController(UserService userService, ProfileService profi
             throw new BackendException("Already logged in.");
         }
 
-        Guid testUserId = await userService.GetTestUserAsync();
+        UserId testUserId = await userService.GetTestUserAsync();
         userService.SignIn(Socket, testUserId);
         await RespondAsync(new LoginAsTestUserResponse());
     }
