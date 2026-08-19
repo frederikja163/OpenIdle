@@ -93,6 +93,7 @@ internal sealed class Socket : IDisposable
 
     internal async Task SendMessageAsync(byte[] bytes, CancellationToken cancellationToken)
     {
+        Log.Debug($"Sending: {Encoding.UTF8.GetString(bytes)}");
         await _sendLock.WaitAsync(cancellationToken);
         try
         {
@@ -106,6 +107,7 @@ internal sealed class Socket : IDisposable
 
     private async Task HandleTextMessageAsync(byte[] bytes, int count)
     {
+        Log.Debug($"Received: {Encoding.UTF8.GetString(bytes)}");
         RequestBase? dto = null;
         try
         {
@@ -116,8 +118,9 @@ internal sealed class Socket : IDisposable
         {
             await SendResponseAsync(new ErrorResponse() { Message = exception.Message, RequestId = dto?.RequestId ?? 0});
         }
-        catch (Exception)
+        catch (Exception ex)
         {
+            Log.Error(ex);
             await SendResponseAsync(new ErrorResponse { Message = "Internal server error.", RequestId = dto?.RequestId ?? 0});
         }
     }
