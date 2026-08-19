@@ -31,11 +31,11 @@ const { createProfile, loadProfiles, profilesState, selectProfile, validateProfi
 const { forgetSessionIntent, resetSessionState, sessionIntent } =
 	await import('$lib/state/session.svelte');
 
-const THORIN = { Name: 'Thorin', ProfileId: '11111111-1111-1111-1111-111111111111' };
-const BALIN = { Name: 'Balin', ProfileId: '22222222-2222-2222-2222-222222222222' };
+const THORIN = { name: 'Thorin', profileId: '11111111-1111-1111-1111-111111111111' };
+const BALIN = { name: 'Balin', profileId: '22222222-2222-2222-2222-222222222222' };
 
 function listResponse(profiles: (typeof THORIN)[]) {
-	return { $type: 'ListProfilesResponse', Id: 1, Profiles: profiles };
+	return { $type: 'ListProfilesResponse', requestId: 1, profiles };
 }
 
 beforeEach(() => {
@@ -92,7 +92,7 @@ describe('createProfile', () => {
 	function respondByType(profilesAfterCreate: (typeof THORIN)[]) {
 		request.mockImplementation((type: string) =>
 			type === 'CreateProfileRequest'
-				? Promise.resolve({ $type: 'CreateProfileResponse', Id: 1 })
+				? Promise.resolve({ $type: 'CreateProfileResponse', requestId: 1 })
 				: Promise.resolve(listResponse(profilesAfterCreate))
 		);
 	}
@@ -102,7 +102,7 @@ describe('createProfile', () => {
 
 		await expect(createProfile('Thorin')).resolves.toBe(true);
 
-		expect(request).toHaveBeenNthCalledWith(1, 'CreateProfileRequest', { Name: 'Thorin' });
+		expect(request).toHaveBeenNthCalledWith(1, 'CreateProfileRequest', { name: 'Thorin' });
 		expect(request).toHaveBeenNthCalledWith(2, 'ListProfilesRequest', {});
 		expect(profilesState.profiles).toEqual([THORIN]);
 		expect(profilesState.creating).toBe(false);
@@ -114,7 +114,7 @@ describe('createProfile', () => {
 
 		await createProfile('  Thorin  ');
 
-		expect(request).toHaveBeenNthCalledWith(1, 'CreateProfileRequest', { Name: 'Thorin' });
+		expect(request).toHaveBeenNthCalledWith(1, 'CreateProfileRequest', { name: 'Thorin' });
 	});
 
 	it('refuses an invalid name without spending a round trip', async () => {
@@ -161,33 +161,33 @@ describe('createProfile', () => {
 
 describe('selectProfile', () => {
 	it('points the socket at the profile and records the selection', async () => {
-		request.mockResolvedValue({ $type: 'SelectProfileResponse', Id: 1 });
+		request.mockResolvedValue({ $type: 'SelectProfileResponse', requestId: 1 });
 
-		await expect(selectProfile(THORIN.ProfileId)).resolves.toBe(true);
+		await expect(selectProfile(THORIN.profileId)).resolves.toBe(true);
 
-		expect(request).toHaveBeenCalledWith('SelectProfileRequest', { ProfileId: THORIN.ProfileId });
-		expect(profilesState.selectedProfileId).toBe(THORIN.ProfileId);
+		expect(request).toHaveBeenCalledWith('SelectProfileRequest', { profileId: THORIN.profileId });
+		expect(profilesState.selectedProfileId).toBe(THORIN.profileId);
 		expect(profilesState.selectingProfileId).toBeNull();
 		expect(profilesState.selectError).toBeNull();
 	});
 
 	it('keeps the previous selection when the backend refuses', async () => {
-		profilesState.selectedProfileId = BALIN.ProfileId;
+		profilesState.selectedProfileId = BALIN.profileId;
 		request.mockRejectedValue(new Error('Profile does not belong to user.'));
 
-		await expect(selectProfile(THORIN.ProfileId)).resolves.toBe(false);
+		await expect(selectProfile(THORIN.profileId)).resolves.toBe(false);
 
 		expect(profilesState.selectError).toBe('Profile does not belong to user.');
-		expect(profilesState.selectedProfileId).toBe(BALIN.ProfileId);
+		expect(profilesState.selectedProfileId).toBe(BALIN.profileId);
 	});
 
 	it('marks only the profile being selected as in flight', async () => {
 		let release = (): void => {};
 		request.mockReturnValueOnce(new Promise((resolve) => (release = () => resolve(undefined))));
 
-		const pending = selectProfile(THORIN.ProfileId);
+		const pending = selectProfile(THORIN.profileId);
 
-		expect(profilesState.selectingProfileId).toBe(THORIN.ProfileId);
+		expect(profilesState.selectingProfileId).toBe(THORIN.profileId);
 		release();
 		await pending;
 		expect(profilesState.selectingProfileId).toBeNull();
@@ -197,8 +197,8 @@ describe('selectProfile', () => {
 		let release = (): void => {};
 		request.mockReturnValueOnce(new Promise((resolve) => (release = () => resolve(undefined))));
 
-		const first = selectProfile(THORIN.ProfileId);
-		await expect(selectProfile(BALIN.ProfileId)).resolves.toBe(false);
+		const first = selectProfile(THORIN.profileId);
+		await expect(selectProfile(BALIN.profileId)).resolves.toBe(false);
 
 		expect(request).toHaveBeenCalledTimes(1);
 		release();
@@ -206,15 +206,15 @@ describe('selectProfile', () => {
 	});
 
 	it('records the selection so a reconnect can restore it', async () => {
-		request.mockResolvedValue({ $type: 'SelectProfileResponse', Id: 1 });
+		request.mockResolvedValue({ $type: 'SelectProfileResponse', requestId: 1 });
 
-		await selectProfile(THORIN.ProfileId);
+		await selectProfile(THORIN.profileId);
 
 		// Outside the session scope on purpose: the reset is what destroys the
 		// evidence of what the session was, and the replay needs it afterwards.
 		resetSessionState();
 		expect(profilesState.selectedProfileId).toBeNull();
-		expect(sessionIntent.profileId).toBe(THORIN.ProfileId);
+		expect(sessionIntent.profileId).toBe(THORIN.profileId);
 	});
 });
 
@@ -294,7 +294,7 @@ describe('a connection dropping under a request', () => {
 			new Promise((_, reject) => (fail = () => reject(new Error('WebSocket closed'))))
 		);
 
-		const selecting = selectProfile(THORIN.ProfileId);
+		const selecting = selectProfile(THORIN.profileId);
 		const dropped = dropDuring(selecting);
 		fail();
 

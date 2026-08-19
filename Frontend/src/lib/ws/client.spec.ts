@@ -97,10 +97,10 @@ describe('WsClient', () => {
 		sockets[0].open();
 		await flush();
 
-		expect(JSON.parse(sockets[0].sent[0])).toEqual({ $type: 'LoginAsTestUserRequest', Id: 1 });
-		sockets[0].deliver({ $type: 'LoginAsTestUserResponse', Id: 1 });
+		expect(JSON.parse(sockets[0].sent[0])).toEqual({ $type: 'LoginAsTestUserRequest', requestId: 1 });
+		sockets[0].deliver({ $type: 'LoginAsTestUserResponse', requestId: 1 });
 
-		await expect(login).resolves.toEqual({ $type: 'LoginAsTestUserResponse', Id: 1 });
+		await expect(login).resolves.toEqual({ $type: 'LoginAsTestUserResponse', requestId: 1 });
 	});
 
 	it('rejects with the backend error text verbatim', async () => {
@@ -111,7 +111,7 @@ describe('WsClient', () => {
 		await flush();
 		sockets[0].open();
 		await flush();
-		sockets[0].deliver({ $type: 'ErrorResponse', Id: null, Message: 'Already logged in.' });
+		sockets[0].deliver({ $type: 'ErrorResponse', requestId: 0, message: 'Already logged in.' });
 
 		// Pinned exactly: ensureLoggedIn compares this string literally to
 		// recover a hot-reloaded session, so rewording the rejection here would
@@ -125,7 +125,7 @@ describe('WsClient', () => {
 		vi.useFakeTimers();
 		const { client, sockets } = makeClient({ requestTimeoutMs: 50 });
 
-		const slow = capture(client.request('CreateProfileRequest', { Name: 'Alice' }));
+		const slow = capture(client.request('CreateProfileRequest', { name: 'Alice' }));
 		await flush();
 		sockets[0].open();
 		await flush();
@@ -134,15 +134,15 @@ describe('WsClient', () => {
 		expect((await slow).toString()).toMatch(/timed out after 50ms/);
 
 		// The backend never saw the timeout and still owes a reply for id 1, so
-		// the Id-less error it eventually sends answers that request — not this
+		// the id-less error it eventually sends answers that request — not this
 		// one, which merely happens to be the oldest one still pending.
 		const next = capture(client.request('ListProfilesRequest', {}));
 		await flush();
-		sockets[0].deliver({ $type: 'ErrorResponse', Id: null, Message: 'Profile name already taken' });
+		sockets[0].deliver({ $type: 'ErrorResponse', requestId: 0, message: 'Profile name already taken' });
 		await flush();
 
-		sockets[0].deliver({ $type: 'ListProfilesResponse', Id: 2, Profiles: [] });
-		await expect(next).resolves.toEqual({ $type: 'ListProfilesResponse', Id: 2, Profiles: [] });
+		sockets[0].deliver({ $type: 'ListProfilesResponse', requestId: 2, profiles: [] });
+		await expect(next).resolves.toEqual({ $type: 'ListProfilesResponse', requestId: 2, profiles: [] });
 	});
 
 	it('charges an error to the live request once an answered one is cleared', async () => {
@@ -153,15 +153,15 @@ describe('WsClient', () => {
 		await flush();
 		sockets[0].open();
 		await flush();
-		sockets[0].deliver({ $type: 'LoginAsTestUserResponse', Id: 1 });
+		sockets[0].deliver({ $type: 'LoginAsTestUserResponse', requestId: 1 });
 		await expect(login).resolves.toMatchObject({ $type: 'LoginAsTestUserResponse' });
 
 		// The counterpart to the case above: the backend has answered id 1, so
 		// the cursor has to have moved off it, or this error is charged to a
 		// settled request and the caller waits out the timeout for nothing.
-		const create = capture(client.request('CreateProfileRequest', { Name: 'Alice' }));
+		const create = capture(client.request('CreateProfileRequest', { name: 'Alice' }));
 		await flush();
-		sockets[0].deliver({ $type: 'ErrorResponse', Id: null, Message: 'Profile name already taken' });
+		sockets[0].deliver({ $type: 'ErrorResponse', requestId: 0, message: 'Profile name already taken' });
 		await vi.advanceTimersByTimeAsync(50);
 
 		const error = await create;
@@ -169,11 +169,35 @@ describe('WsClient', () => {
 		expect((error as WsError).message).toBe('Profile name already taken');
 	});
 
+	it('charges an error carrying a request id to that request, not the oldest', async () => {
+		vi.useFakeTimers();
+		const { client, sockets } = makeClient({ requestTimeoutMs: 50 });
+
+		const first = capture(client.request('ListProfilesRequest', {}));
+		const second = capture(client.request('CreateProfileRequest', { name: 'Alice' }));
+		await flush();
+		sockets[0].open();
+		await flush();
+
+		// The echoed id has to beat the FIFO cursor, which still points at id 1:
+		// falling back on it here would fail the wrong caller and leave the one
+		// the backend actually refused waiting out its timeout.
+		sockets[0].deliver({ $type: 'ErrorResponse', requestId: 2, message: 'Profile name already taken' });
+		await flush();
+
+		const error = await second;
+		expect(error).toBeInstanceOf(WsError);
+		expect((error as WsError).message).toBe('Profile name already taken');
+
+		sockets[0].deliver({ $type: 'ListProfilesResponse', requestId: 1, profiles: [] });
+		await expect(first).resolves.toMatchObject({ $type: 'ListProfilesResponse' });
+	});
+
 	it('forgets what the backend owed when the socket drops', async () => {
 		vi.useFakeTimers();
 		const { client, sockets } = makeClient({ requestTimeoutMs: 50 });
 
-		const abandoned = capture(client.request('CreateProfileRequest', { Name: 'Alice' }));
+		const abandoned = capture(client.request('CreateProfileRequest', { name: 'Alice' }));
 		await flush();
 		sockets[0].open();
 		await flush();
@@ -187,7 +211,7 @@ describe('WsClient', () => {
 		await flush();
 		sockets[1].open();
 		await flush();
-		sockets[1].deliver({ $type: 'ErrorResponse', Id: null, Message: 'Not logged in.' });
+		sockets[1].deliver({ $type: 'ErrorResponse', requestId: 0, message: 'Not logged in.' });
 		await vi.advanceTimersByTimeAsync(50);
 
 		const error = await listed;
@@ -219,7 +243,7 @@ describe('WsClient', () => {
 		await flush();
 		sockets[0].open();
 		await flush();
-		sockets[0].deliver({ $type: 'LoginAsTestUserResponse', Id: 1 });
+		sockets[0].deliver({ $type: 'LoginAsTestUserResponse', requestId: 1 });
 		await expect(login).resolves.toMatchObject({ $type: 'LoginAsTestUserResponse' });
 
 		// close() only flips the socket to CLOSING; the event that would clear
@@ -232,13 +256,13 @@ describe('WsClient', () => {
 		sockets[1].open();
 		await flush();
 		expect(sockets[0].discarded).toHaveLength(0);
-		expect(JSON.parse(sockets[1].sent[0])).toMatchObject({ Id: 2 });
+		expect(JSON.parse(sockets[1].sent[0])).toMatchObject({ requestId: 2 });
 
 		// The first socket's close event lands late and must not disturb its
 		// successor.
 		sockets[0].finishClose();
 		await flush();
-		sockets[1].deliver({ $type: 'LoginAsTestUserResponse', Id: 2 });
+		sockets[1].deliver({ $type: 'LoginAsTestUserResponse', requestId: 2 });
 		await expect(retry).resolves.toMatchObject({ $type: 'LoginAsTestUserResponse' });
 	});
 
@@ -269,8 +293,6 @@ describe('WsClient', () => {
 		expect((await ping).toString()).toMatch(/PingRequest timed out after 50ms/);
 	});
 
-	// Was written against the untyped onEvent(handler) this replaced; it pins the
-	// same thing through onAnyEvent, which is what that signature became.
 	it('stops calling handlers that have unsubscribed', async () => {
 		vi.useFakeTimers();
 		const { client, sockets } = makeClient();
@@ -289,7 +311,7 @@ describe('WsClient', () => {
 		sockets[0].deliver({ $type: 'SomeFutureEvent', Value: 2 });
 		expect(onEvent).toHaveBeenCalledTimes(1);
 
-		sockets[0].deliver({ $type: 'LoginAsTestUserResponse', Id: 1 });
+		sockets[0].deliver({ $type: 'LoginAsTestUserResponse', requestId: 1 });
 		await expect(login).resolves.toMatchObject({ $type: 'LoginAsTestUserResponse' });
 	});
 
@@ -307,9 +329,9 @@ describe('WsClient', () => {
 		sockets[0].deliver({ $type: 'SomeOtherEvent', Value: 1 });
 		expect(onProfiles).not.toHaveBeenCalled();
 
-		const profiles = [{ Name: 'Thorin', ProfileId: 'p1' }];
-		sockets[0].deliver({ $type: 'ProfilesChangedEvent', Profiles: profiles });
-		expect(onProfiles).toHaveBeenCalledWith({ $type: 'ProfilesChangedEvent', Profiles: profiles });
+		const profiles = [{ name: 'Thorin', profileId: 'p1' }];
+		sockets[0].deliver({ $type: 'ProfilesChangedEvent', profiles });
+		expect(onProfiles).toHaveBeenCalledWith({ $type: 'ProfilesChangedEvent', profiles });
 	});
 
 	it('keeps dispatching an event after one handler throws', async () => {
@@ -326,7 +348,7 @@ describe('WsClient', () => {
 		await flush();
 		sockets[0].open();
 		await flush();
-		sockets[0].deliver({ $type: 'ProfilesChangedEvent', Profiles: [] });
+		sockets[0].deliver({ $type: 'ProfilesChangedEvent', profiles: [] });
 
 		expect(second).toHaveBeenCalledTimes(1);
 	});
@@ -386,8 +408,8 @@ describe('WsClient', () => {
 
 		// The old socket answers late with an id-less error. It must not be
 		// charged to the new connection's request.
-		sockets[0].deliver({ $type: 'ErrorResponse', Id: null, Message: 'from the dead socket' });
-		sockets[1].deliver({ $type: 'ListProfilesResponse', Id: 2, Profiles: [] });
+		sockets[0].deliver({ $type: 'ErrorResponse', requestId: 0, message: 'from the dead socket' });
+		sockets[1].deliver({ $type: 'ListProfilesResponse', requestId: 2, profiles: [] });
 
 		await expect(next).resolves.toMatchObject({ $type: 'ListProfilesResponse' });
 	});
@@ -407,8 +429,8 @@ describe('WsClient', () => {
 		await flush();
 
 		expect(sockets[0].sent).toHaveLength(2);
-		sockets[0].deliver({ $type: 'LoginAsTestUserResponse', Id: 1 });
-		sockets[0].deliver({ $type: 'ListProfilesResponse', Id: 2, Profiles: [] });
+		sockets[0].deliver({ $type: 'LoginAsTestUserResponse', requestId: 1 });
+		sockets[0].deliver({ $type: 'ListProfilesResponse', requestId: 2, profiles: [] });
 		await expect(first).resolves.toMatchObject({ $type: 'LoginAsTestUserResponse' });
 		await expect(second).resolves.toMatchObject({ $type: 'ListProfilesResponse' });
 	});
@@ -439,7 +461,7 @@ describe('WsClient', () => {
 		expect(sockets).toHaveLength(1);
 		sockets[0].open();
 		await flush();
-		sockets[0].deliver({ $type: 'PongResponse', Id: 2 });
+		sockets[0].deliver({ $type: 'PongResponse', requestId: 2 });
 
 		await expect(retry).resolves.toMatchObject({ $type: 'PongResponse' });
 	});
@@ -502,7 +524,7 @@ describe('WsClient', () => {
 			'LoginAsTestUserRequest'
 		]);
 
-		sockets[1].deliver({ $type: 'LoginAsTestUserResponse', Id: JSON.parse(sockets[1].sent[0]).Id });
+		sockets[1].deliver({ $type: 'LoginAsTestUserResponse', requestId: JSON.parse(sockets[1].sent[0]).requestId });
 		await flush();
 
 		expect(replayed).toEqual(['login']);

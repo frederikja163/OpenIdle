@@ -19,7 +19,7 @@
 
 	const cards = $derived(
 		profilesState.profiles.map((dto, index) =>
-			toProfile(dto, index, dto.ProfileId === profilesState.selectedProfileId)
+			toProfile(dto, index, dto.profileId === profilesState.selectedProfileId)
 		)
 	);
 

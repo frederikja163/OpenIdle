@@ -7,7 +7,6 @@ import Root, {
 
 export {
 	Root,
-	//
 	Root as Button,
 	buttonVariants,
 	type ButtonProps,

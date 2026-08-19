@@ -366,18 +366,22 @@ export class WsClient {
 				break;
 			}
 			case 'error': {
-				// ErrorResponse.Id is always null on the backend, so it cannot be
-				// matched by id. The backend handles messages FIFO per connection,
-				// so the error answers the oldest request it has not replied to —
-				// which is why the cursor is `outstanding` and not `pending`.
-				const id = this.outstanding.shift();
+				// The backend echoes the failed request's id, except for a frame it
+				// could not deserialize far enough to read one — it sends 0 there,
+				// and 0 is never a request id. Falling back on the oldest unanswered
+				// request is right for that case because the backend handles messages
+				// FIFO per connection, which is why the cursor is `outstanding` and
+				// not `pending`.
+				const echoed = classified.message.requestId;
+				const id = echoed > 0 ? echoed : this.outstanding.shift();
 				if (id === undefined) {
 					console.warn('Websocket error with no request to attribute it to:', classified.message);
 					break;
 				}
+				this.clearOutstanding(id);
 				// Absent from `pending` when that request already timed out: this is
 				// its answer, arriving too late for anyone to receive it.
-				this.takePending(id)?.reject(new WsError(classified.message.Message));
+				this.takePending(id)?.reject(new WsError(classified.message.message));
 				break;
 			}
 			case 'event':
