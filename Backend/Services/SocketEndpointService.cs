@@ -47,7 +47,7 @@ public sealed class SocketEndpointService : IHostedService
         Socket socket = ArgumentException.ThrowIfNotOfType<Socket>(sender);
         if (!_endpoints.TryGetValue(request.GetType(), out List<RegisteredEndpoint>? registeredEndpoints))
         {
-            throw new InvalidOperationException("No handler registered for this request type.");
+            throw new BackendException("No handler registered for this request type.");
         }
 
         try
@@ -60,7 +60,7 @@ public sealed class SocketEndpointService : IHostedService
                 object controller = ActivatorUtilities.CreateInstance(scope.ServiceProvider, registeredEndpoint.ControllerType);
                 if (controller is SocketControllerBase socketControllerBase)
                 {
-                    socketControllerBase.Context = new SocketControllerContext(socket, request);
+                    socketControllerBase.Context = new SocketControllerContext(socket, request, _socketRegistry);
                 }
 
                 object? result = registeredEndpoint.MethodInfo.Invoke(controller, [request]);

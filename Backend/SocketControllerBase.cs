@@ -1,18 +1,43 @@
 ﻿using System;
 using System.Threading.Tasks;
 using Backend.Dtos;
-using Backend.Entities;
+using Backend.Services;
 
 namespace Backend;
 
-internal record SocketControllerContext(Socket Socket, RequestBase Request);
+internal record SocketControllerContext(Socket Socket, RequestBase Request, SocketRegistryService SocketRegistry);
 
 public abstract class SocketControllerBase
 {
     internal Socket Socket => Context.Socket;
-    internal User? User => Socket.User;
-    internal Profile? Profile => Socket.Profile;
     internal RequestBase Request => Context.Request;
+    internal SocketRegistryService SocketRegistry => Context.SocketRegistry;
+
+    internal Guid UserId
+    {
+        get
+        {
+            Guid? userId = Socket.UserId;
+            if (userId is null)
+            {
+                throw new BackendException("You are not signed in.");
+            }
+            return userId.Value;
+        }
+    }
+
+    internal Guid ProfileId
+    {
+        get
+        {
+            Guid? profileId = Socket.ProfileId;
+            if (profileId is null)
+            {
+                throw new BackendException("You must select a profile first.");
+            }
+            return profileId.Value;
+        }
+    }
 
     internal SocketControllerContext Context
     {
@@ -26,7 +51,17 @@ public abstract class SocketControllerBase
 
     public async Task RespondAsync(ResponseBase response)
     {
-        response.Id = Request.Id;
+        response.RequestId = Request.RequestId;
         await Socket.SendResponseAsync(response);
+    }
+
+    public async Task SendProfileEventAsync(EventBase eventBase)
+    {
+        await SocketRegistry.SendToProfileAsync(ProfileId, eventBase);
+    }
+
+    public async Task SendUserEventAsync(EventBase eventBase)
+    {
+        await SocketRegistry.SendToUserAsync(UserId, eventBase);
     }
 }

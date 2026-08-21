@@ -17,10 +17,32 @@ namespace Backend.Migrations
 #pragma warning disable 612, 618
             modelBuilder.HasAnnotation("ProductVersion", "10.0.10");
 
-            modelBuilder.Entity("Backend.Entities.Profile", b =>
+            modelBuilder.Entity("Backend.Database.Entities.Item", b =>
+                {
+                    b.Property<Guid>("ProfileId")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("ItemId")
+                        .HasColumnType("TEXT");
+
+                    b.Property<int>("Count")
+                        .HasColumnType("INTEGER");
+
+                    b.HasKey("ProfileId", "ItemId");
+
+                    b.ToTable("Items");
+                });
+
+            modelBuilder.Entity("Backend.Database.Entities.Profile", b =>
                 {
                     b.Property<Guid>("ProfileId")
                         .ValueGeneratedOnAdd()
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("ActivityId")
+                        .HasColumnType("TEXT");
+
+                    b.Property<DateTime?>("ActivityStartTime")
                         .HasColumnType("TEXT");
 
                     b.Property<string>("Name")
@@ -36,7 +58,26 @@ namespace Backend.Migrations
                     b.ToTable("Profiles");
                 });
 
-            modelBuilder.Entity("Backend.Entities.User", b =>
+            modelBuilder.Entity("Backend.Database.Entities.Skill", b =>
+                {
+                    b.Property<Guid>("ProfileId")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("SkillId")
+                        .HasColumnType("TEXT");
+
+                    b.Property<int>("Level")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<int>("Xp")
+                        .HasColumnType("INTEGER");
+
+                    b.HasKey("ProfileId", "SkillId");
+
+                    b.ToTable("Skills");
+                });
+
+            modelBuilder.Entity("Backend.Database.Entities.User", b =>
                 {
                     b.Property<Guid>("UserId")
                         .ValueGeneratedOnAdd()
@@ -62,19 +103,48 @@ namespace Backend.Migrations
                     b.ToTable("ProfileUser");
                 });
 
+            modelBuilder.Entity("Backend.Database.Entities.Item", b =>
+                {
+                    b.HasOne("Backend.Database.Entities.Profile", "Profile")
+                        .WithMany("Items")
+                        .HasForeignKey("ProfileId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("Profile");
+                });
+
+            modelBuilder.Entity("Backend.Database.Entities.Skill", b =>
+                {
+                    b.HasOne("Backend.Database.Entities.Profile", "Profile")
+                        .WithMany("Skills")
+                        .HasForeignKey("ProfileId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("Profile");
+                });
+
             modelBuilder.Entity("ProfileUser", b =>
                 {
-                    b.HasOne("Backend.Entities.Profile", null)
+                    b.HasOne("Backend.Database.Entities.Profile", null)
                         .WithMany()
                         .HasForeignKey("ProfilesProfileId")
                         .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired();
 
-                    b.HasOne("Backend.Entities.User", null)
+                    b.HasOne("Backend.Database.Entities.User", null)
                         .WithMany()
                         .HasForeignKey("UsersUserId")
                         .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired();
+                });
+
+            modelBuilder.Entity("Backend.Database.Entities.Profile", b =>
+                {
+                    b.Navigation("Items");
+
+                    b.Navigation("Skills");
                 });
 #pragma warning restore 612, 618
         }

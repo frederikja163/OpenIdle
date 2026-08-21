@@ -36,11 +36,13 @@
 		children?: Snippet;
 	}
 
+	// No default for `variant`: undefined falls through to tv's own
+	// defaultVariants above, so the value lives in exactly one place.
 	let {
 		ref = $bindable(null),
 		href,
 		class: className,
-		variant = 'neutral',
+		variant,
 		children,
 		...restProps
 	}: Props = $props();

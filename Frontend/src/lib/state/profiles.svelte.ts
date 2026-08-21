@@ -1,6 +1,6 @@
-import { browser } from '$app/environment';
-import { getWsClient } from '$lib/ws/client';
+import { getWsClient, type PrivilegedSend } from '$lib/ws/client';
 import type { ProfileDto } from '$lib/ws/protocol';
+import { sessionIntent, sessionRun, sessionState } from './session.svelte';
 
 export type ProfilesStatus = 'idle' | 'loading' | 'loaded' | 'error';
 
@@ -9,7 +9,7 @@ export const MAX_PROFILE_NAME_LENGTH = 30;
 // Creating and selecting each carry their own in-flight flag and error so that
 // neither disturbs `status`/`error`, which mean "the ListProfiles fetch" — the
 // page renders the list, the create card and every card footer at once.
-export const profilesState = $state({
+export const profilesState = sessionState(() => ({
 	status: 'idle' as ProfilesStatus,
 	profiles: [] as ProfileDto[],
 	error: null as string | null,
@@ -21,11 +21,7 @@ export const profilesState = $state({
 	selectedProfileId: null as string | null,
 	selectingProfileId: null as string | null,
 	selectError: null as string | null
-});
-
-function toMessage(error: unknown): string {
-	return error instanceof Error ? error.message : String(error);
-}
+}));
 
 /*
  * Mirrors ProfileService.CreateProfileAsync in the backend so a name the server
@@ -55,14 +51,16 @@ export async function loadProfiles(): Promise<void> {
 	}
 	profilesState.status = 'loading';
 	profilesState.error = null;
-	try {
-		const response = await getWsClient().request('ListProfilesRequest', {});
-		profilesState.profiles = response.Profiles;
-		profilesState.status = 'loaded';
-	} catch (error) {
-		profilesState.status = 'error';
-		profilesState.error = toMessage(error);
-	}
+	await sessionRun(() => getWsClient().request('ListProfilesRequest', {}), {
+		ok: (response) => {
+			profilesState.profiles = response.profiles;
+			profilesState.status = 'loaded';
+		},
+		fail: (message) => {
+			profilesState.status = 'error';
+			profilesState.error = message;
+		}
+	});
 }
 
 /** Resolves true once the profile exists and the list has caught up. */
@@ -81,18 +79,28 @@ export async function createProfile(name: string): Promise<boolean> {
 	}
 	profilesState.creating = true;
 	profilesState.createError = null;
-	try {
-		await getWsClient().request('CreateProfileRequest', { Name: trimmed });
-	} catch (error) {
-		profilesState.createError = toMessage(error);
-		return false;
-	} finally {
+	const outcome = await sessionRun(
+		() => getWsClient().request('CreateProfileRequest', { name: trimmed }),
+		{
+			ok: () => {},
+			fail: (message) => {
+				profilesState.createError = message;
+			}
+		}
+	);
+	if (outcome !== 'ok') {
+		// On 'stale' the reset already cleared this; assigning false again is
+		// harmless and keeps the failure paths identical.
 		profilesState.creating = false;
+		return false;
 	}
 	// CreateProfileResponse carries no profile, so refetching is the only way to
-	// learn the new ProfileId. A failure here is a list failure and surfaces
+	// learn the new profileId. A failure here is a list failure and surfaces
 	// through `status`, not through the create form: the profile was still made.
 	await loadProfiles();
+	// Held until the refetch lands, so the form cannot be submitted a second time
+	// against a list that has not caught up yet.
+	profilesState.creating = false;
 	return true;
 }
 
@@ -107,33 +115,39 @@ export async function selectProfile(profileId: string): Promise<boolean> {
 	}
 	profilesState.selectingProfileId = profileId;
 	profilesState.selectError = null;
-	try {
-		await getWsClient().request('SelectProfileRequest', { ProfileId: profileId });
-		profilesState.selectedProfileId = profileId;
-		return true;
-	} catch (error) {
-		// SelectProfileAsync throws before it assigns, so a rejection leaves the
-		// socket on whatever profile it already had: don't clear selectedProfileId.
-		profilesState.selectError = toMessage(error);
-		return false;
-	} finally {
-		profilesState.selectingProfileId = null;
-	}
+	const outcome = await sessionRun(
+		() => getWsClient().request('SelectProfileRequest', { profileId }),
+		{
+			ok: () => {
+				profilesState.selectedProfileId = profileId;
+				sessionIntent.profileId = profileId;
+			},
+			// SelectProfileAsync throws before it assigns, so a rejection leaves the
+			// socket on whatever profile it already had: don't clear the selection.
+			fail: (message) => {
+				profilesState.selectError = message;
+			}
+		}
+	);
+	profilesState.selectingProfileId = null;
+	return outcome === 'ok';
 }
 
-// The backend session is the connection, so profiles fetched over a dead socket
-// belong to a dead session: reset to 'idle' rather than 'loggedOut' so the next
-// login refetches instead of showing the previous user's list. The selection goes
-// with it, for the same reason — it only ever lived on that socket.
-if (browser) {
-	getWsClient().onClose(() => {
-		profilesState.status = 'idle';
-		profilesState.profiles = [];
-		profilesState.error = null;
-		profilesState.creating = false;
-		profilesState.createError = null;
-		profilesState.selectedProfileId = null;
-		profilesState.selectingProfileId = null;
-		profilesState.selectError = null;
-	});
+/** Puts a reconnected socket back on the profile the old one was pointed at. */
+export async function replayProfileSelection(send: PrivilegedSend): Promise<void> {
+	const profileId = sessionIntent.profileId;
+	if (profileId === null) {
+		return;
+	}
+	try {
+		await send('SelectProfileRequest', { profileId });
+	} catch (error) {
+		// Unlike selectProfile(), a refusal here leaves the socket on no profile at
+		// all — the connection is new. Forgetting the intent is what stops a profile
+		// the backend will never accept again (a deleted one) from failing the same
+		// way on every future reconnect and aborting the rest of the replay with it.
+		sessionIntent.profileId = null;
+		throw error;
+	}
+	profilesState.selectedProfileId = profileId;
 }

@@ -30,7 +30,9 @@
 		class: className
 	}: Props = $props();
 
-	const pct = $derived(Math.max(0, Math.min(100, (value / max) * 100)));
+	// A zero max is "nothing to fill", not a division: 0/0 is NaN, which reaches
+	// the style attribute as `width: NaN%` and is dropped, leaving a full-width bar.
+	const pct = $derived(max <= 0 ? 0 : Math.max(0, Math.min(100, (value / max) * 100)));
 
 	const heights: Record<MeterSize, string> = {
 		sm: 'h-1',

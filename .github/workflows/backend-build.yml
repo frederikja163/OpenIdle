@@ -21,3 +21,9 @@ jobs:
 
       - name: Build
         run: dotnet build OpenIdle.slnx --configuration Release --no-restore
+
+      - name: Run unit tests
+        run: dotnet test tests/OpenIdle.Tests/OpenIdle.Tests.csproj --configuration Release --no-build
+
+      - name: Run integration tests
+        run: dotnet test tests/OpenIdle.IntegrationTests/OpenIdle.IntegrationTests.csproj --configuration Release --no-build

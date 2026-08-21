@@ -30,3 +30,6 @@ Desktop.ini
 *.db-shm
 *.db-wal
 *.db-journal
+
+# Generated DTO preview output (dotnet run --project Generators/Generator)
+**/*.generated.*

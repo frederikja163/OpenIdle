@@ -7,7 +7,6 @@ using System.Text.Json.Serialization;
 using System.Threading;
 using System.Threading.Tasks;
 using Backend.Dtos;
-using Backend.Entities;
 using Backend.Extensions;
 
 namespace Backend;
@@ -19,15 +18,14 @@ internal sealed class MessageReceivedEventArgs(RequestBase request) : EventArgs
 
 internal sealed class SocketCloseEventArgs : EventArgs
 {
-    
 }
 
 internal sealed class Socket : IDisposable
 {
     private readonly WebSocket _webSocket;
-    private bool _isClosed = false;
-    private readonly SemaphoreSlim _sendLock = new SemaphoreSlim(1, 1);
-    
+    private bool _isClosed;
+    private readonly SemaphoreSlim _sendLock = new(1, 1);
+
     internal Socket(WebSocket webSocket)
     {
         _webSocket = webSocket;
@@ -35,8 +33,8 @@ internal sealed class Socket : IDisposable
 
     internal WebSocketState State => _webSocket.State;
     
-    internal User? User { get; set; }
-    internal Profile? Profile { get; set; }
+    internal Guid? UserId { get; set; }
+    internal Guid? ProfileId { get; set; }
 
     internal event AsyncEventHandler<MessageReceivedEventArgs>? MessageReceived;
     internal event AsyncEventHandler<SocketCloseEventArgs>? Close;
@@ -83,43 +81,47 @@ internal sealed class Socket : IDisposable
 
     internal async Task SendResponseAsync(ResponseBase response)
     {
-        await SendMessageAsync(response);
+        using CancellationTokenSource timeout = new(TimeSpan.FromSeconds(5));
+        await SendMessageAsync(SocketJsonSerializer.Serialize(response), timeout.Token);
     }
 
     internal async Task SendEventAsync(EventBase eventBase)
     {
-        await SendMessageAsync(eventBase);
+        using CancellationTokenSource timeout = new(TimeSpan.FromSeconds(5));
+        await SendMessageAsync(SocketJsonSerializer.Serialize(eventBase), timeout.Token);
     }
 
-    private async Task HandleTextMessageAsync(byte[] bytes, int count)
+    internal async Task SendMessageAsync(byte[] bytes, CancellationToken cancellationToken)
     {
+        Log.Debug($"Sending: {Encoding.UTF8.GetString(bytes)}");
+        await _sendLock.WaitAsync(cancellationToken);
         try
         {
-            string str = Encoding.UTF8.GetString(bytes.AsSpan(0, count));
-            RequestBase dto = (JsonSerializer.Deserialize<DtoBase>(str) as RequestBase) ??
-                              throw new FormatException(
-                                  "Payload was either malformed json or an unrecognized json object.");
-            if (MessageReceived is { } handler)
-                await handler.InvokeAsync(this, new MessageReceivedEventArgs(dto));
-        }
-        catch (Exception exception)
-        {
-            await SendResponseAsync(new ErrorResponse(exception.Message));
-        }
-    }
-
-    private async Task SendMessageAsync(DtoBase dtoBase)
-    {
-        string str = JsonSerializer.Serialize(dtoBase, typeof(DtoBase));
-        byte[] bytes = Encoding.UTF8.GetBytes(str);
-        await _sendLock.WaitAsync();
-        try
-        {
-            await _webSocket.SendAsync(bytes, WebSocketMessageType.Text, true, CancellationToken.None);
+            await _webSocket.SendAsync(bytes, WebSocketMessageType.Text, true, cancellationToken);
         }
         finally
         {
             _sendLock.Release();
+        }
+    }
+
+    private async Task HandleTextMessageAsync(byte[] bytes, int count)
+    {
+        Log.Debug($"Received: {Encoding.UTF8.GetString(bytes)}");
+        RequestBase? dto = null;
+        try
+        {
+            dto = SocketJsonSerializer.DeserializeRequest(bytes, count);
+            await MessageReceived.InvokeAsync(this, new MessageReceivedEventArgs(dto));
+        }
+        catch (BackendException exception)
+        {
+            await SendResponseAsync(new ErrorResponse() { Message = exception.Message, RequestId = dto?.RequestId ?? 0});
+        }
+        catch (Exception ex)
+        {
+            Log.Error(ex);
+            await SendResponseAsync(new ErrorResponse { Message = "Internal server error.", RequestId = dto?.RequestId ?? 0});
         }
     }
 
@@ -141,7 +143,7 @@ internal sealed class Socket : IDisposable
             _webSocket.Abort();
         }
 
-        if (Close is { } handler) await handler(this, new SocketCloseEventArgs());
+        await Close.InvokeAsync(this, new SocketCloseEventArgs());
     }
 
     public void Dispose()

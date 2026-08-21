@@ -77,8 +77,8 @@ const fillerStats: Omit<Profile, 'profileId' | 'name' | 'active'>[] = [
 /** Dresses a server profile in the card's view model, cycling the filler above. */
 export function toProfile(dto: ProfileDto, index: number, active: boolean): Profile {
 	return {
-		profileId: dto.ProfileId,
-		name: dto.Name,
+		profileId: dto.profileId,
+		name: dto.name,
 		...fillerStats[index % fillerStats.length],
 		active
 	};

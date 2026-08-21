@@ -1,14 +1,14 @@
 ﻿using System;
 using System.Threading.Tasks;
 using Backend.Database;
-using Backend.Entities;
+using Backend.Database.Entities;
 using Microsoft.EntityFrameworkCore;
 
 namespace Backend.Services;
 
-public sealed class UserService(IDbContextFactory<GameDbContext> dbContextFactory)
+public sealed class UserService(IDbContextFactory<GameDbContext> dbContextFactory, SocketRegistryService socketRegistry)
 {
-    internal async Task<User> GetTestUserAsync()
+    internal async Task<Guid> GetTestUserAsync()
     {
         await using GameDbContext dbContext = await dbContextFactory.CreateDbContextAsync();
 
@@ -20,11 +20,12 @@ public sealed class UserService(IDbContextFactory<GameDbContext> dbContextFactor
             await dbContext.SaveChangesAsync();
         }
 
-        return user;
+        return user.UserId;
     }
 
-    internal void SignIn(Socket socket, User user)
+    internal void SignIn(Socket socket, Guid userId)
     {
-        socket.User = user;
+        socket.UserId = userId;
+        socketRegistry.SetUser(socket, userId);
     }
 }

@@ -1,33 +1,50 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
-const { request } = vi.hoisted(() => ({ request: vi.fn() }));
-
-// The module's onClose reset is not exercised here: it registers behind
-// `if (browser)`, which is false in this node project.
-vi.mock('$lib/ws/client', () => ({
-	getWsClient: () => ({ request, onClose: () => () => {} })
+const { request, connection } = vi.hoisted(() => ({
+	request: vi.fn(),
+	// The generation the store reads to decide whether a result still belongs to
+	// the live connection. Bumping it here is a socket dropping.
+	connection: { generation: 0 }
 }));
+
+// One object handed back on every call, like the real singleton: sessionRun
+// compares the generation it captured against the one on the client it fetches
+// later, so a fresh object per call would be testing a contract we do not ship.
+vi.mock('$lib/ws/client', () => {
+	const client = {
+		request,
+		get generation() {
+			return connection.generation;
+		},
+		onClose: () => () => {},
+		onStatus: () => () => {},
+		reopen: () => {}
+	};
+	return { getWsClient: () => client };
+});
 
 const { createProfile, loadProfiles, profilesState, selectProfile, validateProfileName } =
 	await import('$lib/state/profiles.svelte');
+// wireSession() registers the reset against the socket in the real app; this
+// project never calls it, so the reset is driven directly here instead — which
+// is what makes a connection dropping testable at all.
+const { forgetSessionIntent, resetSessionState, sessionIntent } =
+	await import('$lib/state/session.svelte');
 
-const THORIN = { Name: 'Thorin', ProfileId: '11111111-1111-1111-1111-111111111111' };
-const BALIN = { Name: 'Balin', ProfileId: '22222222-2222-2222-2222-222222222222' };
+const THORIN = { name: 'Thorin', profileId: '11111111-1111-1111-1111-111111111111' };
+const BALIN = { name: 'Balin', profileId: '22222222-2222-2222-2222-222222222222' };
 
 function listResponse(profiles: (typeof THORIN)[]) {
-	return { $type: 'ListProfilesResponse', Id: 1, Profiles: profiles };
+	return { $type: 'ListProfilesResponse', requestId: 1, profiles };
 }
 
 beforeEach(() => {
 	request.mockReset();
-	profilesState.status = 'idle';
-	profilesState.profiles = [];
-	profilesState.error = null;
-	profilesState.creating = false;
-	profilesState.createError = null;
-	profilesState.selectedProfileId = null;
-	profilesState.selectingProfileId = null;
-	profilesState.selectError = null;
+	connection.generation = 0;
+	// One call each, no field lists: a field added to the store or to the intent
+	// and forgotten here can no longer leak between cases.
+	resetSessionState();
+	forgetSessionIntent();
 });
 
 describe('loadProfiles', () => {
@@ -56,6 +73,8 @@ describe('loadProfiles', () => {
 describe('validateProfileName', () => {
 	it('accepts a name the backend would accept', () => {
 		expect(validateProfileName('Thorin1')).toBeNull();
+		// The boundary itself, against the rejection of 31 below.
+		expect(validateProfileName('a'.repeat(30))).toBeNull();
 	});
 
 	it.each([
@@ -73,7 +92,7 @@ describe('createProfile', () => {
 	function respondByType(profilesAfterCreate: (typeof THORIN)[]) {
 		request.mockImplementation((type: string) =>
 			type === 'CreateProfileRequest'
-				? Promise.resolve({ $type: 'CreateProfileResponse', Id: 1 })
+				? Promise.resolve({ $type: 'CreateProfileResponse', requestId: 1 })
 				: Promise.resolve(listResponse(profilesAfterCreate))
 		);
 	}
@@ -83,7 +102,7 @@ describe('createProfile', () => {
 
 		await expect(createProfile('Thorin')).resolves.toBe(true);
 
-		expect(request).toHaveBeenNthCalledWith(1, 'CreateProfileRequest', { Name: 'Thorin' });
+		expect(request).toHaveBeenNthCalledWith(1, 'CreateProfileRequest', { name: 'Thorin' });
 		expect(request).toHaveBeenNthCalledWith(2, 'ListProfilesRequest', {});
 		expect(profilesState.profiles).toEqual([THORIN]);
 		expect(profilesState.creating).toBe(false);
@@ -95,7 +114,7 @@ describe('createProfile', () => {
 
 		await createProfile('  Thorin  ');
 
-		expect(request).toHaveBeenNthCalledWith(1, 'CreateProfileRequest', { Name: 'Thorin' });
+		expect(request).toHaveBeenNthCalledWith(1, 'CreateProfileRequest', { name: 'Thorin' });
 	});
 
 	it('refuses an invalid name without spending a round trip', async () => {
@@ -142,33 +161,33 @@ describe('createProfile', () => {
 
 describe('selectProfile', () => {
 	it('points the socket at the profile and records the selection', async () => {
-		request.mockResolvedValue({ $type: 'SelectProfileResponse', Id: 1 });
+		request.mockResolvedValue({ $type: 'SelectProfileResponse', requestId: 1 });
 
-		await expect(selectProfile(THORIN.ProfileId)).resolves.toBe(true);
+		await expect(selectProfile(THORIN.profileId)).resolves.toBe(true);
 
-		expect(request).toHaveBeenCalledWith('SelectProfileRequest', { ProfileId: THORIN.ProfileId });
-		expect(profilesState.selectedProfileId).toBe(THORIN.ProfileId);
+		expect(request).toHaveBeenCalledWith('SelectProfileRequest', { profileId: THORIN.profileId });
+		expect(profilesState.selectedProfileId).toBe(THORIN.profileId);
 		expect(profilesState.selectingProfileId).toBeNull();
 		expect(profilesState.selectError).toBeNull();
 	});
 
 	it('keeps the previous selection when the backend refuses', async () => {
-		profilesState.selectedProfileId = BALIN.ProfileId;
+		profilesState.selectedProfileId = BALIN.profileId;
 		request.mockRejectedValue(new Error('Profile does not belong to user.'));
 
-		await expect(selectProfile(THORIN.ProfileId)).resolves.toBe(false);
+		await expect(selectProfile(THORIN.profileId)).resolves.toBe(false);
 
 		expect(profilesState.selectError).toBe('Profile does not belong to user.');
-		expect(profilesState.selectedProfileId).toBe(BALIN.ProfileId);
+		expect(profilesState.selectedProfileId).toBe(BALIN.profileId);
 	});
 
 	it('marks only the profile being selected as in flight', async () => {
 		let release = (): void => {};
 		request.mockReturnValueOnce(new Promise((resolve) => (release = () => resolve(undefined))));
 
-		const pending = selectProfile(THORIN.ProfileId);
+		const pending = selectProfile(THORIN.profileId);
 
-		expect(profilesState.selectingProfileId).toBe(THORIN.ProfileId);
+		expect(profilesState.selectingProfileId).toBe(THORIN.profileId);
 		release();
 		await pending;
 		expect(profilesState.selectingProfileId).toBeNull();
@@ -178,11 +197,109 @@ describe('selectProfile', () => {
 		let release = (): void => {};
 		request.mockReturnValueOnce(new Promise((resolve) => (release = () => resolve(undefined))));
 
-		const first = selectProfile(THORIN.ProfileId);
-		await expect(selectProfile(BALIN.ProfileId)).resolves.toBe(false);
+		const first = selectProfile(THORIN.profileId);
+		await expect(selectProfile(BALIN.profileId)).resolves.toBe(false);
 
 		expect(request).toHaveBeenCalledTimes(1);
 		release();
 		await first;
+	});
+
+	it('records the selection so a reconnect can restore it', async () => {
+		request.mockResolvedValue({ $type: 'SelectProfileResponse', requestId: 1 });
+
+		await selectProfile(THORIN.profileId);
+
+		// Outside the session scope on purpose: the reset is what destroys the
+		// evidence of what the session was, and the replay needs it afterwards.
+		resetSessionState();
+		expect(profilesState.selectedProfileId).toBeNull();
+		expect(sessionIntent.profileId).toBe(THORIN.profileId);
+	});
+});
+
+/*
+ * The bug this whole mechanism exists for. Rejecting a pending request only
+ * schedules a microtask, so the close handler's reset runs first and the
+ * request's catch runs second — which used to leave `status` on 'error' after
+ * the reset had put it back to 'idle'. The page's only load trigger fires on
+ * 'idle', so the list never loaded again for the life of the page.
+ */
+describe('a connection dropping under a request', () => {
+	function dropDuring<T>(promise: Promise<T>): Promise<T> {
+		resetSessionState();
+		connection.generation++;
+		return promise;
+	}
+
+	it('leaves the list reloadable rather than stuck on an error', async () => {
+		let fail = (): void => {};
+		request.mockReturnValueOnce(
+			new Promise((_, reject) => (fail = () => reject(new Error('WebSocket closed'))))
+		);
+
+		const loading = loadProfiles();
+		expect(profilesState.status).toBe('loading');
+
+		// The socket drops: the reset lands first, the rejection second.
+		const dropped = dropDuring(loading);
+		fail();
+		await dropped;
+
+		expect(profilesState.status).toBe('idle');
+		expect(profilesState.error).toBeNull();
+
+		// And the next attempt actually runs, which is what was impossible before.
+		request.mockResolvedValueOnce(listResponse([THORIN]));
+		await loadProfiles();
+		expect(profilesState.status).toBe('loaded');
+		expect(profilesState.profiles).toEqual([THORIN]);
+	});
+
+	it('discards a list that arrives after the connection carrying it died', async () => {
+		let land = (): void => {};
+		request.mockReturnValueOnce(
+			new Promise((resolve) => (land = () => resolve(listResponse([THORIN]))))
+		);
+
+		const loading = loadProfiles();
+		const dropped = dropDuring(loading);
+		land();
+		await dropped;
+
+		// A success is as unwritable as a failure once its connection is gone: the
+		// list belongs to a session that no longer exists.
+		expect(profilesState.profiles).toEqual([]);
+		expect(profilesState.status).toBe('idle');
+	});
+
+	it('does not surface a dead connection failure on the create form', async () => {
+		let fail = (): void => {};
+		request.mockReturnValueOnce(
+			new Promise((_, reject) => (fail = () => reject(new Error('WebSocket closed'))))
+		);
+
+		const creating = createProfile('Thorin');
+		const dropped = dropDuring(creating);
+		fail();
+
+		await expect(dropped).resolves.toBe(false);
+		expect(profilesState.createError).toBeNull();
+		expect(profilesState.creating).toBe(false);
+	});
+
+	it('does not surface a dead connection failure on a select', async () => {
+		let fail = (): void => {};
+		request.mockReturnValueOnce(
+			new Promise((_, reject) => (fail = () => reject(new Error('WebSocket closed'))))
+		);
+
+		const selecting = selectProfile(THORIN.profileId);
+		const dropped = dropDuring(selecting);
+		fail();
+
+		await expect(dropped).resolves.toBe(false);
+		expect(profilesState.selectError).toBeNull();
+		expect(profilesState.selectedProfileId).toBeNull();
 	});
 });

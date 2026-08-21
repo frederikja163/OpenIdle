@@ -28,7 +28,7 @@ Of the three packages behind the shadcn styling idiom, this sits between the oth
 
 It also composes with the rest of the idiom rather than duplicating it: `tv()` handles variant selection, and conflict resolution is still delegated to [tailwind-merge](./tailwind-merge.md).
 
-**Import sites grow one-per-component.** [clsx](./clsx.md) and [tailwind-merge](./tailwind-merge.md) are reached through the single `cn()` helper; `tv()` is instead called directly in the `module` block of each variant-bearing component. The vendored `button` at `src/lib/components/ui/button/` is the first such component and ships `tv()` to the browser; every component added after it adds another import site. That is why its undo risk is rated above [clsx](./clsx.md)'s.
+**Two import sites** — `button.svelte` and `badge.svelte`, the two vendored components that carry variants. Unlike [clsx](./clsx.md) and [tailwind-merge](./tailwind-merge.md), which are reached through the single `cn()` helper, `tv()` is called directly in the `module` block of each variant-bearing component, so its import sites grow one-per-component as they are added. That is why its undo risk is rated above [clsx](./clsx.md)'s.
 
 ### Pros
 
@@ -59,7 +59,7 @@ Buying wins, though less emphatically than for [tailwind-merge](./tailwind-merge
 
 ### Undo risk — low
 
-The vendored `button` calls `tv()`, but because that component is vendored source we own, replacement is a mechanical edit rather than a fight with a package boundary, and the resolver itself is of modest size. The rating scales with the number of variant-bearing components added — each one calls `tv()` in its `module` block.
+Two import sites today — `button.svelte` and `badge.svelte` — and the replacement is a local resolver of modest size. The rating is `low` rather than `medium` only because that count is still small; it scales with the number of variant-bearing components added. Because those components are vendored source we own, replacement is a mechanical edit rather than a fight with a package boundary.
 
 ### Security risk — low
 

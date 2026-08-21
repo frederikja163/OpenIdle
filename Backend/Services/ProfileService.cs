@@ -2,51 +2,57 @@
 using System.Linq;
 using System.Threading.Tasks;
 using Backend.Database;
-using Backend.Entities;
+using Backend.Database.Entities;
+using Microsoft.Data.Sqlite;
 using Microsoft.EntityFrameworkCore;
 using SQLitePCL;
 
 namespace Backend.Services;
 
-public sealed class ProfileService(IDbContextFactory<GameDbContext> dbContextFactory)
+public sealed class ProfileService(IDbContextFactory<GameDbContext> dbContextFactory, SocketRegistryService socketRegistry)
 {
-    internal async Task<Profile[]> GetProfilesAsync(User user)
+    internal async Task<Profile[]> GetProfilesAsync(Guid userId)
     {
         await using GameDbContext dbContext = await dbContextFactory.CreateDbContextAsync();
 
         return await dbContext.Profiles
-            .Where(p => p.Users.Any(u => u.UserId == user.UserId))
+            .Where(p => p.Users.Any(u => u.UserId == userId))
             .ToArrayAsync();
     }
 
-    internal async Task<Profile> GetProfileAsync(User user, Guid profileId)
+    internal async Task<Profile> GetProfileAsync(Guid userId, Guid profileId)
     {
         await using GameDbContext dbContext = await dbContextFactory.CreateDbContextAsync();
 
         return await dbContext.Profiles
-                   .FirstOrDefaultAsync(p => p.ProfileId == profileId && p.Users.Any(u => u.UserId == user.UserId))
-               ?? throw new InvalidOperationException("Profile does not belong to user.");
+                   .FirstOrDefaultAsync(p => p.ProfileId == profileId && p.Users.Any(u => u.UserId == userId))
+               ?? throw new BackendException("Profile does not belong to user.");
     }
 
-    internal async Task<Profile> CreateProfileAsync(User user, string name)
+    internal async Task<Profile> GetProfileAsync(Guid profileId)
     {
-        // TODO: Fix name duplication problem here.
-        ArgumentException.ThrowIfNullOrWhiteSpace(name);
+        await using GameDbContext dbContext = await dbContextFactory.CreateDbContextAsync();
+
+        return await dbContext.Profiles
+                   .FirstOrDefaultAsync(p => p.ProfileId == profileId)
+               ?? throw new BackendException("Profile does not exist.");
+    }
+
+    internal async Task<Profile> CreateProfileAsync(Guid userId, string name)
+    {
+        BackendException.ThrowIfNullOrWhiteSpace(name);
         if (name.Length > 30)
         {
-            throw new ArgumentException("Profile name must be at most 30 characters.", nameof(name));
+            throw new BackendException("Profile name must be at most 30 characters.");
         }
         if (!name.All(char.IsAsciiLetterOrDigit))
         {
-            throw new ArgumentException("Profile name must be alphanumeric.", nameof(name));
+            throw new BackendException("Profile name must be alphanumeric.");
         }
 
         await using GameDbContext dbContext = await dbContextFactory.CreateDbContextAsync();
-        if (await dbContext.Profiles.AnyAsync(p => p.Name == name))
-        {
-            throw new ArgumentException("Profile name is already taken.");
-        }
 
+        User user = new() { UserId = userId };
         Profile profile = new Profile()
         {
             ProfileId = Guid.NewGuid(),
@@ -56,13 +62,36 @@ public sealed class ProfileService(IDbContextFactory<GameDbContext> dbContextFac
         dbContext.Attach(user);
         profile.Users.Add(user);
         dbContext.Profiles.Add(profile);
-        await dbContext.SaveChangesAsync();
+        try
+        {
+            await dbContext.SaveChangesAsync();
+        }
+        catch (DbUpdateException exception) when (IsUniqueNameViolation(exception))
+        {
+            throw new BackendException("Profile name is already taken.");
+        }
 
         return profile;
     }
 
-    internal async Task SelectProfileAsync(Socket socket, User user, Guid profileId)
+    private static bool IsUniqueNameViolation(DbUpdateException exception)
     {
-        socket.Profile = await GetProfileAsync(user, profileId);
+        for (Exception? inner = exception.InnerException; inner is not null; inner = inner.InnerException)
+        {
+            if (inner is SqliteException { SqliteExtendedErrorCode: raw.SQLITE_CONSTRAINT_UNIQUE })
+            {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    internal async Task<Profile> SelectProfileAsync(Socket socket, Guid userId, Guid profileId)
+    {
+        Profile profile = await GetProfileAsync(userId, profileId);
+        socket.ProfileId = profileId;
+        socketRegistry.SetProfile(socket, profileId);
+        return profile;
     }
 }
