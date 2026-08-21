@@ -367,12 +367,13 @@ export class WsClient {
 			}
 			case 'error': {
 				// The backend echoes the failed request's id, except for a frame it
-				// could not deserialize far enough to read one — it sends 0 there,
-				// and 0 is never a request id. Falling back on the oldest unanswered
+				// could not deserialize far enough to read one. It sets 0 there, which
+				// the serializer then drops entirely, so the id arrives as undefined —
+				// either way never a real id. Falling back on the oldest unanswered
 				// request is right for that case because the backend handles messages
 				// FIFO per connection, which is why the cursor is `outstanding` and
 				// not `pending`.
-				const echoed = classified.message.requestId;
+				const echoed = classified.message.requestId ?? 0;
 				const id = echoed > 0 ? echoed : this.outstanding.shift();
 				if (id === undefined) {
 					console.warn('Websocket error with no request to attribute it to:', classified.message);

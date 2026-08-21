@@ -64,7 +64,7 @@ Everything that crosses the WebSocket is a DTO in `Backend.Dtos`, generated from
 
 - The root element can be any name — [`types.xml`](../../types.xml) uses `<Types>`. Only its child elements are read.
 - `Property` elements are collected from **direct** children only (a `Request`'s `<Response>` is a direct child; the response's properties live *inside* `<Response>`).
-- Top-level element order is preserved in the generated file. Unknown top-level element names are silently ignored.
+- Top-level element order is preserved in the generated file. An unknown top-level element name is a parse error.
 
 ### 2.2 `<Property>` attributes
 
@@ -83,7 +83,7 @@ Built-in type mapping (verified against the emitter):
 | `float` | `float` | `number` | `1.5` |
 | `Guid` | `Guid` | `string` | `"00000000-0000-..."` |
 | declared `Dto` (e.g. `Profile`) | `ProfileDto` | `ProfileDto` | object |
-| declared `Enum` (e.g. `ItemId`) | `ItemId` | `ItemId` | number |
+| declared `Enum` (e.g. `ItemId`) | `ItemId` | `ItemId` (a union of string literals) | `"Stone"` |
 
 ### 2.3 Naming rules (enforced by the emitters)
 
@@ -136,10 +136,11 @@ The source generator reads `types.xml` (wired as an `AdditionalFile` in [`Backen
 ### Step 3 — generate the TypeScript (frontend only)
 
 ```powershell
-dotnet run --project Generators\Generator -- -i types.xml -t Ts -o Frontend\src\lib\dto.generated.ts
+cd Frontend; bun run gen:dto   # or, from the repo root:
+dotnet run --project Generators\Generator -- -i types.xml -t Ts -o Frontend\src\lib\ws\dto.generated.ts
 ```
 
-The TS emitter is **not** wired into the frontend build; run the CLI to regenerate the output (it follows the `*.generated.ts` convention, so the root `.gitignore` excludes it). Target `Cs` prints the same output the source generator produces, useful for review:
+`gen:dto` is the first step of `dev`, `build` and `check`, so simply starting the frontend regenerates this file — a contract edit cannot go unnoticed, and **a .NET SDK is a hard prerequisite for frontend work**. The output is also **committed** (the root `.gitignore` re-includes it) so protocol changes appear in review, and the backend CI workflow re-runs the generator and fails on any diff. Target `Cs` prints the same output the source generator produces, useful for review:
 
 ```powershell
 dotnet run --project Generators\Generator -- -i types.xml -t Cs
@@ -259,9 +260,9 @@ Conventions (not enforced — reviewer judgement):
 
 ## 8. Gotchas & known quirks
 
-- **`requestId`/`eventId` are numeric on both sides.** The C# bases hardcode `int RequestId` / `int EventId` and the TS emitter hardcodes `requestId: number` / `eventId: number` (`Generators/Core/TsEmitter.cs:20-33`). This matches the TS socket client ([`Frontend/src/lib/ws/client.ts`](../../Frontend/src/lib/ws/client.ts)), which assigns client-chosen numeric ids (`nextRequestId`) and expects the echoed response to carry the same number. Keep the two sides in lockstep — changing one alone breaks deserialization. The contract is strict integers: there is no `JsonNumberHandling` leniency in the backend serializer, so a quoted numeral such as `"requestId": "1"` fails deserialization — clients must send a plain JSON number.
+- **`requestId`/`eventId` are numeric on both sides, and optional.** The C# bases declare `int? RequestId` / `int? EventId`, and `SocketJsonSerializer` sets `DefaultIgnoreCondition = WhenWritingDefault`, so an id left at 0 is *omitted from the frame entirely* rather than sent as 0. The TS emitter therefore emits `requestId?: number` / `eventId?: number`, and `classifyMessage` relies on that absence to tell a server-push event from a response. This matches the TS socket client ([`Frontend/src/lib/ws/client.ts`](../../Frontend/src/lib/ws/client.ts)), which assigns client-chosen numeric ids (`nextRequestId`) and expects the echoed response to carry the same number. Keep the two sides in lockstep — changing one alone breaks deserialization. The contract is strict integers: there is no `JsonNumberHandling` leniency in the backend serializer, so a quoted numeral such as `"requestId": "1"` fails deserialization — clients must send a plain JSON number.
 - **No editor validation.** There is no XSD; typos in `type` values surface at parse time (DTC002 / CLI error) and other mistakes at C# build time or not at all (TS). Copy a nearby block rather than typing from memory.
-- **Unknown top-level elements are silently ignored** by the parser (`Generators/Core/Parser.cs:33-52`).
+- **Unknown top-level elements are a parse error**, not ignored — `Generators/Core/Parser.cs:71-72` throws `ParserException`.
 - **`GetElementsByTagName("Response")` is recursive** — the response can sit anywhere inside the request element, but keep it as a direct child.
 - **The decision doc differs from reality.** [`../libraries/dto-xml-contract.md`](../libraries/dto-xml-contract.md) proposed `required="true"`, `T[]` type tokens, and a namespaced root. The implemented contract (this document) uses `multiple="true"`, bare type names, and no `required` attribute. This document and the code are authoritative.
 
@@ -274,8 +275,8 @@ dotnet build Backend\Backend.csproj
 # 2. Generated C# looks right
 dotnet run --project Generators\Generator -- -i types.xml -t Cs
 
-# 3. TypeScript interfaces look right (output follows *.generated.* convention for git-ignore)
-dotnet run --project Generators\Generator -- -i types.xml -t Ts -o Frontend\src\lib\dto.generated.ts
+# 3. TypeScript is regenerated and committed; CI fails if this leaves a diff
+cd Frontend; bun run gen:dto; bun run check; bun run test:unit -- --run
 ```
 
 ## 10. Related documents

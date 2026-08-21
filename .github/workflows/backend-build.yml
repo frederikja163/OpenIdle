@@ -27,3 +27,11 @@ jobs:
 
       - name: Run integration tests
         run: dotnet test tests/OpenIdle.IntegrationTests/OpenIdle.IntegrationTests.csproj --configuration Release --no-build
+
+      # types.xml is the source of truth for the frontend protocol too, and the
+      # generated TypeScript is committed. Regenerating here catches a contract
+      # change that was not accompanied by `bun run gen:dto`.
+      - name: Check the generated TypeScript DTOs are up to date
+        run: |
+          dotnet run --project Generators/Generator -- -i types.xml -t Ts -o Frontend/src/lib/ws/dto.generated.ts
+          git diff --exit-code -- Frontend/src/lib/ws/dto.generated.ts

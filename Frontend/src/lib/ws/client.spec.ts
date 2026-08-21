@@ -287,10 +287,10 @@ describe('WsClient', () => {
 
 		// The socket is left in CONNECTING forever, so the only thing that can
 		// settle this is a timer armed before the connection was awaited.
-		const ping = capture(client.request('PingRequest', {}));
+		const login = capture(client.request('LoginAsTestUserRequest', {}));
 		await vi.advanceTimersByTimeAsync(50);
 
-		expect((await ping).toString()).toMatch(/PingRequest timed out after 50ms/);
+		expect((await login).toString()).toMatch(/LoginAsTestUserRequest timed out after 50ms/);
 	});
 
 	it('stops calling handlers that have unsubscribed', async () => {
@@ -321,7 +321,7 @@ describe('WsClient', () => {
 		const onProfiles = vi.fn();
 		client.onEvent('ProfilesChangedEvent', onProfiles);
 
-		capture(client.request('PingRequest', {}));
+		capture(client.request('LoginAsTestUserRequest', {}));
 		await flush();
 		sockets[0].open();
 		await flush();
@@ -344,7 +344,7 @@ describe('WsClient', () => {
 		});
 		client.onEvent('ProfilesChangedEvent', second);
 
-		capture(client.request('PingRequest', {}));
+		capture(client.request('LoginAsTestUserRequest', {}));
 		await flush();
 		sockets[0].open();
 		await flush();
@@ -452,18 +452,20 @@ describe('WsClient', () => {
 			}
 		});
 
-		expect((await capture(client.request('PingRequest', {}))).toString()).toMatch(/mixed content/);
+		expect((await capture(client.request('LoginAsTestUserRequest', {}))).toString()).toMatch(
+			/mixed content/
+		);
 
 		// The memoised rejection must not outlive the attempt that produced it, or
 		// the singleton is bricked for the life of the page.
-		const retry = capture(client.request('PingRequest', {}));
+		const retry = capture(client.request('LoginAsTestUserRequest', {}));
 		await flush();
 		expect(sockets).toHaveLength(1);
 		sockets[0].open();
 		await flush();
-		sockets[0].deliver({ $type: 'PongResponse', requestId: 2 });
+		sockets[0].deliver({ $type: 'LoginAsTestUserResponse', requestId: 2 });
 
-		await expect(retry).resolves.toMatchObject({ $type: 'PongResponse' });
+		await expect(retry).resolves.toMatchObject({ $type: 'LoginAsTestUserResponse' });
 	});
 
 	it('reconnects after an unexpected drop but not after close()', async () => {
@@ -501,7 +503,7 @@ describe('WsClient', () => {
 			replayed.push('login');
 		});
 
-		capture(client.request('PingRequest', {}));
+		capture(client.request('LoginAsTestUserRequest', {}));
 		await flush();
 		sockets[0].open();
 		await flush();

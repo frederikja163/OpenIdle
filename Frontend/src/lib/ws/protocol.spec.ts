@@ -3,8 +3,8 @@ import { classifyMessage, encodeRequest, MAX_MESSAGE_BYTES } from './protocol';
 
 describe('encodeRequest', () => {
 	it('emits $type as the first property', () => {
-		const json = encodeRequest('PingRequest', 1, {});
-		expect(json.startsWith('{"$type":"PingRequest"')).toBe(true);
+		const json = encodeRequest('LoginAsTestUserRequest', 1, {});
+		expect(json.startsWith('{"$type":"LoginAsTestUserRequest"')).toBe(true);
 	});
 
 	it('includes the request id and camelCase payload', () => {

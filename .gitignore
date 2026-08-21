@@ -31,5 +31,7 @@ Desktop.ini
 *.db-wal
 *.db-journal
 
-# Generated DTO preview output (dotnet run --project Generators/Generator)
+# Generated DTO preview output (dotnet run --project Generators/Generator -t Cs).
+# TypeScript DTOs are the exception: `bun run dev` regenerates them, and they are
+# also committed so protocol changes show up in review and CI can flag drift.
 **/*.generated.*
