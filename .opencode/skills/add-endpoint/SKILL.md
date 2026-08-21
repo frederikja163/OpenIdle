@@ -61,7 +61,7 @@ Controllers are resolved via DI per message; an unregistered dependency fails at
 
 ## Step 3 — write the controller method
 
-Add a method to an existing `[SocketController]` in `Backend/Controllers/` or create a new one (see `UserController.cs` for the canonical shape):
+Add a method to an existing `[SocketController]` in `Backend/Controllers/` or create a new one (see `AuthController.cs` for the canonical shape):
 
 ```csharp
 [SocketController]
@@ -78,10 +78,10 @@ public sealed class ProfileController(ProfileService profileService) : SocketCon
 
 Contract details that fail silently or at startup if wrong:
 
-- Class: `public`, `sealed`, derives `SocketControllerBase`, carries `[SocketController]`.
-- Method: `public` instance method carrying `[Request]`, returns `Task`, takes **exactly one** parameter whose type derives from `RequestBase` (i.e. a generated request type).
+- **Discovery** (in `MapSocketControllers()`, `Backend/Extensions/WebApplicationBuilderExtensions.cs`): classes must be `public` and carry `[SocketController]`; methods must be `public` instance methods carrying `[Request]`. Non-matching classes/methods are silently excluded from registration with no error.
+- **Startup validation** (in `SocketEndpointService.TryRegisterEndpoint`, `Backend/Services/SocketEndpointService.cs`): throws at startup if the method does not have exactly one parameter, or if that parameter's type is not assignable to `RequestBase`.
+- **Runtime behavior** (in the dispatcher, `SocketEndpointService`'s message-handling method): the controller instance is only treated as a `SocketControllerBase` (getting `Socket`/`UserId`/`ProfileId`/`Request` populated) if it actually derives from `SocketControllerBase` — this is not checked at startup, so a controller that doesn't derive from it will fail later when code accesses those members. Likewise, the method's return value is only awaited if it is actually a `Task`; a non-`Task` return is silently not awaited, it is not a startup-checked contract.
 - Dispatch is keyed by the parameter type, not the method name.
-- Discovery failures (wrong visibility/attributes) are **silently excluded**; signature violations throw at startup when `MapSocketControllers()` runs.
 - Reply exactly once via `await RespondAsync(...)` — it copies `RequestId` onto the response automatically.
 - Reject bad input by throwing `BackendException` with a client-safe message; it becomes an `ErrorResponse`. Anything else becomes a generic `"Internal server error."`.
 - Session state available on the base class: `UserId`, `ProfileId` (both throw before login/profile selection), `Socket`, `Request`.
@@ -93,11 +93,17 @@ dotnet build Backend\Backend.csproj   # parses types.xml, generates DTOs, compil
 dotnet run --project Backend          # startup validation throws on a malformed handler
 ```
 
-Smoke test over WebSocket (`http` launch profile → `ws://localhost:5066/ws`):
+Illustrative WebSocket payloads (`http` launch profile → `ws://localhost:5066/ws`):
+
+A real client flow must first establish session state via `LoginAsTestUserRequest` (sets `UserId`) then `SelectProfileRequest` (sets `ProfileId`) before any endpoint that relies on those properties will work:
 
 ```json
-{ "$type": "RenameProfileRequest", "requestId": 1, "profileId": "...", "newName": "Hero" }
+{ "$type": "LoginAsTestUserRequest", "requestId": 1 }
+{ "$type": "SelectProfileRequest", "requestId": 2, "profileId": "<actual-guid>" }
+{ "$type": "RenameProfileRequest", "requestId": 3, "profileId": "<actual-guid>", "newName": "Hero" }
 ```
+
+(Note: `RenameProfileRequest` is this doc's illustrative example, not an actual existing endpoint.)
 
 Only regenerate TypeScript when the task explicitly asks for frontend work:
 
