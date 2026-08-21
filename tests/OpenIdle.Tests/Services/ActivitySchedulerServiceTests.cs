@@ -6,15 +6,15 @@ using Backend.Services;
 namespace OpenIdle.Tests.Services;
 
 [TestFixture]
-public sealed class ActivityStartServiceTests
+public sealed class ActivitySchedulerServiceTests
 {
     [Test]
     public void StartEvent_EnqueuesActivity()
     {
-        ActivityStartService service = new();
+        ActivitySchedulerService service = new();
         FakeCompletion completion = new(Guid.NewGuid());
 
-        service.StartEvent(completion, DateTime.Now.AddMinutes(5));
+        service.StartEvent(completion, DateTime.UtcNow.AddMinutes(5));
 
         Assert.That(completion.CompleteCalled, Is.False);
     }
@@ -22,12 +22,12 @@ public sealed class ActivityStartServiceTests
     [Test]
     public void StartEvent_MultipleActivities_AllEnqueued()
     {
-        ActivityStartService service = new();
+        ActivitySchedulerService service = new();
         FakeCompletion a = new(Guid.NewGuid());
         FakeCompletion b = new(Guid.NewGuid());
 
         service.StartEvent(a, DateTime.UtcNow.AddMinutes(5));
-        service.StartEvent(b, DateTime.Now.AddMinutes(10));
+        service.StartEvent(b, DateTime.UtcNow.AddMinutes(10));
 
         Assert.Multiple(() =>
         {
@@ -39,9 +39,9 @@ public sealed class ActivityStartServiceTests
     [Test]
     public void RemoveEvent_ExistingActivity_RemovesIt()
     {
-        ActivityStartService service = new();
+        ActivitySchedulerService service = new();
         FakeCompletion completion = new(Guid.NewGuid());
-        service.StartEvent(completion, DateTime.Now.AddMinutes(5));
+        service.StartEvent(completion, DateTime.UtcNow.AddMinutes(5));
 
         service.RemoveEvent(completion.ProfileId);
 
@@ -52,7 +52,7 @@ public sealed class ActivityStartServiceTests
     [Test]
     public void RemoveEvent_NonexistentActivity_DoesNotThrow()
     {
-        ActivityStartService service = new();
+        ActivitySchedulerService service = new();
 
         Assert.DoesNotThrow(() => service.RemoveEvent(Guid.NewGuid()));
     }
@@ -60,7 +60,7 @@ public sealed class ActivityStartServiceTests
     [Test]
     public void NextEvent_NoEvents_DoesNotThrow()
     {
-        ActivityStartService service = new();
+        ActivitySchedulerService service = new();
 
         Assert.DoesNotThrow(() => service.NextEvent());
     }
@@ -68,9 +68,9 @@ public sealed class ActivityStartServiceTests
     [Test]
     public void NextEvent_EventInFuture_DoesNotComplete()
     {
-        ActivityStartService service = new();
+        ActivitySchedulerService service = new();
         FakeCompletion completion = new(Guid.NewGuid());
-        service.StartEvent(completion, DateTime.Now.AddMinutes(10));
+        service.StartEvent(completion, DateTime.UtcNow.AddMinutes(10));
 
         service.NextEvent();
 
@@ -80,9 +80,9 @@ public sealed class ActivityStartServiceTests
     [Test]
     public void NextEvent_EventReady_CompletesIt()
     {
-        ActivityStartService service = new();
+        ActivitySchedulerService service = new();
         FakeCompletion completion = new(Guid.NewGuid());
-        service.StartEvent(completion, DateTime.Now.AddSeconds(-1));
+        service.StartEvent(completion, DateTime.UtcNow.AddSeconds(-1));
 
         service.NextEvent();
 
@@ -92,13 +92,13 @@ public sealed class ActivityStartServiceTests
     [Test]
     public void NextEvent_MultipleReady_CompletesEarliestFirst()
     {
-        ActivityStartService service = new();
+        ActivitySchedulerService service = new();
         Guid id1 = Guid.NewGuid();
         Guid id2 = Guid.NewGuid();
         FakeCompletion first = new(id1);
         FakeCompletion second = new(id2);
-        service.StartEvent(first, DateTime.Now.AddSeconds(-2));
-        service.StartEvent(second, DateTime.Now.AddSeconds(-1));
+        service.StartEvent(first, DateTime.UtcNow.AddSeconds(-2));
+        service.StartEvent(second, DateTime.UtcNow.AddSeconds(-1));
 
         service.NextEvent();
 
@@ -112,13 +112,13 @@ public sealed class ActivityStartServiceTests
     [Test]
     public void NextEvent_CompleteThenNext_CompletesSecond()
     {
-        ActivityStartService service = new();
+        ActivitySchedulerService service = new();
         Guid id1 = Guid.NewGuid();
         Guid id2 = Guid.NewGuid();
         FakeCompletion first = new(id1);
         FakeCompletion second = new(id2);
-        service.StartEvent(first, DateTime.Now.AddSeconds(-2));
-        service.StartEvent(second, DateTime.Now.AddSeconds(-1));
+        service.StartEvent(first, DateTime.UtcNow.AddSeconds(-2));
+        service.StartEvent(second, DateTime.UtcNow.AddSeconds(-1));
 
         service.NextEvent();
         service.NextEvent();
@@ -133,9 +133,9 @@ public sealed class ActivityStartServiceTests
     [Test]
     public void RemoveEvent_BeforeNextEvent_PreventsCompletion()
     {
-        ActivityStartService service = new();
+        ActivitySchedulerService service = new();
         FakeCompletion completion = new(Guid.NewGuid());
-        service.StartEvent(completion, DateTime.Now.AddSeconds(-1));
+        service.StartEvent(completion, DateTime.UtcNow.AddSeconds(-1));
 
         service.RemoveEvent(completion.ProfileId);
         service.NextEvent();
@@ -146,13 +146,13 @@ public sealed class ActivityStartServiceTests
     [Test]
     public void NextEvent_RemovedEvent_SkipsToNext()
     {
-        ActivityStartService service = new();
+        ActivitySchedulerService service = new();
         Guid id1 = Guid.NewGuid();
         Guid id2 = Guid.NewGuid();
         FakeCompletion first = new(id1);
         FakeCompletion second = new(id2);
-        service.StartEvent(first, DateTime.Now.AddSeconds(-2));
-        service.StartEvent(second, DateTime.Now.AddSeconds(-1));
+        service.StartEvent(first, DateTime.UtcNow.AddSeconds(-2));
+        service.StartEvent(second, DateTime.UtcNow.AddSeconds(-1));
 
         service.RemoveEvent(id1);
         service.NextEvent();

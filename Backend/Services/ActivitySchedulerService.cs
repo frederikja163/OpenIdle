@@ -5,7 +5,7 @@ using System.Threading.Tasks;
 
 namespace Backend.Services;
 
-internal abstract class ActivityCompletion(Guid profileId) : IEquatable<ActivityCompletion>
+public abstract class ActivityCompletion(Guid profileId) : IEquatable<ActivityCompletion>
 {
     public ProfileId ProfileId { get; } = profileId;
     public abstract void Complete();
@@ -31,7 +31,7 @@ internal abstract class ActivityCompletion(Guid profileId) : IEquatable<Activity
     }
 }
 
-internal sealed class ActivityStartService
+public sealed class ActivitySchedulerService
 {
     private readonly object _lock = new object();
     private readonly Dictionary<ProfileId, ActivityCompletion> _activityMap = new();
@@ -68,7 +68,7 @@ internal sealed class ActivityStartService
         ActivityCompletion? activityCompletion;
         lock (_lock)
         {
-            if (!_priorityQueue.TryPeek(out ProfileId profileId, out DateTime endTime) || DateTime.Now < endTime)
+            if (!_priorityQueue.TryPeek(out ProfileId profileId, out DateTime endTime) || DateTime.UtcNow < endTime)
             {
                 return;
             }
@@ -94,7 +94,7 @@ internal sealed class ActivityStartService
             }
         }
 
-        TimeSpan remaining = endTime - DateTime.Now;
+        TimeSpan remaining = endTime - DateTime.UtcNow;
         if (remaining <= TimeSpan.Zero || !_resetEvent.WaitOne(remaining))
         {
             return;

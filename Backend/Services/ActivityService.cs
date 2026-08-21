@@ -16,8 +16,9 @@ public sealed class LevelRequirement(SkillId skillId, int level)
     public int Level { get; } = level;
 }
 
-public sealed class ActivityDefinition(Reward[] rewards, LevelRequirement[] requirements)
+public sealed class ActivityDefinition(float time, Reward[] rewards, LevelRequirement[] requirements)
 {
+    public float Time { get; } = time;
     public Reward[] Rewards { get; } = rewards.Where(r => r.Weight is null).ToArray();
     public DropTable? DropTable { get; } = CreateDropTable(rewards);
     
@@ -31,7 +32,8 @@ public sealed class ActivityDefinition(Reward[] rewards, LevelRequirement[] requ
 }
 
 public sealed class ActivityService(IDbContextFactory<GameDbContext> dbContextFactory, DropTableService dropTableService,
-    ProfileService profileService, ItemService itemService, SkillService skillService)
+    ProfileService profileService, ItemService itemService, SkillService skillService,
+    SocketRegistryService socketRegistry, ActivitySchedulerService activitySchedulerService)
 {
     private readonly Dictionary<ActivityId, ActivityDefinition> _activities = new();
 
@@ -49,6 +51,11 @@ public sealed class ActivityService(IDbContextFactory<GameDbContext> dbContextFa
 
         Profile profile = await profileService.GetProfileAsync(profileId);
 
+        if (profile.ActivityId is not null)
+        {
+            throw new BackendException("Profile is already doing an activity.");
+        }
+
         foreach (LevelRequirement requirement in definition.Requirements)
         {
             Skill[] skills = await skillService.GetSkillsAsync(profileId, [requirement.SkillId]);
@@ -61,14 +68,19 @@ public sealed class ActivityService(IDbContextFactory<GameDbContext> dbContextFa
         await using GameDbContext dbContext = await dbContextFactory.CreateDbContextAsync();
         dbContext.Profiles.Attach(profile);
         profile.ActivityId = activityId;
-        profile.ActivityStartTime = DateTime.Now;
+        profile.ActivityStartTime = DateTime.UtcNow;
         await dbContext.SaveChangesAsync();
+
+        activitySchedulerService.StartEvent(
+            new ProfileActivityCompletion(this, socketRegistry, profileId, activityId),
+            DateTime.UtcNow.AddSeconds(definition.Time));
 
         return profile;
     }
 
     internal async Task<Reward[]> ResolveActivityAsync(ProfileId profileId)
     {
+        activitySchedulerService.RemoveEvent(profileId);
         Profile profile = await profileService.GetProfileAsync(profileId);
 
         if (profile.ActivityId is not ActivityId activityId)
@@ -116,7 +128,23 @@ public sealed class ActivityService(IDbContextFactory<GameDbContext> dbContextFa
             }
         }
 
+        dbContext.Profiles.Attach(profile);
+        profile.ActivityId = null;
+        profile.ActivityStartTime = null;
+
         await dbContext.SaveChangesAsync();
         return [.. resolvedRewards];
+    }
+}
+
+internal sealed class ProfileActivityCompletion(
+    ActivityService activityService, SocketRegistryService socketRegistry, ProfileId profileId, ActivityId activityId)
+    : ActivityCompletion(profileId)
+{
+    public override void Complete()
+    {
+        activityService.ResolveActivityAsync(ProfileId).GetAwaiter().GetResult();
+        socketRegistry.SendToProfileAsync(ProfileId, new ActivityEndedEvent() { ActivityId = activityId })
+            .GetAwaiter().GetResult();
     }
 }
