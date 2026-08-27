@@ -41,9 +41,9 @@ Follow the existing error style: throw `ParserException` with a message naming t
 
 The C# output must compile against whatever hand-written backend types you reference (e.g. `ItemReward`, `ActivityDefinition` in `Backend/Services/`) — extend those first if the emitted expressions need new constructors.
 
-## Step 4 — TypeScript emitter only when explicitly requested
+## Step 4 — TypeScript emitter for shared DTO changes
 
-Leave [`TsEmitter.cs`](../../../Generators/Core/TsEmitter.cs) untouched unless the task says the new grammar must appear in TypeScript output. When asked, mirror every mapping there: `GetPropertyType` for built-ins, `EmitDtos` for new shapes. The two emitters render the same model, so a mapping added to only one side makes C# and TS drift apart — if you skip TS deliberately, say so in your summary.
+[`TsEmitter.cs`](../../../Generators/Core/TsEmitter.cs) must be updated whenever a change adds a new `PropertyType` enum member or adds a new object to `DtoModel.AllObjects` (i.e., new Dto/Request/Response/Event shape) — update `GetPropertyType` and `EmitDtos` as needed so the TS and C# emitters stay in sync. Backend-only additions like `DropTable`/`Activity` elements remain excluded from this requirement since they're not part of `AllObjects` and have no TS representation. If you deliberately skip TypeScript for a backend-only addition, state so in your summary.
 
 ## Step 5 — verify
 
