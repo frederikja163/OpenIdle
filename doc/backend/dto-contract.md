@@ -17,6 +17,7 @@ The socket protocol's data shapes are defined once, in one XML file, and generat
 | Add a client→server call | `<Request name="...">` with a `<Response>` child |
 | Add a server→client notification | `<Event name="...">` with `<Property>` children |
 | Add a standalone response (e.g. `Error`) | Top-level `<Response name="...">` |
+| Declare item stats/tool slots content | `<Item>` / `<ItemSlot>` / `<SkillSlots>` (seeded into `ToolService`, see [Generated output details](#4-generated-output-details)) |
 
 ## 1. What DTOs exist here
 
@@ -191,6 +192,7 @@ The C# emitter writes a single file, `Dto.g.cs`, into the `Backend.Dtos` namespa
 - The three abstract bases: `DtoBase`, `RequestBase` (with `int RequestId`), `ResponseBase` (with `int RequestId`), `EventBase` (with `int EventId`).
 - `public static class DropTableData` with `public static void AddAll(DropTableService service)` — a seeder that registers every `<DropTable>` from `types.xml` into a `Backend.Services.DropTableService`: `<ItemReward item=...>` drops become `new ItemReward(count, weight, ItemId.X)`, `<TableReward table=...>` drops become `new TableReward(count, weight, DropTableId.Y)`.
 - `public static class ActivityData` with `public static void AddAll(ActivityService service)` — a seeder that registers every `<Activity>` from `types.xml` into a `Backend.Services.ActivityService`: each activity becomes `service.AddActivity(ActivityId.X, new ActivityDefinition(rewards: [...], requirements: [...]))`. Rewards are `<ItemReward>` / `<TableReward>` / `<XpReward>`; a missing `weight` makes the reward guaranteed, a present `weight` puts it into the activity's weighted roll (same weighted pick as a drop table). `<LevelRequirement skill="..." count="..."/>` becomes `new LevelRequirement(SkillId.X, N)`.
+- `public static class ToolData` with `public static void AddAll(ToolService service)` — a seeder that registers tool/item-slot content. Every `<Item name="...">` becomes `service.AddItem(ItemId.X, new ItemDefinition([new ItemStat(ToolStat.Y, v), ...]))` (each `<Stat name="..." value="..."/>` maps to a `ToolStat` and a float). Every `<ItemSlot name="...">` becomes `service.AddItemSlot(ItemSlotId.X, [ItemId.Y, ...])` from its `<ValidItem name="..."/>` children. Every `<SkillSlots skill="...">` becomes `service.AddSkillSlots(SkillId.X, [new SlotBinding(ItemSlotId.Y, required), ...])` from its `<Slot name="..." required="..."/>` children. `Item`s also auto-register into the `ItemId` enum and `ItemSlot`s into a generated `ItemSlotId` enum, exactly like `DropTableId` / `ActivityId`.
 The file also carries `using Backend.Services;` for these hand-written types.
 
 All DTO classes are `sealed` and non-partial — **you cannot extend generated types with hand-written members.** If a payload needs a field, it must be declared in `types.xml`.

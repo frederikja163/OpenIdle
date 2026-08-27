@@ -29,6 +29,31 @@
     <TableReward table="StoneTable" count="1"/>
     <LevelRequirement skill="Mining" count="1"/>
   </Activity>
+
+  <Item name="IronPickaxeHead">
+    <Stat name="speed" value="1.1"/>
+    <Stat name="itemProductivity" value="1.25"/>
+    <Stat name="xpProductivity" value="1.0"/>
+    <Stat name="durable" value="1.5"/>
+  </Item>
+
+  <Item name="OakHandle">
+    <Stat name="speed" value="0.9"/>
+    <Stat name="durable" value="1.2"/>
+  </Item>
+
+  <ItemSlot name="MiningHead">
+    <ValidItem name="IronPickaxeHead"/>
+  </ItemSlot>
+
+  <ItemSlot name="Handle">
+    <ValidItem name="OakHandle"/>
+  </ItemSlot>
+
+  <SkillSlots skill="Mining">
+    <Slot name="MiningHead" required="true"/>
+    <Slot name="Handle" required="true"/>
+  </SkillSlots>
   
   <Dto name="Item">
     <Property name="ProfileId" type="Guid"/>

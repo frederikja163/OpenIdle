@@ -28,12 +28,14 @@ internal static class AppHost
         builder.Services.AddSingleton<SkillService>();
         builder.Services.AddSingleton<ItemService>();
         builder.Services.AddSingleton<ActivityService>();
+        builder.Services.AddSingleton<ToolService>();
 
         WebApplication app = builder.Build();
         app.MapControllers();
         app.MapSocketControllers();
         DropTableData.AddAll(app.Services.GetRequiredService<DropTableService>());
         ActivityData.AddAll(app.Services.GetRequiredService<ActivityService>());
+        ToolData.AddAll(app.Services.GetRequiredService<ToolService>());
 
         return app;
     }

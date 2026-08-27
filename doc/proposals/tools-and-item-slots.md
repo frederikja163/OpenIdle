@@ -1,8 +1,10 @@
 # Proposal — tools and item slots
 
-- Status: **proposal** (not implemented)
+- Status: **implemented (parsing/seeding); gameplay wiring pending**
 - Date: 2026-08-27
 - Scope: defines how tools, item slots, and per-item stats are declared in `types.xml`
+
+> **Implementation status:** the parser, model, and emitters in the generator project now support `<Item>`, `<ItemSlot>`, and `<SkillSlots>`, and a `ToolData` seeder + `Backend.Services.ToolService` populate the runtime. What is **not** done yet is wiring the stats into actual gameplay (activity speed, drop rolls, XP, durability). See [Implementation notes](#7-implementation-notes).
 
 ## 1. Problem
 
@@ -93,3 +95,14 @@ The set of supported stats (each numeric, higher is better unless noted):
 
 - [DTO contract](../backend/dto-contract.md) — how `types.xml` elements drive generated C#/TS.
 - [Socket endpoints](../backend/socket-endpoints.md) — where equipped-tool data would be queried/updated.
+
+## 7. Implementation notes
+
+The generator-side parsing is implemented as of 2026-08-27:
+
+- **Parser (`Generators/Core/Parser.cs`)** recognizes `Item`, `ItemSlot`, and `SkillSlots` elements. Item stats are validated against the known set (`speed`, `itemProductivity`, `xpProductivity`, `durable`); an unknown stat is a parse error. Items extend the existing `ItemId` enum; slots create an `ItemSlotId` enum (mirroring `DropTableId` / `ActivityId`).
+- **Model (`Generators/Core/DtoModel.cs`)** gains `Item`, `ItemStat`, `ItemSlot`, `ValidItem`, `SkillSlots`, and `Slot` types.
+- **C# emitter (`Generators/Core/CsEmitter.cs`)** emits a `ToolData.AddAll(ToolService)` seeder. It also exposed a latent culture bug: numeric literal parsing (`RequireAttribute<T>`) used the ambient culture, so decimal `value`s misparsed on non-en-US hosts (e.g. `en-DK` turned `1.1` into `11`). Fixed to parse with `CultureInfo.InvariantCulture` in `XmlElementExtensions.ConvertValue` — this affects all numeric attributes, not just the new ones.
+- **Backend (`Backend/Services/ToolService.cs`)** holds the runtime definitions (`ItemDefinition`, `ItemStat`, `SlotBinding`, `SkillSlotDefinition`) and is registered in DI and seeded from `ToolData.AddAll` in `AppHost.cs`.
+
+Still open (not implemented): applying stats to gameplay (activity duration from `speed`, extra drop-table rolls from `itemProductivity`, XP multiplier from `xpProductivity`, durability consumption from `durable`), equipping/unequipping without a socket/ToolService consumer, and any aggregate/set-bonus semantics.
