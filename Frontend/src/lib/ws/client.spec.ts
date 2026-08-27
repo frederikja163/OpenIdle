@@ -97,7 +97,10 @@ describe('WsClient', () => {
 		sockets[0].open();
 		await flush();
 
-		expect(JSON.parse(sockets[0].sent[0])).toEqual({ $type: 'LoginAsTestUserRequest', requestId: 1 });
+		expect(JSON.parse(sockets[0].sent[0])).toEqual({
+			$type: 'LoginAsTestUserRequest',
+			requestId: 1
+		});
 		sockets[0].deliver({ $type: 'LoginAsTestUserResponse', requestId: 1 });
 
 		await expect(login).resolves.toEqual({ $type: 'LoginAsTestUserResponse', requestId: 1 });
@@ -138,11 +141,19 @@ describe('WsClient', () => {
 		// one, which merely happens to be the oldest one still pending.
 		const next = capture(client.request('ListProfilesRequest', {}));
 		await flush();
-		sockets[0].deliver({ $type: 'ErrorResponse', requestId: 0, message: 'Profile name already taken' });
+		sockets[0].deliver({
+			$type: 'ErrorResponse',
+			requestId: 0,
+			message: 'Profile name already taken'
+		});
 		await flush();
 
 		sockets[0].deliver({ $type: 'ListProfilesResponse', requestId: 2, profiles: [] });
-		await expect(next).resolves.toEqual({ $type: 'ListProfilesResponse', requestId: 2, profiles: [] });
+		await expect(next).resolves.toEqual({
+			$type: 'ListProfilesResponse',
+			requestId: 2,
+			profiles: []
+		});
 	});
 
 	it('charges an error to the live request once an answered one is cleared', async () => {
@@ -161,7 +172,11 @@ describe('WsClient', () => {
 		// settled request and the caller waits out the timeout for nothing.
 		const create = capture(client.request('CreateProfileRequest', { name: 'Alice' }));
 		await flush();
-		sockets[0].deliver({ $type: 'ErrorResponse', requestId: 0, message: 'Profile name already taken' });
+		sockets[0].deliver({
+			$type: 'ErrorResponse',
+			requestId: 0,
+			message: 'Profile name already taken'
+		});
 		await vi.advanceTimersByTimeAsync(50);
 
 		const error = await create;
@@ -182,7 +197,11 @@ describe('WsClient', () => {
 		// The echoed id has to beat the FIFO cursor, which still points at id 1:
 		// falling back on it here would fail the wrong caller and leave the one
 		// the backend actually refused waiting out its timeout.
-		sockets[0].deliver({ $type: 'ErrorResponse', requestId: 2, message: 'Profile name already taken' });
+		sockets[0].deliver({
+			$type: 'ErrorResponse',
+			requestId: 2,
+			message: 'Profile name already taken'
+		});
 		await flush();
 
 		const error = await second;
@@ -524,7 +543,10 @@ describe('WsClient', () => {
 			'LoginAsTestUserRequest'
 		]);
 
-		sockets[1].deliver({ $type: 'LoginAsTestUserResponse', requestId: JSON.parse(sockets[1].sent[0]).requestId });
+		sockets[1].deliver({
+			$type: 'LoginAsTestUserResponse',
+			requestId: JSON.parse(sockets[1].sent[0]).requestId
+		});
 		await flush();
 
 		expect(replayed).toEqual(['login']);
