@@ -69,6 +69,7 @@ public sealed class SkillService(IDbContextFactory<GameDbContext> dbContextFacto
                 skill.Xp += reward.Count;
             }
 
+            skill.Level = LevelCurve.LevelFromXp(skill.Xp);
             skills.Add(skill);
         }
 

@@ -18,6 +18,12 @@ This is the entry point for all project documentation. It is written for **both*
 | [`backend/socket-endpoints.md`](./backend/socket-endpoints.md) | How to add a new socket controller endpoint: the `[SocketController]` / `[Request]` pattern, request pipeline, state, error handling | any change that adds a game-protocol call |
 | [`backend/http-endpoints.md`](./backend/http-endpoints.md) | How to add a new HTTP controller endpoint (MVC pattern under `Backend/Controllers/Http/`) | adding HTTP plumbing routes |
 
+### Proposals — planned / not-yet-implemented features
+
+| Document | What it describes |
+|---|---|
+| [`proposals/tools-and-item-slots.md`](./proposals/tools-and-item-slots.md) | Planned `types.xml` additions for tools, item slots, and per-item stats (status: proposal, not implemented) |
+
 ### Libraries — dependency decisions
 
 Every third-party dependency used or considered is documented in the library index at [`libraries/README.md`](./libraries/README.md). It is the authoritative list of what we depend on and why, and it supersedes this summary:
@@ -43,6 +49,7 @@ For AI agents: find your task, read the listed documents (fully), then the sourc
 | Add/evaluate/replace a third-party dependency | [`libraries/README.md`](./libraries/README.md), [`libraries/TEMPLATE.md`](./libraries/TEMPLATE.md) (via the `document-library` skill) |
 | Frontend work (components, styling, tests) | [`libraries/README.md`](./libraries/README.md) sections for the affected area, then the specific decision doc |
 | Security / dependency audit | [`libraries/README.md`](./libraries/README.md) (Open items + Standing notes) |
+| Planned feature (not yet implemented) — e.g. tools, item slots | [`proposals/tools-and-item-slots.md`](./proposals/tools-and-item-slots.md) |
 
 ## Repository map (orientation)
 
@@ -53,6 +60,7 @@ For AI agents: find your task, read the listed documents (fully), then the sourc
 | [`Generators/`](../Generators/) | DTO pipeline: [`Core/`](../Generators/Core/) parser + emitters, [`Backend/`](../Generators/Backend/) Roslyn source generator, [`Generator/`](../Generators/Generator/) CLI for the TS output. |
 | [`types.xml`](../types.xml) | Single source of truth for all socket DTOs. |
 | [`doc/libraries/`](./libraries/) | Library decision documents + index + template. |
+| [`doc/proposals/`](./proposals/) | Proposals for planned, not-yet-implemented features. |
 
 ## Maintaining this index
 
