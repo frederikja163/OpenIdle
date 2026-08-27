@@ -1,5 +1,6 @@
 ﻿using System;
 using System.Collections.Generic;
+using System.Globalization;
 using System.Linq;
 using System.Xml;
 
@@ -47,7 +48,14 @@ internal static class XmlElementExtensions
     {
         try
         {
-            return (T)Convert.ChangeType(value, typeof(T));
+            object converted = typeof(T) switch
+            {
+                _ when typeof(T) == typeof(int) => int.Parse(value, CultureInfo.InvariantCulture),
+                _ when typeof(T) == typeof(float) => float.Parse(value, CultureInfo.InvariantCulture),
+                _ when typeof(T) == typeof(bool) => bool.Parse(value),
+                _ => Convert.ChangeType(value, typeof(T), CultureInfo.InvariantCulture),
+            };
+            return (T)converted;
         }
         catch (Exception ex) when (ex is FormatException or InvalidCastException or OverflowException)
         {

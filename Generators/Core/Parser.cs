@@ -13,6 +13,8 @@ public sealed class Parser
 {
     private const string DropTableIdEnumName = "DropTableId";
     private const string ActivityIdEnumName = "ActivityId";
+    private const string ItemIdEnumName = "ItemId";
+    private const string ItemSlotIdEnumName = "ItemSlotId";
 
     public DtoModel Model { get; } = new();
 
@@ -50,6 +52,20 @@ public sealed class Parser
                 Activity activity = Activity(element);
                 Model.Activities.Add(activity.Key, activity);
                 GetEnum(ActivityIdEnumName).AddEnum(new EnumValue(activity.Key));
+                break;
+            case "Item":
+                Item item = Item(element);
+                Model.Items.Add(item.Key, item);
+                GetEnum(ItemIdEnumName).AddEnum(new EnumValue(item.Key));
+                break;
+            case "ItemSlot":
+                ItemSlot itemSlot = ItemSlot(element);
+                Model.ItemSlots.Add(itemSlot.Key, itemSlot);
+                GetEnum(ItemSlotIdEnumName).AddEnum(new EnumValue(itemSlot.Key));
+                break;
+            case "SkillSlots":
+                SkillSlots skillSlots = SkillSlots(element);
+                Model.SkillSlots.Add(skillSlots);
                 break;
             case "Dto":
                 Dto dto = Dto(element);
@@ -175,6 +191,44 @@ public sealed class Parser
     private LevelRequirement LevelRequirement(XmlElement element)
     {
         return new LevelRequirement(element.RequireAttribute("skill"), element.RequireAttribute<int>("count"));
+    }
+
+    private Item Item(XmlElement element)
+    {
+        Item item = new(element.RequireAttribute("name"));
+        foreach (XmlElement statElement in element.GetChildren("Stat"))
+        {
+            string statName = statElement.RequireAttribute("name");
+            if (!ItemStats.ByKey.ContainsKey(statName))
+            {
+                throw new ParserException($"Item '{item.Key}' declares an unknown stat '{statName}'.");
+            }
+
+            item.Stats.Add(new ItemStat(statName, statElement.RequireAttribute<float>("value")));
+        }
+        return item;
+    }
+
+    private ItemSlot ItemSlot(XmlElement element)
+    {
+        ItemSlot itemSlot = new(element.RequireAttribute("name"));
+        foreach (XmlElement validItemElement in element.GetChildren("ValidItem"))
+        {
+            itemSlot.ValidItems.Add(new ValidItem(validItemElement.RequireAttribute("name")));
+        }
+        return itemSlot;
+    }
+
+    private SkillSlots SkillSlots(XmlElement element)
+    {
+        SkillSlots skillSlots = new(element.RequireAttribute("skill"));
+        foreach (XmlElement slotElement in element.GetChildren("Slot"))
+        {
+            skillSlots.Slots.Add(new Slot(
+                slotElement.RequireAttribute("name"),
+                slotElement.GetAttribute<bool>("required", false)));
+        }
+        return skillSlots;
     }
 
     private Dto Dto(XmlElement element)

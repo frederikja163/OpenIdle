@@ -38,6 +38,8 @@ public sealed class CsEmitter : IDtoEmitter
         EmitDropTableData(model);
 
         EmitActivityData(model);
+
+        EmitToolData(model);
     }
 
     private void EmitEnums(DtoModel model)
@@ -85,6 +87,47 @@ public sealed class CsEmitter : IDtoEmitter
                 }
             }
         }
+    }
+
+    private void EmitToolData(DtoModel model)
+    {
+        _textWriter.WriteLine();
+        using (Scope _ = _textWriter.Scope("public static class ToolData"))
+        {
+            using (Scope __ = _textWriter.Scope("public static void AddAll(ToolService service)"))
+            {
+                foreach (Item item in model.Items.Values)
+                {
+                    string stats = string.Join(", ", item.Stats.Select(ItemStatExpression));
+                    _textWriter.WriteLine(
+                        $"service.AddItem(ItemId.{item.Name.UpperCamelCase}, new ItemDefinition([{stats}]));");
+                }
+
+                foreach (ItemSlot itemSlot in model.ItemSlots.Values)
+                {
+                    string validItems = string.Join(", ", itemSlot.ValidItems.Select(vi => $"ItemId.{new Casing(vi.Name).UpperCamelCase}"));
+                    _textWriter.WriteLine(
+                        $"service.AddItemSlot(ItemSlotId.{itemSlot.Name.UpperCamelCase}, [{validItems}]);");
+                }
+
+                foreach (SkillSlots skillSlots in model.SkillSlots)
+                {
+                    string slots = string.Join(", ", skillSlots.Slots.Select(SlotExpression));
+                    _textWriter.WriteLine(
+                        $"service.AddSkillSlots(SkillId.{new Casing(skillSlots.Skill).UpperCamelCase}, [{slots}]);");
+                }
+            }
+        }
+    }
+
+    private static string ItemStatExpression(ItemStat stat)
+    {
+        return $"new ItemStat(ToolStat.{ItemStats.ByKey[stat.Name]}, {stat.Value.ToString(CultureInfo.InvariantCulture)}f)";
+    }
+
+    private static string SlotExpression(Slot slot)
+    {
+        return $"new SlotBinding(ItemSlotId.{new Casing(slot.Name).UpperCamelCase}, {slot.Required.ToString().ToLowerInvariant()})";
     }
 
     private void EmitDropTable(DropTable dropTable)
