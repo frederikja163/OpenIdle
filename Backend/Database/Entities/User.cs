@@ -5,7 +5,7 @@ namespace Backend.Database.Entities;
 
 public sealed class User
 {
-    public required Guid UserId { get; init; }
+    public required UserId UserId { get; init; }
 
     public ICollection<Profile> Profiles { get; } = [];
 }
