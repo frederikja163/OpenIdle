@@ -33,3 +33,8 @@ Desktop.ini
 
 # Generated DTO preview output (dotnet run --project Generators/Generator)
 **/*.generated.*
+
+# Per-host deployment values. deploy/.env.example is the tracked template.
+deploy/.env
+deploy/.env.*
+!deploy/.env.example
