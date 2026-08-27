@@ -1,7 +1,7 @@
 # @sveltejs/adapter-auto
 
-- Status: under-review
-- Date: 2026-08-03
+- Status: rejected (superseded by [@sveltejs/adapter-node](./sveltejs-adapter-node.md))
+- Date: 2026-08-03, resolved 2026-08-27
 - Decided by: project owner
 - Version / commit pinned: 7.0.1 (declared `^7.0.1`)
 
@@ -23,13 +23,19 @@ Why `adapter-auto` loses: it solves a problem we do not have. It exists so that 
 
 ## 3. Decision & rationale
 
-**Status is `under-review` because no decision has actually been made yet.** `adapter-auto` is present because `sv create` put it there, and it survives only because nothing has been deployed. It is a default, and this project's rules do not let a default stand as a decision.
+> **Resolved 2026-08-27 — removed in favour of [@sveltejs/adapter-node](./sveltejs-adapter-node.md), not `adapter-static`.**
+>
+> Everything below is the original review, kept because its criticism of `adapter-auto` is exactly why it was removed and still stands. Its *recommendation* does not: it assumed the frontend would be built once and served as static files by ASP.NET Core, and the deployment that was actually built does not work that way. The frontend is now its own container, and one image serves both dev and prod with `PUBLIC_WS_URL` read at run time — which a static build cannot do, since `$env/dynamic/public` collapses to build-time substitution without a server process. The trade-off that buys, and the "second backend" objection it has to answer, are argued in the adapter-node document.
+>
+> The parts of section 4 below describing `adapter-static` configuration — full prerender versus `fallback: 'index.html'` plus `MapFallbackFile` — remain accurate should the project ever move back; `ssr = false` is still worth adopting on its own merits, and is recorded as an open follow-up there.
+
+**Status was `under-review` because no decision had actually been made.** `adapter-auto` is present because `sv create` put it there, and it survives only because nothing has been deployed. It is a default, and this project's rules do not let a default stand as a decision.
 
 The recommendation is to **replace it with `@sveltejs/adapter-static`, configured with `ssr = false`**, giving a client built to static files. `ssr = false` is only half the configuration — the other half is what `adapter-static` does with a URL it did not prerender, and the two coherent answers (full prerender, or an `index.html` fallback with a matching ASP.NET Core rewrite) are set out in section 4. That follows directly from the architectural constraint recorded in [SvelteKit](./sveltekit.md): the C# server is the only backend, so the client should compile to assets that any static host — or the ASP.NET Core process itself — can serve. It also removes a Node runtime from production entirely, which is one fewer thing to patch, monitor, and keep alive on the VPS.
 
 Two properties of `adapter-auto` are worth flagging beyond mere redundancy. It resolves and **downloads the real adapter at build time**, meaning a production build reaches out to the npm registry for a package that is not in `bun.lock` — an unpinned dependency introduced during the build, which is both a reproducibility problem and a supply-chain one. And because detection is environment-driven, the same commit can produce different build output on different machines. Neither is acceptable for a build we expect to reproduce.
 
-This document should be revised to `rejected` (with `adapter-static` documented separately) once the deployment target is confirmed and the swap is made. Until then it stays `under-review` as an open item.
+This document was revised to `rejected` on 2026-08-27, when the swap was made and the replacement documented separately — see the note at the top of this section for which replacement, and why it was not the one recommended here.
 
 ### Pros
 
