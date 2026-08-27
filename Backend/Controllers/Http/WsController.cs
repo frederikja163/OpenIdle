@@ -9,7 +9,10 @@ namespace Backend.Controllers.Http;
 [ApiController]
 public sealed class WsController(SocketRegistryService socketRegistryService) : ControllerBase
 {
-    // TODO: According to claude this needs an origin check?    
+    // The origin check this needs lives in UseWebSockets, not here: ASP.NET Core
+    // rejects a disallowed Origin during the handshake, before the request ever
+    // reaches this action. See BuildWebSocketOptions in
+    // Backend/Extensions/WebApplicationBuilderExtensions.cs and doc/deployment.md.
     [HttpGet("/ws")]
     public async Task Ws()
     {
