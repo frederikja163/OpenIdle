@@ -6,6 +6,8 @@ using Backend.Dtos;
 using Backend.Extensions;
 using Backend.Services;
 using Microsoft.AspNetCore.Builder;
+using Microsoft.AspNetCore.Http;
+using Microsoft.AspNetCore.Routing;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
@@ -30,6 +32,13 @@ internal static class AppHost
         builder.Services.AddSingleton<ActivityService>();
 
         WebApplication app = builder.Build();
+
+        // Cheap liveness signal for the container healthcheck and for the
+        // post-deploy check in the publish workflow. Deliberately says nothing
+        // about the database: a backend that cannot reach SQLite still needs to
+        // come up far enough to be diagnosed rather than be restarted in a loop.
+        app.MapGet("/healthz", () => Results.Ok(new { status = "ok" }));
+
         app.MapControllers();
         app.MapSocketControllers();
         DropTableData.AddAll(app.Services.GetRequiredService<DropTableService>());
