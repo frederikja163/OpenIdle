@@ -18,7 +18,7 @@ const WS_ROUTE = /\/ws$/;
 // protected route there, so assert on the pathname plus optional query.
 const LOGIN_URL = /\/login(\?.*)?$/;
 
-const THORIN = { Name: 'Thorin', ProfileId: 'p1' };
+const THORIN = { name: 'Thorin', profileId: 'p1' };
 
 /**
  * The whole backend, for tests that only need the socket to say yes: every
@@ -29,12 +29,12 @@ function respondToRequests(
 	profiles: (typeof THORIN)[]
 ): (frame: string | Buffer) => void {
 	return (frame) => {
-		const { $type, Id } = JSON.parse(String(frame));
+		const { $type, requestId } = JSON.parse(String(frame));
 		if ($type === 'ListProfilesRequest') {
-			ws.send(JSON.stringify({ $type: 'ListProfilesResponse', Id, Profiles: profiles }));
+			ws.send(JSON.stringify({ $type: 'ListProfilesResponse', requestId, profiles }));
 			return;
 		}
-		ws.send(JSON.stringify({ $type: `${$type.replace('Request', '')}Response`, Id }));
+		ws.send(JSON.stringify({ $type: `${$type.replace('Request', '')}Response`, requestId }));
 	};
 }
 
@@ -81,8 +81,8 @@ test('a successful login replaces /login rather than stacking /profiles on it', 
 		// connectToServer() is never called, so these frames are the whole
 		// backend as far as this test is concerned.
 		ws.onMessage((frame) => {
-			const { Id } = JSON.parse(String(frame));
-			ws.send(JSON.stringify({ $type: 'LoginAsTestUserResponse', Id }));
+			const { requestId } = JSON.parse(String(frame));
+			ws.send(JSON.stringify({ $type: 'LoginAsTestUserResponse', requestId }));
 		});
 	});
 
