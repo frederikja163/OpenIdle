@@ -180,3 +180,74 @@ test('deleting a profile asks first, and confirming does nothing yet', async ({ 
 	await expect(page.getByRole('dialog')).toBeHidden();
 	await expect(page.getByText('Thorin')).toBeVisible();
 });
+
+// The ?ws= override is what lets the one deployed dev frontend be pointed at
+// whichever backend a developer is running locally — something no single
+// PUBLIC_WS_URL can do, since every developer's localhost is their own. These
+// run under PUBLIC_ALLOW_WS_OVERRIDE=true (see playwright.config.ts), which is
+// the deployed dev frontend's configuration and not production's.
+
+const LOCAL_BACKEND = 'ws://127.0.0.1:5066/ws';
+const OTHER_BACKEND = 'ws://127.0.0.1:9999/ws';
+
+/**
+ * Records which address the client actually dialled. The route pattern has to
+ * be broad enough to catch an overridden port, so it matches any /ws.
+ */
+async function captureDialledUrl(page: import('@playwright/test').Page): Promise<string[]> {
+	const dialled: string[] = [];
+	await page.routeWebSocket(WS_ROUTE, (ws) => {
+		dialled.push(ws.url());
+		ws.onMessage(respondToRequests(ws, [THORIN]));
+	});
+	return dialled;
+}
+
+test('a ?ws= override points the socket at another backend', async ({ page }) => {
+	const dialled = await captureDialledUrl(page);
+
+	await page.goto(`/login?ws=${encodeURIComponent(OTHER_BACKEND)}`);
+	await page.getByRole('button', { name: 'Log in' }).click();
+	await expect(page).toHaveURL(/\/profiles$/);
+
+	expect(dialled).toEqual([OTHER_BACKEND]);
+});
+
+test('an override survives a reload, so it need only be typed once', async ({ page }) => {
+	const dialled = await captureDialledUrl(page);
+
+	await page.goto(`/login?ws=${encodeURIComponent(OTHER_BACKEND)}`);
+	await page.getByRole('button', { name: 'Log in' }).click();
+	await expect(page).toHaveURL(/\/profiles$/);
+
+	// Navigating to a plain URL, with no parameter to re-supply it.
+	await page.goto('/login');
+	await page.getByRole('button', { name: 'Log in' }).click();
+	await expect(page).toHaveURL(/\/profiles$/);
+
+	expect(dialled).toEqual([OTHER_BACKEND, OTHER_BACKEND]);
+});
+
+test('an empty ?ws= hands the client back to its own backend', async ({ page }) => {
+	const dialled = await captureDialledUrl(page);
+
+	await page.goto(`/login?ws=${encodeURIComponent(OTHER_BACKEND)}`);
+	await page.getByRole('button', { name: 'Log in' }).click();
+	await expect(page).toHaveURL(/\/profiles$/);
+
+	await page.goto('/login?ws=');
+	await page.getByRole('button', { name: 'Log in' }).click();
+	await expect(page).toHaveURL(/\/profiles$/);
+
+	expect(dialled).toEqual([OTHER_BACKEND, LOCAL_BACKEND]);
+});
+
+test('a malformed override is ignored rather than breaking the client', async ({ page }) => {
+	const dialled = await captureDialledUrl(page);
+
+	await page.goto('/login?ws=not-a-url');
+	await page.getByRole('button', { name: 'Log in' }).click();
+	await expect(page).toHaveURL(/\/profiles$/);
+
+	expect(dialled).toEqual([LOCAL_BACKEND]);
+});

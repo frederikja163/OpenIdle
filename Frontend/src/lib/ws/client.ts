@@ -1,5 +1,3 @@
-import { dev } from '$app/environment';
-import { env } from '$env/dynamic/public';
 import {
 	classifyMessage,
 	encodeRequest,
@@ -9,8 +7,8 @@ import {
 	type ServerEvent,
 	type ServerEventOf
 } from './protocol';
+import { resolveWsUrl } from './ws-url';
 
-const DEFAULT_WS_URL = 'ws://localhost:5066/ws';
 const DEFAULT_REQUEST_TIMEOUT_MS = 10_000;
 const DEFAULT_CONNECT_TIMEOUT_MS = 5_000;
 const DEFAULT_RECONNECT_BASE_MS = 500;
@@ -511,23 +509,4 @@ let client: WsClient | null = null;
 export function getWsClient(): WsClient {
 	client ??= new WsClient({ url: resolveWsUrl() });
 	return client;
-}
-
-/**
- * The development default is only safe for a local backend. In any deployed
- * build a missing PUBLIC_WS_URL is a configuration error worth failing fast on
- * rather than silently pointing every client at localhost.
- */
-function resolveWsUrl(): string {
-	const configured = env.PUBLIC_WS_URL;
-	if (configured) {
-		return configured;
-	}
-	if (dev) {
-		return DEFAULT_WS_URL;
-	}
-	console.warn(
-		'PUBLIC_WS_URL is not set; refusing to fall back to the development default outside development.'
-	);
-	throw new Error('PUBLIC_WS_URL must be configured outside development');
 }
