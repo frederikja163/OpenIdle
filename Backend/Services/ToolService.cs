@@ -1,11 +1,15 @@
 using System;
 using System.Collections.Generic;
-using System.Collections.ObjectModel;
-using System.Linq;
 using Backend.Dtos;
 
 namespace Backend.Services;
 
+/// <summary>
+/// The stats an item may carry on its <c>ItemStat</c>. Keep the numeric values in lockstep with
+/// <c>Generator.Core.ItemStats.ByKey</c> (the generator's <c>ToolData</c> seeder maps an item's stat names
+/// to these enum members) — an item declared with a stat whose <c>ToolStat</c> member is missing here
+/// will fail to compile the generated <c>ToolData.AddAll</c>.
+/// </summary>
 public enum ToolStat
 {
     Speed,
@@ -45,16 +49,27 @@ public sealed class SkillSlotDefinition(SkillId skillId, IReadOnlyList<SlotBindi
 public sealed class ToolService
 {
     private readonly Dictionary<ItemId, ItemDefinition> _items = new();
-    private readonly List<SkillSlotDefinition> _skillSlots = new();
+    private readonly Dictionary<ItemTagId, List<ItemId>> _itemsByTag = new();
+    private readonly Dictionary<SkillId, SkillSlotDefinition> _skillSlots = new();
 
     public void AddItem(ItemId itemId, ItemDefinition definition)
     {
         _items.Add(itemId, definition);
+        foreach (ItemTagId tag in definition.Tags)
+        {
+            if (!_itemsByTag.TryGetValue(tag, out List<ItemId>? itemIds))
+            {
+                itemIds = [];
+                _itemsByTag[tag] = itemIds;
+            }
+
+            itemIds.Add(itemId);
+        }
     }
 
     public void AddSkillSlots(SkillId skillId, IReadOnlyList<SlotBinding> slots)
     {
-        _skillSlots.Add(new SkillSlotDefinition(skillId, slots));
+        _skillSlots.Add(skillId, new SkillSlotDefinition(skillId, slots));
     }
 
     public bool TryGetItem(ItemId itemId, out ItemDefinition? definition)
@@ -65,21 +80,23 @@ public sealed class ToolService
     /// <summary>Returns the ids of every item that carries the given tag.</summary>
     public ItemId[] GetValidItems(ItemTagId tag)
     {
-        return _items
-            .Where(kvp => kvp.Value.Tags.Contains(tag))
-            .Select(kvp => kvp.Key)
-            .ToArray();
+        return _itemsByTag.TryGetValue(tag, out List<ItemId>? itemIds) ? itemIds.ToArray() : [];
     }
 
     public bool TryGetSkillSlots(SkillId skillId, out IReadOnlyList<SlotBinding>? slots)
     {
-        SkillSlotDefinition? definition = _skillSlots.FirstOrDefault(s => s.SkillId == skillId);
-        slots = definition?.Slots;
-        return definition is not null;
+        if (_skillSlots.TryGetValue(skillId, out SkillSlotDefinition? definition))
+        {
+            slots = definition.Slots;
+            return true;
+        }
+
+        slots = null;
+        return false;
     }
 
     public IReadOnlyList<SkillSlotDefinition> GetSkillSlots()
     {
-        return new ReadOnlyCollection<SkillSlotDefinition>(_skillSlots);
+        return [.. _skillSlots.Values];
     }
 }
