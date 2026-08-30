@@ -66,7 +66,7 @@ public sealed class ActivityService(IDbContextFactory<GameDbContext> dbContextFa
         }
 
         DateTime startedAt = startTime ?? DateTime.UtcNow;
-        DateTime endTime = startedAt.AddSeconds(definition.Time);
+        TimeSpan duration = TimeSpan.FromSeconds(definition.Time);
 
         await using GameDbContext dbContext = await dbContextFactory.CreateDbContextAsync();
         dbContext.Profiles.Attach(profile);
@@ -75,7 +75,7 @@ public sealed class ActivityService(IDbContextFactory<GameDbContext> dbContextFa
         await dbContext.SaveChangesAsync();
 
         activitySchedulerService.StartEvent(
-            new ProfileActivityCompletion(this, socketRegistry, itemService, skillService, profileId, activityId, endTime));
+            new ProfileActivityCompletion(this, socketRegistry, itemService, skillService, profileId, activityId, duration), startedAt);
 
         return profile;
     }
@@ -135,10 +135,6 @@ public sealed class ActivityService(IDbContextFactory<GameDbContext> dbContextFa
             await itemService.AddItemsAsync(dbContext, profileId, itemRewards);
         }
 
-        dbContext.Profiles.Attach(profile);
-        profile.ActivityId = null;
-        profile.ActivityStartTime = null;
-
         await dbContext.SaveChangesAsync();
         return [.. resolvedRewards];
     }
@@ -146,13 +142,12 @@ public sealed class ActivityService(IDbContextFactory<GameDbContext> dbContextFa
 
 internal sealed class ProfileActivityCompletion(
     ActivityService activityService, SocketRegistryService socketRegistry, ItemService itemService,
-    SkillService skillService, ProfileId profileId, ActivityId activityId, DateTime endTime)
-    : ActivityCompletion(profileId, endTime)
+    SkillService skillService, ProfileId profileId, ActivityId activityId, TimeSpan duration)
+    : ActivityCompletion(profileId, duration)
 {
     public override async Task Complete()
     {
         await activityService.ResolveActivityAsync(ProfileId);
-        await activityService.StartActivityAsync(ProfileId, activityId, EndTime);
 
         Item[] items = await itemService.GetItemsAsync(ProfileId);
         Skill[] skills = await skillService.GetSkillsAsync(ProfileId);

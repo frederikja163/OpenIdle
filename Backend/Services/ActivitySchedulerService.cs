@@ -5,10 +5,10 @@ using System.Threading.Tasks;
 
 namespace Backend.Services;
 
-public abstract class ActivityCompletion(Guid profileId, DateTime endTime) : IEquatable<ActivityCompletion>
+public abstract class ActivityCompletion(Guid profileId, TimeSpan duration) : IEquatable<ActivityCompletion>
 {
     public ProfileId ProfileId { get; } = profileId;
-    public DateTime EndTime { get; } = endTime;
+    public TimeSpan Duration { get; } = duration;
     public abstract Task Complete();
 
     public bool Equals(ActivityCompletion? other)
@@ -39,11 +39,11 @@ public sealed class ActivitySchedulerService
     private readonly ManualResetEvent _resetEvent = new(true);
     private readonly PriorityQueue<ProfileId, DateTime> _priorityQueue = new();
 
-    public void StartEvent(ActivityCompletion activityCompletion)
+    public void StartEvent(ActivityCompletion activityCompletion, DateTime startTime)
     {
         lock (_lock)
         {
-            DateTime endTime = activityCompletion.EndTime;
+            DateTime endTime = startTime + activityCompletion.Duration;
             bool isNewEarliest = _priorityQueue.Count == 0;
             if (!isNewEarliest && _priorityQueue.TryPeek(out _, out DateTime currentEndTime))
             {
@@ -51,10 +51,8 @@ public sealed class ActivitySchedulerService
             }
 
             _priorityQueue.Enqueue(activityCompletion.ProfileId, endTime);
-            _activityMap.Add(activityCompletion.ProfileId, activityCompletion);
+            _activityMap[activityCompletion.ProfileId] = activityCompletion;
 
-            // Wake a background waiter that may be sleeping until a later event: the new event
-            // is earlier, so it should re-check now instead of sleeping to the old end time.
             if (isNewEarliest)
             {
                 _resetEvent.Reset();
@@ -73,37 +71,28 @@ public sealed class ActivitySchedulerService
         }
     }
 
-    /// <summary>
-    /// A single non-blocking poll: completes the earliest event whose end time has passed, if any.
-    /// Returns whether an event was processed. The background loop calls this after
-    /// <see cref="WaitForNextEvent"/> so it does not busy-spin.
-    /// </summary>
-    public async Task<bool> NextEvent()
+    public async Task NextEvent()
     {
         ActivityCompletion? activityCompletion;
         lock (_lock)
         {
             if (!_priorityQueue.TryPeek(out ProfileId profileId, out DateTime endTime) || DateTime.UtcNow < endTime)
             {
-                return false;
+                return;
             }
 
             profileId = _priorityQueue.Dequeue();
-            if (!_activityMap.Remove(profileId, out activityCompletion))
+            
+            if (!_activityMap.TryGetValue(profileId, out activityCompletion))
             {
-                return false;
+                return;
             }
+            StartEvent(activityCompletion, endTime);
         }
 
         await activityCompletion.Complete();
-        return true;
     }
 
-    /// <summary>
-    /// Blocks until the earliest scheduled event is due, or a new earlier event is added via
-    /// <see cref="StartEvent"/> (whichever comes first). Returns promptly — at most the idle poll
-    /// interval — so the caller can react to shutdown and newly-arriving events.
-    /// </summary>
     public void WaitForNextEvent()
     {
         TimeSpan? waitDuration;
