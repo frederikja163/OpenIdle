@@ -24,9 +24,9 @@ Neither alone is enough. The override switch stops a prod *user* being redirecte
 | Image | Dockerfile | Build context |
 |---|---|---|
 | `ghcr.io/<owner>/openidle-backend` | `Backend/Dockerfile` | repository root |
-| `ghcr.io/<owner>/openidle-frontend` | `Frontend/Dockerfile` | `Frontend/` |
+| `ghcr.io/<owner>/openidle-frontend` | `Frontend/Dockerfile` | repository root |
 
-The backend context is the repository root deliberately: `Backend.csproj` references `Generators/Core` and `Generators/Backend` as analyzers and `../types.xml` as an `AdditionalFile`, so a `Backend/`-only context cannot compile. `.dockerignore` keeps the rest of the tree out.
+Both contexts are the repository root deliberately. `Backend.csproj` references `Generators/Core` and `Generators/Backend` as analyzers and `../types.xml` as an `AdditionalFile`, so a `Backend/`-only context cannot compile. The frontend image needs the root for the same reason: its protocol schema (`protocol.generated.ts`) is regenerated inside the image from `../types.xml` by a .NET generator stage, because the Bun Alpine stage has no `dotnet` and the generated file is git-ignored anyway. The single root `.dockerignore` keeps the rest of the tree out of both images.
 
 Both are multi-stage and run as a non-root user. The backend runtime is Debian-based rather than Alpine because `SQLitePCLRaw.bundle_e_sqlite3` ships a glibc-linked native library.
 
@@ -34,7 +34,7 @@ To build them by hand:
 
 ```sh
 docker build -f Backend/Dockerfile  -t openidle-backend  .
-docker build -f Frontend/Dockerfile -t openidle-frontend Frontend/
+docker build -f Frontend/Dockerfile -t openidle-frontend .
 ```
 
 ### Tags
