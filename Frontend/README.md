@@ -29,6 +29,22 @@ bun run dev
 bun run dev -- --open
 ```
 
+## Environment
+
+Three files, with one job each:
+
+- `.env` — tracked non-secret defaults, read by `bun run dev`, `build` and
+  `preview`. A deployed build does not read it: it takes `PUBLIC_*` values from
+  the process environment instead.
+- `.env.example` — the template for per-machine overrides (see above).
+- `.env.local` — gitignored, holds this machine's real values and any secrets,
+  and overrides the other two.
+
+| Variable        | Default                  |
+| --------------- | ------------------------ |
+| `PUBLIC_WS_URL` | `ws://localhost:5066/ws` |
+| `PUBLIC_DEBUG`  | `true`                   |
+
 ## Building
 
 To create a production version of your app:
