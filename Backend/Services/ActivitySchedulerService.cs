@@ -5,9 +5,10 @@ using System.Threading.Tasks;
 
 namespace Backend.Services;
 
-public abstract class ActivityCompletion(Guid profileId) : IEquatable<ActivityCompletion>
+public abstract class ActivityCompletion(Guid profileId, DateTime endTime) : IEquatable<ActivityCompletion>
 {
     public ProfileId ProfileId { get; } = profileId;
+    public DateTime EndTime { get; } = endTime;
     public abstract Task Complete();
 
     public bool Equals(ActivityCompletion? other)
@@ -38,10 +39,11 @@ public sealed class ActivitySchedulerService
     private readonly ManualResetEvent _resetEvent = new(true);
     private readonly PriorityQueue<ProfileId, DateTime> _priorityQueue = new();
 
-    public void StartEvent(ActivityCompletion activityCompletion, DateTime endTime)
+    public void StartEvent(ActivityCompletion activityCompletion)
     {
         lock (_lock)
         {
+            DateTime endTime = activityCompletion.EndTime;
             bool isNewEarliest = _priorityQueue.Count == 0;
             if (!isNewEarliest && _priorityQueue.TryPeek(out _, out DateTime currentEndTime))
             {

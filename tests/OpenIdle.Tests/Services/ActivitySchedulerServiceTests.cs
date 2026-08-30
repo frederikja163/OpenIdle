@@ -12,9 +12,9 @@ public sealed class ActivitySchedulerServiceTests
     public void StartEvent_EnqueuesActivity()
     {
         ActivitySchedulerService service = new();
-        FakeCompletion completion = new(Guid.NewGuid());
+        FakeCompletion completion = new(Guid.NewGuid(), DateTime.UtcNow.AddMinutes(5));
 
-        service.StartEvent(completion, DateTime.UtcNow.AddMinutes(5));
+        service.StartEvent(completion);
 
         Assert.That(completion.CompleteCalled, Is.False);
     }
@@ -23,11 +23,11 @@ public sealed class ActivitySchedulerServiceTests
     public void StartEvent_MultipleActivities_AllEnqueued()
     {
         ActivitySchedulerService service = new();
-        FakeCompletion a = new(Guid.NewGuid());
-        FakeCompletion b = new(Guid.NewGuid());
+        FakeCompletion a = new(Guid.NewGuid(), DateTime.UtcNow.AddMinutes(5));
+        FakeCompletion b = new(Guid.NewGuid(), DateTime.UtcNow.AddMinutes(10));
 
-        service.StartEvent(a, DateTime.UtcNow.AddMinutes(5));
-        service.StartEvent(b, DateTime.UtcNow.AddMinutes(10));
+        service.StartEvent(a);
+        service.StartEvent(b);
 
         Assert.Multiple(() =>
         {
@@ -40,8 +40,8 @@ public sealed class ActivitySchedulerServiceTests
     public async Task RemoveEvent_ExistingActivity_RemovesIt()
     {
         ActivitySchedulerService service = new();
-        FakeCompletion completion = new(Guid.NewGuid());
-        service.StartEvent(completion, DateTime.UtcNow.AddMinutes(5));
+        FakeCompletion completion = new(Guid.NewGuid(), DateTime.UtcNow.AddMinutes(5));
+        service.StartEvent(completion);
 
         service.RemoveEvent(completion.ProfileId);
 
@@ -69,8 +69,8 @@ public sealed class ActivitySchedulerServiceTests
     public async Task NextEvent_EventInFuture_DoesNotComplete()
     {
         ActivitySchedulerService service = new();
-        FakeCompletion completion = new(Guid.NewGuid());
-        service.StartEvent(completion, DateTime.UtcNow.AddMinutes(10));
+        FakeCompletion completion = new(Guid.NewGuid(), DateTime.UtcNow.AddMinutes(10));
+        service.StartEvent(completion);
 
         await service.NextEvent();
 
@@ -81,8 +81,8 @@ public sealed class ActivitySchedulerServiceTests
     public async Task NextEvent_EventReady_CompletesIt()
     {
         ActivitySchedulerService service = new();
-        FakeCompletion completion = new(Guid.NewGuid());
-        service.StartEvent(completion, DateTime.UtcNow.AddSeconds(-1));
+        FakeCompletion completion = new(Guid.NewGuid(), DateTime.UtcNow.AddSeconds(-1));
+        service.StartEvent(completion);
 
         await service.NextEvent();
 
@@ -95,10 +95,10 @@ public sealed class ActivitySchedulerServiceTests
         ActivitySchedulerService service = new();
         Guid id1 = Guid.NewGuid();
         Guid id2 = Guid.NewGuid();
-        FakeCompletion first = new(id1);
-        FakeCompletion second = new(id2);
-        service.StartEvent(first, DateTime.UtcNow.AddSeconds(-2));
-        service.StartEvent(second, DateTime.UtcNow.AddSeconds(-1));
+        FakeCompletion first = new(id1, DateTime.UtcNow.AddSeconds(-2));
+        FakeCompletion second = new(id2, DateTime.UtcNow.AddSeconds(-1));
+        service.StartEvent(first);
+        service.StartEvent(second);
 
         await service.NextEvent();
 
@@ -115,10 +115,10 @@ public sealed class ActivitySchedulerServiceTests
         ActivitySchedulerService service = new();
         Guid id1 = Guid.NewGuid();
         Guid id2 = Guid.NewGuid();
-        FakeCompletion first = new(id1);
-        FakeCompletion second = new(id2);
-        service.StartEvent(first, DateTime.UtcNow.AddSeconds(-2));
-        service.StartEvent(second, DateTime.UtcNow.AddSeconds(-1));
+        FakeCompletion first = new(id1, DateTime.UtcNow.AddSeconds(-2));
+        FakeCompletion second = new(id2, DateTime.UtcNow.AddSeconds(-1));
+        service.StartEvent(first);
+        service.StartEvent(second);
 
         await service.NextEvent();
         await service.NextEvent();
@@ -134,8 +134,8 @@ public sealed class ActivitySchedulerServiceTests
     public async Task RemoveEvent_BeforeNextEvent_PreventsCompletion()
     {
         ActivitySchedulerService service = new();
-        FakeCompletion completion = new(Guid.NewGuid());
-        service.StartEvent(completion, DateTime.UtcNow.AddSeconds(-1));
+        FakeCompletion completion = new(Guid.NewGuid(), DateTime.UtcNow.AddSeconds(-1));
+        service.StartEvent(completion);
 
         service.RemoveEvent(completion.ProfileId);
         await service.NextEvent();
@@ -149,10 +149,10 @@ public sealed class ActivitySchedulerServiceTests
         ActivitySchedulerService service = new();
         Guid id1 = Guid.NewGuid();
         Guid id2 = Guid.NewGuid();
-        FakeCompletion first = new(id1);
-        FakeCompletion second = new(id2);
-        service.StartEvent(first, DateTime.UtcNow.AddSeconds(-2));
-        service.StartEvent(second, DateTime.UtcNow.AddSeconds(-1));
+        FakeCompletion first = new(id1, DateTime.UtcNow.AddSeconds(-2));
+        FakeCompletion second = new(id2, DateTime.UtcNow.AddSeconds(-1));
+        service.StartEvent(first);
+        service.StartEvent(second);
 
         service.RemoveEvent(id1);
         await service.NextEvent();
@@ -168,8 +168,9 @@ public sealed class ActivitySchedulerServiceTests
     public void ActivityCompletion_EqualProfileIds_AreEqual()
     {
         Guid id = Guid.NewGuid();
-        FakeCompletion a = new(id);
-        FakeCompletion b = new(id);
+        DateTime endTime = DateTime.UtcNow;
+        FakeCompletion a = new(id, endTime);
+        FakeCompletion b = new(id, endTime);
 
         Assert.Multiple(() =>
         {
@@ -181,8 +182,9 @@ public sealed class ActivitySchedulerServiceTests
     [Test]
     public void ActivityCompletion_DifferentProfileIds_AreNotEqual()
     {
-        FakeCompletion a = new(Guid.NewGuid());
-        FakeCompletion b = new(Guid.NewGuid());
+        DateTime endTime = DateTime.UtcNow;
+        FakeCompletion a = new(Guid.NewGuid(), endTime);
+        FakeCompletion b = new(Guid.NewGuid(), endTime);
 
         Assert.That(a.Equals(b), Is.False);
     }
@@ -190,7 +192,7 @@ public sealed class ActivitySchedulerServiceTests
     [Test]
     public void ActivityCompletion_EqualsNull_ReturnsFalse()
     {
-        FakeCompletion completion = new(Guid.NewGuid());
+        FakeCompletion completion = new(Guid.NewGuid(), DateTime.UtcNow);
 
         Assert.Multiple(() =>
         {
@@ -202,7 +204,7 @@ public sealed class ActivitySchedulerServiceTests
     [Test]
     public void ActivityCompletion_EqualsSameReference_ReturnsTrue()
     {
-        FakeCompletion completion = new(Guid.NewGuid());
+        FakeCompletion completion = new(Guid.NewGuid(), DateTime.UtcNow);
 
         Assert.That(completion.Equals(completion), Is.True);
     }
@@ -210,12 +212,12 @@ public sealed class ActivitySchedulerServiceTests
     [Test]
     public void ActivityCompletion_EqualsDifferentType_ReturnsFalse()
     {
-        FakeCompletion completion = new(Guid.NewGuid());
+        FakeCompletion completion = new(Guid.NewGuid(), DateTime.UtcNow);
 
         Assert.That(completion.Equals("not a completion"), Is.False);
     }
 
-    private sealed class FakeCompletion(Guid profileId) : ActivityCompletion(profileId)
+    private sealed class FakeCompletion(Guid profileId, DateTime endTime) : ActivityCompletion(profileId, endTime)
     {
         public bool CompleteCalled { get; private set; }
 

@@ -66,6 +66,7 @@ public sealed class ActivityService(IDbContextFactory<GameDbContext> dbContextFa
         }
 
         DateTime startedAt = startTime ?? DateTime.UtcNow;
+        DateTime endTime = startedAt.AddSeconds(definition.Time);
 
         await using GameDbContext dbContext = await dbContextFactory.CreateDbContextAsync();
         dbContext.Profiles.Attach(profile);
@@ -74,8 +75,7 @@ public sealed class ActivityService(IDbContextFactory<GameDbContext> dbContextFa
         await dbContext.SaveChangesAsync();
 
         activitySchedulerService.StartEvent(
-            new ProfileActivityCompletion(this, socketRegistry, itemService, skillService, profileId, activityId),
-            startedAt.AddSeconds(definition.Time));
+            new ProfileActivityCompletion(this, socketRegistry, itemService, skillService, profileId, activityId, endTime));
 
         return profile;
     }
@@ -148,18 +148,17 @@ public sealed class ActivityService(IDbContextFactory<GameDbContext> dbContextFa
 
 internal sealed class ProfileActivityCompletion(
     ActivityService activityService, SocketRegistryService socketRegistry, ItemService itemService,
-    SkillService skillService, ProfileId profileId, ActivityId activityId)
-    : ActivityCompletion(profileId)
+    SkillService skillService, ProfileId profileId, ActivityId activityId, DateTime endTime)
+    : ActivityCompletion(profileId, endTime)
 {
     public async override Task Complete()
     {
-        DateTime completionTime = DateTime.UtcNow;
-
         await activityService.ResolveActivityAsync(ProfileId);
 
-        // Restart the next cycle immediately, anchored to the exact moment this one ended so the
-        // loop has no delay or drift between cycles.
-        await activityService.StartActivityAsync(ProfileId, activityId, completionTime);
+        // Restart the next cycle immediately, anchored to the exact moment this one ended. Using the
+        // completion's own EndTime means the next cycle begins the same second the previous one
+        // ended, so the loop has no delay or drift between cycles.
+        await activityService.StartActivityAsync(ProfileId, activityId, EndTime);
 
         Item[] items = await itemService.GetItemsAsync(ProfileId);
         Skill[] skills = await skillService.GetSkillsAsync(ProfileId);
