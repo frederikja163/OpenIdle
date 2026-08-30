@@ -72,7 +72,7 @@ public sealed class ActivityService(IDbContextFactory<GameDbContext> dbContextFa
         await dbContext.SaveChangesAsync();
 
         activitySchedulerService.StartEvent(
-            new ProfileActivityCompletion(this, socketRegistry, profileId, activityId),
+            new ProfileActivityCompletion(this, socketRegistry, itemService, skillService, profileId, activityId),
             DateTime.UtcNow.AddSeconds(definition.Time));
 
         return profile;
@@ -100,6 +100,7 @@ public sealed class ActivityService(IDbContextFactory<GameDbContext> dbContextFa
         }
 
         List<Reward> resolvedRewards = [];
+        List<ItemReward> itemRewards = [];
         await using GameDbContext dbContext = await dbContextFactory.CreateDbContextAsync();
         foreach (Reward reward in grantedRewards)
         {
@@ -112,7 +113,7 @@ public sealed class ActivityService(IDbContextFactory<GameDbContext> dbContextFa
             switch (resolved)
             {
                 case ItemReward itemReward when itemReward.Count > 0:
-                    await itemService.AddItemsAsync(dbContext, profileId, [itemReward]);
+                    itemRewards.Add(itemReward);
                     resolvedRewards.Add(itemReward);
                     break;
                 case ItemReward:
@@ -128,6 +129,11 @@ public sealed class ActivityService(IDbContextFactory<GameDbContext> dbContextFa
             }
         }
 
+        if (itemRewards.Count > 0)
+        {
+            await itemService.AddItemsAsync(dbContext, profileId, itemRewards);
+        }
+
         dbContext.Profiles.Attach(profile);
         profile.ActivityId = null;
         profile.ActivityStartTime = null;
@@ -138,13 +144,21 @@ public sealed class ActivityService(IDbContextFactory<GameDbContext> dbContextFa
 }
 
 internal sealed class ProfileActivityCompletion(
-    ActivityService activityService, SocketRegistryService socketRegistry, ProfileId profileId, ActivityId activityId)
+    ActivityService activityService, SocketRegistryService socketRegistry, ItemService itemService,
+    SkillService skillService, ProfileId profileId, ActivityId activityId)
     : ActivityCompletion(profileId)
 {
-    public override void Complete()
+    public async override Task Complete()
     {
-        activityService.ResolveActivityAsync(ProfileId).GetAwaiter().GetResult();
-        socketRegistry.SendToProfileAsync(ProfileId, new ActivityEndedEvent() { ActivityId = activityId })
-            .GetAwaiter().GetResult();
+        await activityService.ResolveActivityAsync(ProfileId);
+        Item[] items = await itemService.GetItemsAsync(ProfileId);
+        Skill[] skills = await skillService.GetSkillsAsync(ProfileId);
+        await activityService.StartActivityAsync(ProfileId, activityId);
+        await socketRegistry.SendToProfileAsync(ProfileId, new ActivityEndedEvent()
+        {
+            ActivityId = activityId,
+            Items = items.Select(i => i.ToDto()).ToArray(),
+            Skills = skills.Select(s => s.ToDto()).ToArray(),
+        });
     }
 }

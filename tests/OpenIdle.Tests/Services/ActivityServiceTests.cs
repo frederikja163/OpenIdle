@@ -9,6 +9,7 @@ using Backend.Dtos;
 using Backend.Services;
 using Microsoft.Extensions.Logging.Abstractions;
 using OpenIdle.Tests.Database;
+using OpenIdle.Tests.TestDoubles;
 
 namespace OpenIdle.Tests.Services;
 
@@ -109,34 +110,83 @@ public sealed class ActivityServiceTests : IDisposable
     }
 
     [Test]
-    public async Task StartActivityAsync_CompletionTimeElapsed_ResolvesRewardsAndClearsState()
+    public async Task StartActivityAsync_CompletionElapsed_SendsEventWithRewardsAndContinuesActivity()
     {
         Profile profile = await SeedProfileAsync();
-        await SeedSkillAsync(profile, SkillId.Mining, xp: 0, level: 1);
         SocketRegistryService socketRegistry = new(NullLogger<SocketRegistryService>.Instance);
+        FakeWebSocket webSocket = RegisterSocket(socketRegistry, profile.ProfileId);
         ActivitySchedulerService scheduler = new();
         ActivityService service = new(_db.Factory, new DropTableService(), new ProfileService(_db.Factory, socketRegistry),
             new ItemService(_db.Factory), new SkillService(_db.Factory), socketRegistry, scheduler);
         service.AddActivity(ActivityId.Stone, new ActivityDefinition(
             time: 0.01f,
-            rewards: [new ItemReward(2, null, ItemId.Stone)],
+            rewards: [new ItemReward(2, null, ItemId.Stone), new XpReward(10, null, SkillId.Mining)],
             requirements: []));
 
         await service.StartActivityAsync(profile.ProfileId, ActivityId.Stone);
         Assert.That(await GetItemsAsync(profile.ProfileId), Is.Empty);
 
         Thread.Sleep(100);
-        scheduler.NextEvent();
+        await scheduler.NextEvent();
 
-        Item[] items = await GetItemsAsync(profile.ProfileId);
-        await using GameDbContext dbContext = await _db.Factory.CreateDbContextAsync();
-        Profile? updated = await dbContext.Profiles.FindAsync(profile.ProfileId);
-        Assert.Multiple(() =>
+        await Assert.MultipleAsync(async () =>
         {
+            Item[] items = await GetItemsAsync(profile.ProfileId);
             Assert.That(items, Has.Length.EqualTo(1));
             Assert.That(items[0].ItemId, Is.EqualTo(ItemId.Stone));
             Assert.That(items[0].Count, Is.EqualTo(2));
-            Assert.That(updated?.ActivityId, Is.Null);
+            Skill skill = (await GetSkillsAsync(profile.ProfileId)).Single();
+            Assert.That(skill.Xp, Is.EqualTo(10));
+
+            await using GameDbContext dbContext = await _db.Factory.CreateDbContextAsync();
+            Profile? updated = await dbContext.Profiles.FindAsync(profile.ProfileId);
+            Assert.That(updated?.ActivityId, Is.EqualTo(ActivityId.Stone));
+            Assert.That(updated?.ActivityStartTime, Is.Not.Null);
+
+            byte[] frame = webSocket.Sent[0].Bytes;
+            ActivityEndedEvent? endedEvent = SocketJsonSerializer.Deserialize(frame, frame.Length) as ActivityEndedEvent;
+            Assert.That(endedEvent, Is.Not.Null);
+            Assert.That(endedEvent!.ActivityId, Is.EqualTo(ActivityId.Stone));
+            Assert.That(endedEvent!.Items, Has.Length.EqualTo(1));
+            ItemDto itemDto = endedEvent!.Items!.Single();
+            Assert.That(itemDto.ItemId, Is.EqualTo(ItemId.Stone));
+            Assert.That(itemDto.Count, Is.EqualTo(2));
+            Assert.That(endedEvent!.Skills, Has.Length.EqualTo(1));
+            SkillDto skillDto = endedEvent!.Skills!.Single();
+            Assert.That(skillDto.SkillId, Is.EqualTo(SkillId.Mining));
+            Assert.That(skillDto.Xp, Is.EqualTo(10));
+        });
+    }
+
+    [Test]
+    public async Task StartActivityAsync_Completion_SchedulesNextActivity()
+    {
+        Profile profile = await SeedProfileAsync();
+        SocketRegistryService socketRegistry = new(NullLogger<SocketRegistryService>.Instance);
+        ActivitySchedulerService scheduler = new();
+        ActivityService service = new(_db.Factory, new DropTableService(), new ProfileService(_db.Factory, socketRegistry),
+            new ItemService(_db.Factory), new SkillService(_db.Factory), socketRegistry, scheduler);
+        service.AddActivity(ActivityId.Stone, new ActivityDefinition(
+            time: 0.01f,
+            rewards: [new ItemReward(2, null, ItemId.Stone), new XpReward(10, null, SkillId.Mining)],
+            requirements: []));
+
+        await service.StartActivityAsync(profile.ProfileId, ActivityId.Stone);
+
+        Thread.Sleep(100);
+        await scheduler.NextEvent();
+        Thread.Sleep(100);
+        await scheduler.NextEvent();
+
+        await Assert.MultipleAsync(async () =>
+        {
+            Item item = (await GetItemsAsync(profile.ProfileId)).Single();
+            Assert.That(item.Count, Is.EqualTo(4));
+            Skill skill = (await GetSkillsAsync(profile.ProfileId)).Single();
+            Assert.That(skill.Xp, Is.EqualTo(20));
+            await using GameDbContext dbContext = await _db.Factory.CreateDbContextAsync();
+            Profile? updated = await dbContext.Profiles.FindAsync(profile.ProfileId);
+            Assert.That(updated?.ActivityId, Is.EqualTo(ActivityId.Stone));
         });
     }
 
@@ -318,6 +368,15 @@ public sealed class ActivityServiceTests : IDisposable
             time: 1f,
             rewards: [new ItemReward(4, null, ItemId.Stone), new XpReward(10, null, SkillId.Mining)],
             requirements: [new LevelRequirement(SkillId.Mining, 1)]));
+    }
+
+    private static FakeWebSocket RegisterSocket(SocketRegistryService socketRegistry, Guid profileId)
+    {
+        FakeWebSocket webSocket = new();
+        Socket socket = new Socket(webSocket);
+        socketRegistry.RegisterSocket(socket);
+        socketRegistry.SetProfile(socket, profileId);
+        return webSocket;
     }
 
     private (ActivityService, DropTableService) CreateService()

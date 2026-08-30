@@ -46,7 +46,7 @@
     <ItemReward item="Stone" count="4"/>
     <XpReward skill="Mining" count="10"/>
     <TableReward table="StoneTable" count="1"/>
-    <LevelRequirement skill="Mining" count="1"/>
+    <LevelRequirement skill="Mining" count="0"/>
   </Activity>
 
   <SkillSlots skill="Mining">
@@ -91,6 +91,8 @@
 
   <Event name="ActivityEnded">
     <Property name="ActivityId" type="ActivityId"/>
+    <Property name="Items" type="Item" multiple="true" />
+    <Property name="Skills" type="Skill" multiple="true" />
   </Event>
 
   <Request name="ListProfiles">

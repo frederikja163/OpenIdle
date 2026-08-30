@@ -254,6 +254,24 @@ Server→client event:
 }
 ```
 
+Server→client event carrying the resulting inventory and skill state (the `ActivityEndedEvent` reports the **totals** after a completion, not deltas):
+
+```json
+{
+  "$type": "ActivityEndedEvent",
+  "eventId": 1,
+  "activityId": "Stone",
+  "items": [
+    { "profileId": "2efd7f6a-...", "itemId": "Stone", "count": 4 }
+  ],
+  "skills": [
+    { "profileId": "2efd7f6a-...", "skillId": "Mining", "xp": 10, "level": 1 }
+  ]
+}
+```
+
+Sending the full resulting `items`/`skills` (rather than the small reward deltas) means the client always converges on total state even if an individual reward is lost.
+
 Sending an unknown `$type` fails deserialization; `Backend/Socket.cs` converts any message-handling exception into an `ErrorResponse` (`{ "$type": "ErrorResponse", "message": "..." }`).
 
 ## 6. Generation mechanics
@@ -290,6 +308,8 @@ Conventions (not enforced — reviewer judgement):
 - **Numeric attributes are culture-invariant.** All `<Property>`/reward/activity attribute numbers (including `float` `weight` and activity `time`) are parsed with `InvariantCulture` (`Generators/Core/Extensions/XmlElementExtensions.cs`) and emitted with it too — decimals always use `.`, regardless of OS locale.
 - **No editor validation.** There is no XSD; typos in `type` values surface at parse time (DTC002 / CLI error) and other mistakes at C# build time or not at all (TS). Copy a nearby block rather than typing from memory.
 - **An unrecognized top-level element throws** — `Parser.Element` ends in a `default` branch that raises `ParserException` (`Generators/Core/Parser.cs:71-73`), so a typo'd element name fails the build rather than being skipped.
+- **`optional` is mandatory for partial DTOs.** Non-optional properties are emitted as `required` in generated C#, so deserializing a payload that omits them throws `JsonException` ("missing required properties"). Any DTO whose sender legitimately leaves some fields unset defaults must mark them `optional` in `types.xml`.
+- **Agree on totals vs. deltas per event.** Whether an event carries incremental changes or the full resulting state is a protocol decision made per event in `types.xml` (see the `ActivityEndedEvent` example in [Wire format](#5-wire-format), which sends **total** `items`/`skills`). Don't mix the two meanings on one event.
 - **`GetElementsByTagName("Response")` is recursive** — the response can sit anywhere inside the request element, but keep it as a direct child.
 - **The decision doc differs from reality.** [`../libraries/dto-xml-contract.md`](../libraries/dto-xml-contract.md) proposed `required="true"`, `T[]` type tokens, and a namespaced root. The implemented contract (this document) uses `multiple="true"`, bare type names, and no `required` attribute. This document and the code are authoritative.
 

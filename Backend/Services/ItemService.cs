@@ -42,30 +42,30 @@ public sealed class ItemService(IDbContextFactory<GameDbContext> dbContextFactor
 
     internal async Task<Item[]> AddItemsAsync(GameDbContext dbContext, ProfileId profileId, IEnumerable<ItemReward> rewards)
     {
-        List<Item> items = [];
-        foreach (ItemReward reward in rewards)
-        {
-            if (reward.Count <= 0)
-            {
-                continue;
-            }
+        var countsByItem = rewards
+            .Where(r => r.Count > 0)
+            .GroupBy(r => r.ItemId)
+            .ToDictionary(g => g.Key, g => g.Sum(r => r.Count));
 
+        List<Item> items = [];
+        foreach ((ItemId itemId, int count) in countsByItem)
+        {
             Item? item = await dbContext.Items
-                .FirstOrDefaultAsync(i => i.ProfileId == profileId && i.ItemId == reward.ItemId);
+                .FirstOrDefaultAsync(i => i.ProfileId == profileId && i.ItemId == itemId);
 
             if (item is null)
             {
                 item = new Item()
                 {
                     ProfileId = profileId,
-                    ItemId = reward.ItemId,
-                    Count = reward.Count,
+                    ItemId = itemId,
+                    Count = count,
                 };
                 dbContext.Items.Add(item);
             }
             else
             {
-                item.Count += reward.Count;
+                item.Count += count;
             }
 
             items.Add(item);
