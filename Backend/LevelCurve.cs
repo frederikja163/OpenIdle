@@ -24,9 +24,6 @@ public static class LevelCurve
     public const int MaxLevel = 50;
 
     /// <summary>Base (tier 0) duration of one untooled action, in seconds.</summary>
-    // NOTE: the following pacing constants are not yet consumed by gameplay. They are the agreed
-    // tuning the ToolService stat application (activity speed, drop rolls, XP, durability) will use —
-    // see doc/proposals/tools-and-item-slots.md. Remove them if that wiring never lands.
     public const double BaseUntooledActionSecondsTier0 = 8;
 
     /// <summary>Extra seconds each tier adds to an untooled action.</summary>

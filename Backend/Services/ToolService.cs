@@ -4,12 +4,6 @@ using Backend.Dtos;
 
 namespace Backend.Services;
 
-/// <summary>
-/// The stats an item may carry on its <c>ItemStat</c>. Keep the numeric values in lockstep with
-/// <c>Generator.Core.ItemStats.ByKey</c> (the generator's <c>ToolData</c> seeder maps an item's stat names
-/// to these enum members) — an item declared with a stat whose <c>ToolStat</c> member is missing here
-/// will fail to compile the generated <c>ToolData.AddAll</c>.
-/// </summary>
 public enum ToolStat
 {
     Speed,

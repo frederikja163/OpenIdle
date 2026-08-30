@@ -94,8 +94,6 @@ public sealed class ActivityService(IDbContextFactory<GameDbContext> dbContextFa
             throw new BackendException($"Activity '{activityId}' does not have a valid definition.");
         }
 
-        activitySchedulerService.RemoveEvent(profileId);
-
         List<Reward> grantedRewards = [.. definition.Rewards];
         if (definition.DropTable is {})
         {
@@ -151,13 +149,9 @@ internal sealed class ProfileActivityCompletion(
     SkillService skillService, ProfileId profileId, ActivityId activityId, DateTime endTime)
     : ActivityCompletion(profileId, endTime)
 {
-    public async override Task Complete()
+    public override async Task Complete()
     {
         await activityService.ResolveActivityAsync(ProfileId);
-
-        // Restart the next cycle immediately, anchored to the exact moment this one ended. Using the
-        // completion's own EndTime means the next cycle begins the same second the previous one
-        // ended, so the loop has no delay or drift between cycles.
         await activityService.StartActivityAsync(ProfileId, activityId, EndTime);
 
         Item[] items = await itemService.GetItemsAsync(ProfileId);
