@@ -191,6 +191,22 @@ public sealed class ActivityServiceTests : IDisposable
     }
 
     [Test]
+    public async Task StartActivityAsync_ExplicitStartTime_IsUsedAsAnchor()
+    {
+        Profile profile = await SeedProfileAsync();
+        await SeedSkillAsync(profile, SkillId.Mining, xp: 0, level: 1);
+        (ActivityService service, _) = CreateService();
+        AddStoneActivity(service);
+
+        DateTime anchor = DateTime.UtcNow.AddSeconds(-30);
+        await service.StartActivityAsync(profile.ProfileId, ActivityId.Stone, anchor);
+
+        await using GameDbContext dbContext = await _db.Factory.CreateDbContextAsync();
+        Profile updated = (await dbContext.Profiles.FindAsync(profile.ProfileId))!;
+        Assert.That(updated.ActivityStartTime, Is.EqualTo(anchor));
+    }
+
+    [Test]
     public async Task ResolveActivityAsync_NoActivity_ThrowsBackendException()
     {
         Profile profile = await SeedProfileAsync();

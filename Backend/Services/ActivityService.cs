@@ -42,7 +42,7 @@ public sealed class ActivityService(IDbContextFactory<GameDbContext> dbContextFa
         _activities.Add(activityId, definition);
     }
 
-    internal async Task<Profile> StartActivityAsync(ProfileId profileId, ActivityId activityId)
+    internal async Task<Profile> StartActivityAsync(ProfileId profileId, ActivityId activityId, DateTime? startTime = null)
     {
         if (!_activities.TryGetValue(activityId, out ActivityDefinition? definition))
         {
@@ -65,22 +65,23 @@ public sealed class ActivityService(IDbContextFactory<GameDbContext> dbContextFa
             }
         }
 
+        DateTime startedAt = startTime ?? DateTime.UtcNow;
+
         await using GameDbContext dbContext = await dbContextFactory.CreateDbContextAsync();
         dbContext.Profiles.Attach(profile);
         profile.ActivityId = activityId;
-        profile.ActivityStartTime = DateTime.UtcNow;
+        profile.ActivityStartTime = startedAt;
         await dbContext.SaveChangesAsync();
 
         activitySchedulerService.StartEvent(
             new ProfileActivityCompletion(this, socketRegistry, itemService, skillService, profileId, activityId),
-            DateTime.UtcNow.AddSeconds(definition.Time));
+            startedAt.AddSeconds(definition.Time));
 
         return profile;
     }
 
     internal async Task<Reward[]> ResolveActivityAsync(ProfileId profileId)
     {
-        activitySchedulerService.RemoveEvent(profileId);
         Profile profile = await profileService.GetProfileAsync(profileId);
 
         if (profile.ActivityId is not ActivityId activityId)
@@ -92,6 +93,8 @@ public sealed class ActivityService(IDbContextFactory<GameDbContext> dbContextFa
         {
             throw new BackendException($"Activity '{activityId}' does not have a valid definition.");
         }
+
+        activitySchedulerService.RemoveEvent(profileId);
 
         List<Reward> grantedRewards = [.. definition.Rewards];
         if (definition.DropTable is {})
@@ -150,10 +153,16 @@ internal sealed class ProfileActivityCompletion(
 {
     public async override Task Complete()
     {
+        DateTime completionTime = DateTime.UtcNow;
+
         await activityService.ResolveActivityAsync(ProfileId);
+
+        // Restart the next cycle immediately, anchored to the exact moment this one ended so the
+        // loop has no delay or drift between cycles.
+        await activityService.StartActivityAsync(ProfileId, activityId, completionTime);
+
         Item[] items = await itemService.GetItemsAsync(ProfileId);
         Skill[] skills = await skillService.GetSkillsAsync(ProfileId);
-        await activityService.StartActivityAsync(ProfileId, activityId);
         await socketRegistry.SendToProfileAsync(ProfileId, new ActivityEndedEvent()
         {
             ActivityId = activityId,
