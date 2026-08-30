@@ -180,3 +180,22 @@ test('deleting a profile asks first, and confirming does nothing yet', async ({ 
 	await expect(page.getByRole('dialog')).toBeHidden();
 	await expect(page.getByText('Thorin')).toBeVisible();
 });
+
+test('the Debug button opens the protocol console and Back returns to the app', async ({
+	page
+}) => {
+	await page.routeWebSocket(WS_ROUTE, (ws) => ws.onMessage(respondToRequests(ws, [THORIN])));
+
+	await page.goto('/login');
+	await page.getByRole('button', { name: 'Log in' }).click();
+	await expect(page).toHaveURL(/\/profiles$/);
+
+	await page.getByRole('link', { name: 'Debug' }).click();
+	await expect(page).toHaveURL(/\/debug$/);
+	await expect(page.getByRole('heading', { level: 1, name: 'Protocol console' })).toBeVisible();
+
+	// Client-side navigation keeps the singleton socket logged in, so the return
+	// does not bounce to /login.
+	await page.getByRole('link', { name: 'Back to app' }).click();
+	await expect(page).toHaveURL(/\/profiles$/);
+});

@@ -1,6 +1,9 @@
 <script lang="ts">
+	import { resolve } from '$app/paths';
+	import ArrowLeft from '@lucide/svelte/icons/arrow-left';
 	import Column from '$lib/components/layout/Column.svelte';
 	import Row from '$lib/components/layout/Row.svelte';
+	import { Button } from '$lib/components/ui/button';
 	import { PROTOCOL } from '$lib/debug/schema';
 	import { recordTraffic } from '$lib/debug/traffic.svelte';
 	import ConnectionPanel from './components/ConnectionPanel.svelte';
@@ -25,11 +28,15 @@
 <svelte:head><title>OpenIdle — protocol console</title></svelte:head>
 
 <Column class="oi-board h-screen gap-(--gutter-app) p-(--gutter-app)">
-	<Row class="items-baseline gap-(--sp-5)">
+	<Row class="items-center gap-(--sp-5)">
 		<h1 class="oi-display-md text-text-strong">Protocol console</h1>
 		<span class="oi-body-md text-text-muted">
 			{PROTOCOL.requests.length} requests
 		</span>
+		<Button variant="ghost" size="sm" class="ml-auto" href={resolve('/profiles')}>
+			<ArrowLeft />
+			Back to app
+		</Button>
 	</Row>
 
 	<!-- Two columns on a wide screen: build on the left, watch on the right. The page owns
