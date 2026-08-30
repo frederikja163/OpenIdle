@@ -33,6 +33,7 @@ internal static class AppHost
         builder.Services.AddHostedService<ActivitySchedulerHostedService>();
 
         WebApplication app = builder.Build();
+
         app.MapControllers();
         app.MapSocketControllers();
         DropTableData.AddAll(app.Services.GetRequiredService<DropTableService>());

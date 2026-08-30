@@ -5,6 +5,7 @@ using System.Reflection;
 using Backend.Attributes;
 using Backend.Services;
 using Microsoft.AspNetCore.Builder;
+using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 
 namespace Backend.Extensions;
@@ -25,7 +26,7 @@ internal static class WebApplicationBuilderExtensions
     {
         internal void MapSocketControllers()
         {
-            app.UseWebSockets();
+            app.UseWebSockets(BuildWebSocketOptions(app));
             SocketEndpointService socketEndpointService = app.Services.GetRequiredService<SocketEndpointService>();
 
             IEnumerable<MethodInfo> methodInfos = Assembly.GetExecutingAssembly()
@@ -39,5 +40,22 @@ internal static class WebApplicationBuilderExtensions
                 socketEndpointService.TryRegisterEndpoint(methodInfo);
             }
         }
+    }
+
+    private static WebSocketOptions BuildWebSocketOptions(WebApplication app)
+    {
+        WebSocketOptions options = new();
+        string[] allowedOrigins = app.Configuration.GetSection("AllowedWsOrigins").Get<string[]>() ?? [];
+
+        foreach (string origin in allowedOrigins)
+        {
+            options.AllowedOrigins.Add(origin);
+        }
+
+        Log.Info(allowedOrigins.Length == 0
+            ? "WebSocket origins: unrestricted (AllowedWsOrigins is empty)"
+            : $"WebSocket origins restricted to: {string.Join(", ", allowedOrigins)}");
+
+        return options;
     }
 }

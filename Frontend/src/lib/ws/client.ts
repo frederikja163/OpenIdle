@@ -1,5 +1,3 @@
-import { dev } from '$app/environment';
-import { env } from '$env/dynamic/public';
 import {
 	classifyMessage,
 	encodeRequest,
@@ -10,8 +8,8 @@ import {
 	type ServerEvent,
 	type ServerEventOf
 } from './protocol';
+import { defaultWsUrl, readStoredWsUrl, resolveWsUrl, writeStoredWsUrl } from './ws-url';
 
-const DEFAULT_WS_URL = 'ws://localhost:5066/ws';
 const DEFAULT_REQUEST_TIMEOUT_MS = 10_000;
 const DEFAULT_CONNECT_TIMEOUT_MS = 5_000;
 const DEFAULT_RECONNECT_BASE_MS = 500;
@@ -647,40 +645,6 @@ export function getWsClient(): WsClient {
 	return client;
 }
 
-/**
- * Where a URL chosen on the debug page is kept. Deliberately per-browser and
- * persistent: pointing the app at a local backend is a decision about this
- * machine, and one that should survive a reload rather than have to be made
- * again on every page load.
- */
-const WS_URL_STORAGE_KEY = 'openidle.wsUrl';
-
-/**
- * Every access is guarded: localStorage is absent during SSR and *throws* rather
- * than returning null in a browser configured to block site data, which would
- * otherwise take the whole socket down with it.
- */
-function readStoredWsUrl(): string | null {
-	try {
-		return localStorage.getItem(WS_URL_STORAGE_KEY);
-	} catch {
-		return null;
-	}
-}
-
-function writeStoredWsUrl(url: string | null): void {
-	try {
-		if (url === null) {
-			localStorage.removeItem(WS_URL_STORAGE_KEY);
-		} else {
-			localStorage.setItem(WS_URL_STORAGE_KEY, url);
-		}
-	} catch {
-		// A URL that cannot be persisted is still applied to the live client below;
-		// it just will not survive the reload.
-	}
-}
-
 /** The URL the app is using, or would use on its next connect. */
 export function getWsUrl(): string {
 	return client?.currentUrl ?? resolveWsUrl();
@@ -688,7 +652,7 @@ export function getWsUrl(): string {
 
 /** The URL the app would use with no override in place. */
 export function getDefaultWsUrl(): string {
-	return resolveConfiguredWsUrl();
+	return defaultWsUrl();
 }
 
 /** Whether the app is on a URL chosen here rather than the configured one. */
@@ -706,34 +670,8 @@ export function setWsUrl(url: string): void {
 	client?.setUrl(url);
 }
 
-/** Drops the override and returns the app to PUBLIC_WS_URL (or the dev default). */
+/** Drops the override and returns the app to the configured or dev default. */
 export function clearWsUrl(): void {
 	writeStoredWsUrl(null);
-	client?.setUrl(resolveConfiguredWsUrl());
-}
-
-function resolveWsUrl(): string {
-	// The stored override wins over the build-time configuration on purpose: it is
-	// the more recent and more specific decision, made by someone sitting at this
-	// browser. It is only ever written by the debug page.
-	return readStoredWsUrl() ?? resolveConfiguredWsUrl();
-}
-
-/**
- * The development default is only safe for a local backend. In any deployed
- * build a missing PUBLIC_WS_URL is a configuration error worth failing fast on
- * rather than silently pointing every client at localhost.
- */
-function resolveConfiguredWsUrl(): string {
-	const configured = env.PUBLIC_WS_URL;
-	if (configured) {
-		return configured;
-	}
-	if (dev) {
-		return DEFAULT_WS_URL;
-	}
-	console.warn(
-		'PUBLIC_WS_URL is not set; refusing to fall back to the development default outside development.'
-	);
-	throw new Error('PUBLIC_WS_URL must be configured outside development');
+	client?.setUrl(defaultWsUrl());
 }
