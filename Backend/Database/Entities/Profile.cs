@@ -11,7 +11,7 @@ public sealed class Profile
 {
     [MaxLength(30)]
     public required string Name { get; init; }
-    public required Guid ProfileId { get; init; }
+    public required ProfileId ProfileId { get; init; }
     public ActivityId? ActivityId { get; set; }
     public DateTime? ActivityStartTime { get; set; }
 

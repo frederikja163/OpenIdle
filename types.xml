@@ -23,7 +23,7 @@
     <TableReward table="BrokenRockTable" weight="1" count="1"/>
   </DropTable>
   
-  <Activity name="Stone">
+  <Activity name="Stone" time="2.5">
     <ItemReward item="Stone" count="4"/>
     <XpReward skill="Mining" count="10"/>
     <TableReward table="StoneTable" count="1"/>
@@ -61,6 +61,10 @@
     <Property name="Profiles" type="Profile" multiple="true" />
   </Event>
 
+  <Event name="ActivityEnded">
+    <Property name="ActivityId" type="ActivityId"/>
+  </Event>
+
   <Request name="ListProfiles">
     <Response>
       <Property name="Profiles" type="Profile" multiple="true" />
@@ -73,6 +77,11 @@
 
   <Request name="SelectProfile">
     <Property name="ProfileId" type="Guid" />
+    <Response />
+  </Request>
+
+  <Request name="StartActivity">
+    <Property name="ActivityId" type="ActivityId"/>
     <Response />
   </Request>
 

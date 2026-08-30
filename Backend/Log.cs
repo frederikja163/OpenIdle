@@ -30,7 +30,7 @@ internal static class Log
 
     private static void Message(string severity, object obj)
     {
-        DateTime time = DateTime.Now;
+        DateTime time = DateTime.UtcNow;
         Console.WriteLine($"{time:s} | {severity} | {obj}");
     }
 }

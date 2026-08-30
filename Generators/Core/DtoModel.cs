@@ -87,8 +87,9 @@ public sealed class LevelRequirement(string skill, int count)
     public int Count { get; } = count;
 }
 
-public sealed class Activity(string name) : NamedType(name)
+public sealed class Activity(string name, float time) : NamedType(name)
 {
+    public float Time { get; } = time;
     public List<Reward> Rewards { get; } = [];
     public List<LevelRequirement> Requirements { get; } = [];
 }

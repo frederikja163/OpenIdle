@@ -34,6 +34,15 @@ export default defineConfig(
 		}
 	},
 	{
+		// Emitted from types.xml by the DTO generator (`bun run generate`). Linting it would
+		// only ever produce complaints nobody can act on: the fix would have to be made in
+		// Generators/Core and would be overwritten on the next generation anyway.
+		//
+		// Not covered by includeIgnoreFile above, which reads Frontend/.gitignore — the
+		// `**/*.generated.*` rule lives in the repository root one.
+		ignores: ['**/*.generated.ts']
+	},
+	{
 		// shadcn-svelte components are vendored into the repo by its CLI and are regenerated
 		// wholesale by `shadcn-svelte update`, so any in-file eslint-disable comment would be
 		// wiped. Scope the exceptions to the generated directory instead.

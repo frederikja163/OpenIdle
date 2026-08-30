@@ -6,7 +6,7 @@ The socket protocol's data shapes are defined once, in one XML file, and generat
 
 - **Single source of truth:** [`types.xml`](../../types.xml) at the repository root.
 - **C# DTOs are generated at build time** by a Roslyn source generator into the `Backend.Dtos` namespace (`Dto.g.cs`). Never write a DTO class by hand.
-- **TypeScript interfaces are generated on demand** by a CLI tool (see [Generation mechanics](#6-generation-mechanics)).
+- **TypeScript is generated on demand** by a CLI tool, in two flavours: `-t Ts` for interfaces, `-t TsSchema` for a runtime description of the contract (see [Generation mechanics](#6-generation-mechanics)).
 - **Workflow to add a request/response/event:** edit `types.xml`, rebuild, done (C#). For the frontend, also run the CLI to regenerate the `.ts` (the output is git-ignored).
 - **Naming:** the emitters append suffixes — `name="Foo"` becomes `FooDto`, `FooRequest`, `FooResponse`, or `FooEvent`. Do **not** write the suffix in the XML name.
 - **Every `<Request>` must contain exactly one `<Response>`** child (possibly empty).
@@ -64,15 +64,16 @@ Everything that crosses the WebSocket is a DTO in `Backend.Dtos`, generated from
 
 - The root element can be any name — [`types.xml`](../../types.xml) uses `<Types>`. Only its child elements are read.
 - `Property` elements are collected from **direct** children only (a `Request`'s `<Response>` is a direct child; the response's properties live *inside* `<Response>`).
-- Top-level element order is preserved in the generated file. Unknown top-level element names are silently ignored.
+- Top-level element order is preserved in the generated file. An unrecognized top-level element name is a **parse error** (`Generators/Core/Parser.cs:71-73`).
 
 ### 2.2 `<Property>` attributes
 
 | Attribute | Required | Values | Effect |
 |---|---|---|---|
 | `name` | yes | identifier | Property name. Lower-camel-cased in JSON and TS; upper-camel-cased in C#. |
-| `type` | yes | `string` \| `int` \| `float` \| `Guid`, or the **base name of a declared `Dto`** (suffix omitted) or a **declared `Enum`** | A bare built-in, or a reference to a custom type (see below). Case-insensitive for the built-ins only. |
+| `type` | yes | `string` \| `int` \| `float` \| `Guid` \| `UserId` \| `ProfileId`, or the **base name of a declared `Dto`** (suffix omitted) or a **declared `Enum`** | A bare built-in, or a reference to a custom type (see below). Case-insensitive for the built-ins only. |
 | `multiple` | no | `true` | Emits an array type (`T[]`). Absent / `false` = single value. |
+| `optional` | no | `true` | Emits `name?: T` in TypeScript and lets the sender omit the key. On the wire an omitted key leaves the C# property at its default — there is no null. |
 
 Built-in type mapping (verified against the emitter):
 
@@ -82,8 +83,24 @@ Built-in type mapping (verified against the emitter):
 | `int` | `int` | `number` | `123` |
 | `float` | `float` | `number` | `1.5` |
 | `Guid` | `Guid` | `string` | `"00000000-0000-..."` |
+| `UserId` | `Guid` | `string` | `"00000000-0000-..."` |
+| `ProfileId` | `Guid` | `string` | `"00000000-0000-..."` |
 | declared `Dto` (e.g. `Profile`) | `ProfileDto` | `ProfileDto` | object |
-| declared `Enum` (e.g. `ItemId`) | `ItemId` | `ItemId` | number |
+| declared `Enum` (e.g. `ItemId`) | `ItemId` | `ItemId` (a string-literal union) | `"Stone"` |
+
+**Enums are strings on the wire, not ordinals.** The backend's serializer installs a
+`JsonStringEnumConverter` (`Backend/SocketJsonSerializer.cs:17`) and the TS emitter writes
+`type ItemId = 'None' | 'Stone' | ...` (`Generators/Core/TsEmitter.cs:54`), so the value sent
+and received is the member's UpperCamelCase name.
+
+Two things about enums that `types.xml` does not show:
+
+- **Every enum gains a `None` member as its first value**, added by the generator's `Enum`
+  constructor (`Generators/Core/DtoModel.cs:32-35`) whether or not the XML lists one.
+- **`DropTableId` and `ActivityId` are synthesised**, not declared: each `<DropTable>` and
+  `<Activity>` element appends its name to the corresponding enum
+  (`Generators/Core/Parser.cs:47,52`). They can be referenced from a `Property` like any
+  other enum.
 
 ### 2.3 Naming rules (enforced by the emitters)
 
@@ -101,11 +118,12 @@ Built-in type mapping (verified against the emitter):
 
 ### 2.4 Supported property types, precisely
 
-The parser (`Generators/Core/Parser.cs`) matches `type` against `string`, `int`, `float`, `Guid` (case-insensitive). Any other value must name a declared `<Dto>` or `<Enum>` — the parser resolves it to that type and the emitters emit a reference to the generated `{Name}Dto` (for DTOs) or `{Name}` (for enums). Consequences:
+The parser (`Generators/Core/Parser.cs:225`) matches `type` against the `PropertyType` enum's member names, case-insensitively: `string`, `int`, `float`, `Guid`, `UserId`, `ProfileId`. Any other value must name a declared `<Dto>` or `<Enum>` — the parser resolves it to that type and the emitters emit a reference to the generated `{Name}Dto` (for DTOs) or `{Name}` (for enums). Consequences:
 
 - `type="Profile"` → `ProfileDto` (requires a `<Dto name="Profile">`).
 - `type="ItemId"` → `ItemId` (requires an `<Enum name="ItemId">`).
 - A typo such as `type="Gud"` is a **parse error** (`ParserException`, surfaced as `DTC002` in the backend build / CLI failure) — custom types must resolve to a declared DTO or enum.
+- Resolution is **order-sensitive**: the parser builds its dictionaries as it walks the document, so a `Property` can only name a `<Dto>` or `<Enum>` declared *above* it in `types.xml`.
 
 ## 3. How to add a DTO
 
@@ -190,7 +208,7 @@ The C# emitter writes a single file, `Dto.g.cs`, into the `Backend.Dtos` namespa
 - `[JsonPolymorphic]` + one `[JsonDerivedType]` per generated type on `abstract class DtoBase`.
 - The three abstract bases: `DtoBase`, `RequestBase` (with `int RequestId`), `ResponseBase` (with `int RequestId`), `EventBase` (with `int EventId`).
 - `public static class DropTableData` with `public static void AddAll(DropTableService service)` — a seeder that registers every `<DropTable>` from `types.xml` into a `Backend.Services.DropTableService`: `<ItemReward item=...>` drops become `new ItemReward(count, weight, ItemId.X)`, `<TableReward table=...>` drops become `new TableReward(count, weight, DropTableId.Y)`.
-- `public static class ActivityData` with `public static void AddAll(ActivityService service)` — a seeder that registers every `<Activity>` from `types.xml` into a `Backend.Services.ActivityService`: each activity becomes `service.AddActivity(ActivityId.X, new ActivityDefinition(rewards: [...], requirements: [...]))`. Rewards are `<ItemReward>` / `<TableReward>` / `<XpReward>`; a missing `weight` makes the reward guaranteed, a present `weight` puts it into the activity's weighted roll (same weighted pick as a drop table). `<LevelRequirement skill="..." count="..."/>` becomes `new LevelRequirement(SkillId.X, N)`.
+- `public static class ActivityData` with `public static void AddAll(ActivityService service)` — a seeder that registers every `<Activity>` from `types.xml` into a `Backend.Services.ActivityService`: each activity becomes `service.AddActivity(ActivityId.X, new ActivityDefinition(time: Nf, rewards: [...], requirements: [...]))`. The `time` attribute is required — a float number of seconds for how long the activity takes to complete by default (`<Activity name="Stone" time="2.5">` emits `time: 2.5f`). Rewards are `<ItemReward>` / `<TableReward>` / `<XpReward>`; a missing `weight` makes the reward guaranteed, a present `weight` puts it into the activity's weighted roll (same weighted pick as a drop table). `<LevelRequirement skill="..." count="..."/>` becomes `new LevelRequirement(SkillId.X, N)`.
 The file also carries `using Backend.Services;` for these hand-written types.
 
 All DTO classes are `sealed` and non-partial — **you cannot extend generated types with hand-written members.** If a payload needs a field, it must be declared in `types.xml`.
@@ -239,7 +257,14 @@ Sending an unknown `$type` fails deserialization; `Backend/Socket.cs` converts a
 ## 6. Generation mechanics
 
 - **C# (build time):** `Generators/Backend/TypesGenerator.cs` is an `IIncrementalGenerator` wired into [`Backend/Backend.csproj`](../../Backend/Backend.csproj) (lines 17-24) as an analyzer. It finds `types.xml` via `AdditionalFiles`, runs the same `Parser` + `CsEmitter` as the CLI, and emits `Dto.g.cs`. Diagnostics `DTC001` (missing file) and `DTC002` (invalid XML) fail the build.
-- **TypeScript (on demand):** `Generators/Generator/Program.cs` is a `CommandLineParser` console app using `TsEmitter`. Flags: `-i|--input` (required), `-t|--target Cs|Ts` (required), `-o|--output` (default stdout).
+- **TypeScript (on demand):** `Generators/Generator/Program.cs` is a `CommandLineParser` console app. Flags: `-i|--input` (required), `-t|--target Cs|Ts|TsSchema` (required), `-o|--output` (default stdout).
+- **`-t TsSchema`** (`Generators/Core/TsSchemaEmitter.cs`) emits the contract as a *value* rather than as declarations — an object naming every request, its properties (wire name, kind, `multiple`, `optional`) and its response, plus every DTO and enum. TypeScript types are erased at compile time, so anything that has to reason about the protocol at runtime needs this instead of `-t Ts`. The frontend's protocol console (`Frontend/src/routes/debug/`) builds its request forms from it, and `Frontend/package.json`'s `generate` script — which `dev`, `build` and `check` all depend on — keeps the output current:
+
+  ```powershell
+  cd Frontend; bun run generate
+  ```
+
+  The emitted file annotates itself with a hand-written `ProtocolSchema` interface it imports, so a change to the emitter that the consumer does not expect fails `bun run check` rather than the page.
 - The parser, model, and emitters all live in `Generators/Core/` and are shared between the two consumers.
 
 ## 7. Rules & constraints
@@ -260,8 +285,9 @@ Conventions (not enforced — reviewer judgement):
 ## 8. Gotchas & known quirks
 
 - **`requestId`/`eventId` are numeric on both sides.** The C# bases hardcode `int RequestId` / `int EventId` and the TS emitter hardcodes `requestId: number` / `eventId: number` (`Generators/Core/TsEmitter.cs:20-33`). This matches the TS socket client ([`Frontend/src/lib/ws/client.ts`](../../Frontend/src/lib/ws/client.ts)), which assigns client-chosen numeric ids (`nextRequestId`) and expects the echoed response to carry the same number. Keep the two sides in lockstep — changing one alone breaks deserialization. The contract is strict integers: there is no `JsonNumberHandling` leniency in the backend serializer, so a quoted numeral such as `"requestId": "1"` fails deserialization — clients must send a plain JSON number.
+- **Numeric attributes are culture-invariant.** All `<Property>`/reward/activity attribute numbers (including `float` `weight` and activity `time`) are parsed with `InvariantCulture` (`Generators/Core/Extensions/XmlElementExtensions.cs`) and emitted with it too — decimals always use `.`, regardless of OS locale.
 - **No editor validation.** There is no XSD; typos in `type` values surface at parse time (DTC002 / CLI error) and other mistakes at C# build time or not at all (TS). Copy a nearby block rather than typing from memory.
-- **Unknown top-level elements are silently ignored** by the parser (`Generators/Core/Parser.cs:33-52`).
+- **An unrecognized top-level element throws** — `Parser.Element` ends in a `default` branch that raises `ParserException` (`Generators/Core/Parser.cs:71-73`), so a typo'd element name fails the build rather than being skipped.
 - **`GetElementsByTagName("Response")` is recursive** — the response can sit anywhere inside the request element, but keep it as a direct child.
 - **The decision doc differs from reality.** [`../libraries/dto-xml-contract.md`](../libraries/dto-xml-contract.md) proposed `required="true"`, `T[]` type tokens, and a namespaced root. The implemented contract (this document) uses `multiple="true"`, bare type names, and no `required` attribute. This document and the code are authoritative.
 
@@ -276,6 +302,9 @@ dotnet run --project Generators\Generator -- -i types.xml -t Cs
 
 # 3. TypeScript interfaces look right (output follows *.generated.* convention for git-ignore)
 dotnet run --project Generators\Generator -- -i types.xml -t Ts -o Frontend\src\lib\dto.generated.ts
+
+# 4. The runtime schema emits, and satisfies the interface the frontend checks it against
+cd Frontend; bun run check
 ```
 
 ## 10. Related documents

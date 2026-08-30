@@ -28,6 +28,8 @@ internal static class AppHost
         builder.Services.AddSingleton<SkillService>();
         builder.Services.AddSingleton<ItemService>();
         builder.Services.AddSingleton<ActivityService>();
+        builder.Services.AddSingleton<ActivitySchedulerService>();
+        builder.Services.AddHostedService<ActivitySchedulerHostedService>();
 
         WebApplication app = builder.Build();
 

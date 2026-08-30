@@ -81,7 +81,7 @@ public sealed class CsEmitter : IDtoEmitter
                     string rewards = string.Join(", ", activity.Rewards.Select(RewardExpression));
                     string requirements = string.Join(", ", activity.Requirements.Select(RequirementExpression));
                     _textWriter.WriteLine(
-                        $"service.AddActivity(ActivityId.{activity.Name.UpperCamelCase}, new ActivityDefinition(rewards: [{rewards}], requirements: [{requirements}]));");
+                        $"service.AddActivity(ActivityId.{activity.Name.UpperCamelCase}, new ActivityDefinition(time: {TimeLiteral(activity.Time)}, rewards: [{rewards}], requirements: [{requirements}]));");
                 }
             }
         }
@@ -127,6 +127,11 @@ public sealed class CsEmitter : IDtoEmitter
     private static string WeightLiteral(float? weight)
     {
         return weight is null ? "null" : weight.Value.ToString(CultureInfo.InvariantCulture) + "f";
+    }
+
+    private static string TimeLiteral(float time)
+    {
+        return time.ToString(CultureInfo.InvariantCulture) + "f";
     }
 
     private void EmitClass(Object obj)

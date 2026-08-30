@@ -147,6 +147,25 @@ export function selectWsUrl(input: WsUrlInput): WsUrlResolution {
 }
 
 /**
+ * Returns the URL that would be used with no override in place: the configured
+ * `PUBLIC_WS_URL`, or the dev fallback. Throws outside development when no
+ * configuration is present — a missing value is a deployment error.
+ */
+export function defaultWsUrl(): string {
+	const configured = env.PUBLIC_WS_URL;
+	if (configured) {
+		return configured;
+	}
+	if (dev) {
+		return DEFAULT_WS_URL;
+	}
+	console.warn(
+		'PUBLIC_WS_URL is not set; refusing to fall back to the development default outside development.'
+	);
+	throw new Error('PUBLIC_WS_URL must be configured outside development');
+}
+
+/**
  * Reading `window.localStorage` — not just using it — throws in a browser with
  * site data blocked, so even the handle has to be taken defensively.
  */
@@ -168,6 +187,33 @@ function persistOverride(storage: Storage, override: string | null): void {
 	} catch {
 		// A session that cannot persist the override still honours it for this
 		// page; losing it on reload beats failing the connection over it.
+	}
+}
+
+/**
+ * Reads the stored WebSocket override, guarded against environments where
+ * localStorage is blocked or absent.
+ */
+export function readStoredWsUrl(): string | null {
+	const storage = openStorage();
+	if (!storage) {
+		return null;
+	}
+	try {
+		return storage.getItem(WS_URL_OVERRIDE_KEY);
+	} catch {
+		return null;
+	}
+}
+
+/**
+ * Persists (or clears, when `null`) the WebSocket override, guarded against
+ * environments where localStorage is blocked or absent.
+ */
+export function writeStoredWsUrl(url: string | null): void {
+	const storage = openStorage();
+	if (storage) {
+		persistOverride(storage, url);
 	}
 }
 
