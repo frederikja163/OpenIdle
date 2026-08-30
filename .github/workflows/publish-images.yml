@@ -3,17 +3,17 @@ name: Publish Images
 # The whole CD path. Both image builds are gated on the test suites below, so
 # nothing reaches GHCR from a red commit.
 #
-#   push to main       -> :dev  + :sha-<commit>   -> redeploys the dev hosts
-#   published release  -> :prod + :latest + :X.Y.Z -> redeploys the prod hosts
-#   manual dispatch    -> treated as dev
+#   push to main     -> :dev  + :sha-<commit>           -> redeploys the dev hosts
+#   push to release  -> :prod + :latest + :sha-<commit> -> redeploys the prod hosts
+#   manual dispatch  -> as for a push to the branch it was started from
 #
-# Prod therefore only ever moves on a deliberate release, which is what keeps
-# the prod frontend and prod backend on versions that were released together.
+# Prod therefore only ever moves on a deliberate push to release, which is what
+# keeps the prod frontend and prod backend on versions that were released
+# together. A branch push carries no version number, so :sha-<commit> is the
+# only tag that says which commit a prod image was built from.
 on:
   push:
-    branches: [main]
-  release:
-    types: [published]
+    branches: [main, release]
   workflow_dispatch:
 
 # Serialise per ref: two runs pushing the same tag would race, and the redeploy
@@ -68,17 +68,18 @@ jobs:
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
+      # Keyed on github.ref rather than ref_name so that a *tag* named release,
+      # which a manual dispatch can select, does not pass for the branch.
       - name: Compute tags
         id: meta
         uses: docker/metadata-action@v5
         with:
           images: ${{ steps.image.outputs.name }}
           tags: |
-            type=raw,value=dev,enable=${{ github.event_name != 'release' }}
-            type=sha,enable=${{ github.event_name != 'release' }}
-            type=raw,value=prod,enable=${{ github.event_name == 'release' }}
-            type=raw,value=latest,enable=${{ github.event_name == 'release' }}
-            type=semver,pattern={{version}},enable=${{ github.event_name == 'release' }}
+            type=raw,value=dev,enable=${{ github.ref != 'refs/heads/release' }}
+            type=raw,value=prod,enable=${{ github.ref == 'refs/heads/release' }}
+            type=raw,value=latest,enable=${{ github.ref == 'refs/heads/release' }}
+            type=sha
 
       - name: Build and push
         uses: docker/build-push-action@v6
@@ -97,8 +98,10 @@ jobs:
     runs-on: ubuntu-latest
     # Secrets and variables are read from the environment, so the two hosts are
     # configured with the same names and cannot be crossed. Give `prod` a
-    # required reviewer in the repository settings to gate a production release.
-    environment: ${{ github.event_name == 'release' && 'prod' || 'dev' }}
+    # required reviewer in the repository settings to gate a push to release
+    # behind an approval. The ref check is repeated from the tags step rather
+    # than shared through env: the env context is not available here.
+    environment: ${{ github.ref == 'refs/heads/release' && 'prod' || 'dev' }}
     steps:
       - name: Trigger backend redeploy
         shell: bash

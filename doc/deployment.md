@@ -44,27 +44,27 @@ docker build -f Frontend/Dockerfile -t openidle-frontend Frontend/
 | Trigger | Tags |
 |---|---|
 | push to `main` | `dev`, `sha-<commit>` |
-| published GitHub Release | `prod`, `latest`, `<version>` |
-| manual dispatch | as for a push to `main` |
+| push to `release` | `prod`, `latest`, `sha-<commit>` |
+| manual dispatch | as for a push to the branch it was started from |
 
-Production therefore only moves on a deliberate release, which is what keeps the prod frontend and prod backend on versions that were released together.
+Production therefore only moves on a deliberate push to `release`, which is what keeps the prod frontend and prod backend on versions that were released together. There is no GitHub Release and no version tag — the branch is the release — so `sha-<commit>` is what identifies the commit a prod image was built from. To ship prod, push the commit you want there: `git push origin main:release`.
 
 GHCR packages are **private by default**. Either make the two packages public, or give each host a read-only PAT and `docker login ghcr.io` before the first pull — otherwise the redeploy webhook fires and the pull fails.
 
 ## Pipeline
 
 ```
-pull request ──> Backend Build + Frontend Build          (tests only)
+pull request ────> Backend Build + Frontend Build          (tests only)
 
-push to main ──> publish-images.yml
-                   ├─ backend-tests   (calls Backend Build)
-                   ├─ frontend-tests  (calls Frontend Build)
-                   ├─ publish         both images, :dev
-                   └─ redeploy        environment: dev
-release ─────>     …same, but :prod   environment: prod
+push to main ────> publish-images.yml
+                     ├─ backend-tests   (calls Backend Build)
+                     ├─ frontend-tests  (calls Frontend Build)
+                     ├─ publish         both images, :dev
+                     └─ redeploy        environment: dev
+push to release ─>   …same, but :prod + :latest   environment: prod
 ```
 
-`backend-build.yml` and `frontend-build.yml` trigger on `pull_request` and `workflow_call` only. Pushes to `main` reach them through `publish-images.yml`, so the suites run once per commit and no image is ever published from a red one.
+`backend-build.yml` and `frontend-build.yml` trigger on `pull_request` and `workflow_call` only. Pushes to `main` and `release` reach them through `publish-images.yml`, so the suites run once per commit and no image is ever published from a red one.
 
 ### Redeploy webhooks
 
@@ -80,7 +80,7 @@ Configure these under **Settings → Environments**, in an environment named `de
 | Variable | `BACKEND_HEALTH_URL` | Polled after deploy, e.g. `https://api.openidle.example/healthz` |
 | Variable | `FRONTEND_HEALTH_URL` | Polled after deploy, e.g. `https://openidle.example/healthz` |
 
-Anything unset is skipped with a notice rather than failing the run, so the pipeline is usable before the hosts exist. Give the `prod` environment a required reviewer to gate production releases behind an approval.
+Anything unset is skipped with a notice rather than failing the run, so the pipeline is usable before the hosts exist. Give the `prod` environment a required reviewer to gate every push to `release` behind an approval, and restrict its deployment branches to `release` so nothing else can deploy to it.
 
 ## Running a host
 

@@ -1,6 +1,6 @@
 name: Backend Build
 
-# Pull requests run this directly. Pushes to main and releases reach it through
+# Pull requests run this directly. Pushes to main and release reach it through
 # publish-images.yml, which calls it before it pushes anything to GHCR — so an
 # image is never published from a commit whose tests did not pass. Keeping the
 # push trigger off avoids running the whole suite twice for one commit.
