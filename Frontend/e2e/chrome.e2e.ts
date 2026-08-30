@@ -181,6 +181,43 @@ test('deleting a profile asks first, and confirming does nothing yet', async ({ 
 	await expect(page.getByText('Thorin')).toBeVisible();
 });
 
+test('the Debug button opens the protocol console and Back returns to the app', async ({
+	page
+}) => {
+	await page.routeWebSocket(WS_ROUTE, (ws) => ws.onMessage(respondToRequests(ws, [THORIN])));
+
+	await page.goto('/login');
+	await page.getByRole('button', { name: 'Log in' }).click();
+	await expect(page).toHaveURL(/\/profiles$/);
+
+	await page.getByRole('link', { name: 'Debug' }).click();
+	await expect(page).toHaveURL(/\/debug$/);
+	await expect(page.getByRole('heading', { level: 1, name: 'Protocol console' })).toBeVisible();
+
+	// Client-side navigation keeps the singleton socket logged in, so the return
+	// does not bounce to /login.
+	await page.getByRole('link', { name: 'Back to app' }).click();
+	await expect(page).toHaveURL(/\/profiles$/);
+});
+
+test('the traffic filter remembers which kinds are hidden across reloads', async ({ page }) => {
+	await page.goto('/debug');
+
+	// The toggle is a badge whose text oi-label-sm uppercases in CSS only, so
+	// the accessible name stays lowercase and 'event' still finds it.
+	await page.getByRole('button', { name: 'event' }).click();
+	await expect(page.getByRole('button', { name: 'event' })).toHaveAttribute(
+		'aria-pressed',
+		'false'
+	);
+
+	await page.reload();
+	await expect(page.getByRole('button', { name: 'event' })).toHaveAttribute(
+		'aria-pressed',
+		'false'
+	);
+});
+
 // The ?ws= override is what lets the one deployed dev frontend be pointed at
 // whichever backend a developer is running locally — something no single
 // PUBLIC_WS_URL can do, since every developer's localhost is their own. These
