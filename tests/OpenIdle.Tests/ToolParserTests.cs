@@ -96,30 +96,28 @@ public sealed class ToolParserTests
     }
 
     [Test]
-    public void Parse_SkillSlotsCollectsSlotBindings()
+    public void Parse_SkillWithSlots_CollectsSlotBindings()
     {
         Parser parser = Parse("""
             <Types>
-              <SkillSlots skill="Mining">
+              <Skill name="Mining">
                 <Slot name="Head" required="true">
                   <Tag name="head"/>
                 </Slot>
                 <Slot name="Handle">
                   <Tag name="handle"/>
                 </Slot>
-              </SkillSlots>
+              </Skill>
             </Types>
             """);
 
-        Assert.That(parser.Model.SkillSlots, Has.Count.EqualTo(1));
-        SkillSlots skillSlots = parser.Model.SkillSlots[0];
-        Assert.That(skillSlots.Skill, Is.EqualTo("Mining"));
-        Assert.That(skillSlots.Slots, Has.Count.EqualTo(2));
-        Assert.That(skillSlots.Slots[0].Name, Is.EqualTo("Head"));
-        Assert.That(skillSlots.Slots[0].Tag.Name, Is.EqualTo("head"));
-        Assert.That(skillSlots.Slots[0].Required, Is.True);
-        Assert.That(skillSlots.Slots[1].Tag.Name, Is.EqualTo("handle"));
-        Assert.That(skillSlots.Slots[1].Required, Is.False);
+        Skill skill = parser.Model.Skills["Mining"];
+        Assert.That(skill.Slots, Has.Count.EqualTo(2));
+        Assert.That(skill.Slots[0].Name, Is.EqualTo("Head"));
+        Assert.That(skill.Slots[0].Tag.Name, Is.EqualTo("head"));
+        Assert.That(skill.Slots[0].Required, Is.True);
+        Assert.That(skill.Slots[1].Tag.Name, Is.EqualTo("handle"));
+        Assert.That(skill.Slots[1].Required, Is.False);
     }
 
     [Test]
@@ -127,11 +125,11 @@ public sealed class ToolParserTests
     {
         Parser parser = Parse("""
             <Types>
-              <SkillSlots skill="Mining">
+              <Skill name="Mining">
                 <Slot name="Head" required="true">
                   <Tag name="head"/>
                 </Slot>
-              </SkillSlots>
+              </Skill>
             </Types>
             """);
 
@@ -143,9 +141,9 @@ public sealed class ToolParserTests
     {
         Assert.Throws<ParserException>(() => Parse("""
             <Types>
-              <SkillSlots skill="Mining">
+              <Skill name="Mining">
                 <Slot name="Head" required="true"/>
-              </SkillSlots>
+              </Skill>
             </Types>
             """));
     }

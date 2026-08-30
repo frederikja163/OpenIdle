@@ -72,12 +72,8 @@ public sealed class Parser
                 Skill skill = Skill(element);
                 Model.Skills.Add(skill.Key, skill);
                 GetEnum(SkillIdEnumName).AddEnum(new EnumValue(skill.Key));
-                break;
-            case "SkillSlots":
-                SkillSlots skillSlots = SkillSlots(element);
-                Model.SkillSlots.Add(skillSlots);
                 Enum slotEnum = GetEnum(ItemSlotIdEnumName);
-                foreach (Slot slot in skillSlots.Slots)
+                foreach (Slot slot in skill.Slots)
                 {
                     if (slotEnum.GetEnum(slot.Name) is null)
                     {
@@ -236,23 +232,17 @@ public sealed class Parser
     private Skill Skill(XmlElement element)
     {
         Skill skill = new(element.RequireAttribute("name"));
-        return skill;
-    }
-
-    private SkillSlots SkillSlots(XmlElement element)
-    {
-        SkillSlots skillSlots = new(element.RequireAttribute("skill"));
         foreach (XmlElement slotElement in element.GetChildren("Slot"))
         {
             XmlElement tagElement = slotElement.GetChildren("Tag").SingleOrDefault()
                 ?? throw new ParserException($"Slot '{slotElement.RequireAttribute("name")}' must declare exactly one 'Tag'.");
 
-            skillSlots.Slots.Add(new Slot(
+            skill.Slots.Add(new Slot(
                 slotElement.RequireAttribute("name"),
                 new ItemTag(tagElement.RequireAttribute("name")),
                 slotElement.GetAttribute<bool>("required", false)));
         }
-        return skillSlots;
+        return skill;
     }
 
     private Dto Dto(XmlElement element)

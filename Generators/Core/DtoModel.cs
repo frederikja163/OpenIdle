@@ -14,7 +14,6 @@ public sealed class DtoModel
     public Dictionary<string, Activity> Activities { get; } = [];
     public Dictionary<string, Item> Items { get; } = [];
     public Dictionary<string, Skill> Skills { get; } = [];
-    public List<SkillSlots> SkillSlots { get; } = [];
 
     public IEnumerable<Object> AllObjects => Dtos.Values.Union<Object>(Requests.Values)
         .Union<Object>(Responses.Values)
@@ -133,11 +132,6 @@ public sealed class ItemStat(string name, float value)
 
 public sealed class Skill(string name) : NamedType(name)
 {
-}
-
-public sealed class SkillSlots(string skill)
-{
-    public string Skill { get; } = skill;
     public List<Slot> Slots { get; } = [];
 }
 

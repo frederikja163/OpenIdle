@@ -104,11 +104,11 @@ public sealed class CsEmitter : IDtoEmitter
                         $"service.AddItem(ItemId.{item.Name.UpperCamelCase}, new ItemDefinition(tags: [{tags}], stats: [{stats}]));");
                 }
 
-                foreach (SkillSlots skillSlots in model.SkillSlots)
+                foreach (Skill skill in model.Skills.Values.Where(s => s.Slots.Count > 0))
                 {
-                    string slots = string.Join(", ", skillSlots.Slots.Select(SlotExpression));
+                    string slots = string.Join(", ", skill.Slots.Select(SlotExpression));
                     _textWriter.WriteLine(
-                        $"service.AddSkillSlots(SkillId.{new Casing(skillSlots.Skill).UpperCamelCase}, [{slots}]);");
+                        $"service.AddSkillSlots(SkillId.{skill.Name.UpperCamelCase}, [{slots}]);");
                 }
             }
         }

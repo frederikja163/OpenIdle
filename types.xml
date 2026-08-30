@@ -1,6 +1,13 @@
 ﻿<?xml version="1.0" encoding="utf-8"?>
 <Types>
-  <Skill name="Mining"/>
+  <Skill name="Mining">
+    <Slot name="Head" required="true">
+      <Tag name="head"/>
+    </Slot>
+    <Slot name="Handle" required="true">
+      <Tag name="handle"/>
+    </Slot>
+  </Skill>
   <Skill name="LumberJacking"/>
   <Skill name="Crafting"/>
 
@@ -48,15 +55,6 @@
     <TableReward table="StoneTable" count="1"/>
     <LevelRequirement skill="Mining" count="0"/>
   </Activity>
-
-  <SkillSlots skill="Mining">
-    <Slot name="Head" required="true">
-      <Tag name="head"/>
-    </Slot>
-    <Slot name="Handle" required="true">
-      <Tag name="handle"/>
-    </Slot>
-  </SkillSlots>
 
   <Dto name="Item">
     <Property name="ProfileId" type="Guid"/>
