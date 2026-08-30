@@ -1,10 +1,28 @@
-# Build context is Frontend/:
-#   docker build -f Frontend/Dockerfile -t openidle-frontend Frontend/
+# Build context is the repository root, like the backend image:
+#   docker build -f Frontend/Dockerfile -t openidle-frontend .
+#
+# The root context exists for a reason: the frontend's protocol schema is
+# regenerated inside the image from the same commit's ../types.xml, and the
+# generator lives in ../Generators. The Bun Alpine stage has no dotnet, so a
+# short .NET SDK stage produces the TS file first. The generated file is
+# git-ignored (and .dockerignored) and therefore absent from the context — it
+# never ships stale. See doc/deployment.md.
 #
 # One image serves every environment. The backend address is read at runtime
 # from PUBLIC_WS_URL rather than compiled in, which is the whole reason the
 # project runs @sveltejs/adapter-node instead of a static adapter — see
 # doc/libraries/sveltejs-adapter-node.md.
+
+# The .NET stage: build the generator CLI once and run it against types.xml to
+# emit the TsSchema value src/lib/debug/protocol.generated.ts needs. The root
+# .dockerignore keeps bins, objs, node_modules and local state out of the COPY.
+FROM mcr.microsoft.com/dotnet/sdk:10.0 AS generate
+WORKDIR /src
+COPY . .
+RUN mkdir -p /out \
+    && dotnet run --project Generators/Generator/Generator.csproj \
+        --configuration Release -- \
+        -i types.xml -t TsSchema -o /out/protocol.generated.ts
 
 FROM oven/bun:1.3.10-alpine AS build
 WORKDIR /app
@@ -12,11 +30,17 @@ WORKDIR /app
 # --frozen-lockfile makes the build fail on a lockfile that disagrees with
 # package.json rather than quietly resolving something else. The `prepare`
 # script runs `svelte-kit sync`, which tsconfig.json depends on.
-COPY package.json bun.lock ./
+COPY Frontend/package.json Frontend/bun.lock ./
 RUN bun install --frozen-lockfile
 
-COPY . .
-RUN bun run build
+COPY Frontend/ ./
+# Overlay the freshly generated schema over any local copy that slipped past
+# .dockerignore, so the image always builds from its own commit's types.xml.
+COPY --from=generate /out/protocol.generated.ts ./src/lib/debug/protocol.generated.ts
+
+# Not `bun run build`: the local `build` script starts with `bun run generate`,
+# which would invoke dotnet. The generate stage above already did that work.
+RUN bunx vite build
 
 FROM oven/bun:1.3.10-alpine AS runtime
 WORKDIR /app

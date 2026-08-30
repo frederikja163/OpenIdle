@@ -43,13 +43,16 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          # The backend context is the repository root on purpose: Backend.csproj
-          # pulls in Generators/ and ../types.xml. See Backend/Dockerfile.
+          # Both contexts are the repository root on purpose. The backend needs
+          # Generators/ and ../types.xml (Backend.csproj pulls them in); the
+          # frontend image regenerates protocol.generated.ts from types.xml in a
+          # .NET generator stage, so it needs ../Generators and ../types.xml too.
+          # See Backend/Dockerfile and Frontend/Dockerfile.
           - name: backend
             context: .
             dockerfile: Backend/Dockerfile
           - name: frontend
-            context: Frontend
+            context: .
             dockerfile: Frontend/Dockerfile
     steps:
       - uses: actions/checkout@v4

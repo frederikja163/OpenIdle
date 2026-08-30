@@ -157,7 +157,7 @@ The source generator reads `types.xml` (wired as an `AdditionalFile` in [`Backen
 dotnet run --project Generators\Generator -- -i types.xml -t Ts -o Frontend\src\lib\dto.generated.ts
 ```
 
-The TS emitter is **not** wired into the frontend build; run the CLI to regenerate the output (it follows the `*.generated.ts` convention, so the root `.gitignore` excludes it). Target `Cs` prints the same output the source generator produces, useful for review:
+The TS emitter runs on demand rather than as part of `vite build` itself: locally `Frontend/package.json`'s `generate` script (which `dev`, `build` and `check` all start with) invokes it, and the frontend image regenerates the schema inside `Frontend/Dockerfile` from its commit's `types.xml`, so no output is ever checked in (the `*.generated.ts` convention excludes it via the root `.gitignore`). Target `Cs` prints the same output the source generator produces, useful for review:
 
 ```powershell
 dotnet run --project Generators\Generator -- -i types.xml -t Cs
