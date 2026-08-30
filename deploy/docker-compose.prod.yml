@@ -1,0 +1,38 @@
+# Production environment. Same shape as docker-compose.dev.yml, with two
+# deliberate differences that together make "prod only talks to prod" true:
+#
+#   * the frontend does not set PUBLIC_ALLOW_WS_OVERRIDE, so a ?ws= link is
+#     inert here and this frontend can only ever reach its own backend;
+#   * the backend's origin allowlist names the prod frontend and nothing else —
+#     no localhost entry.
+#
+# Deploy as for dev:
+#
+#   docker compose -f docker-compose.prod.yml up -d
+
+name: openidle-prod
+
+services:
+  backend:
+    image: ghcr.io/${GHCR_OWNER}/openidle-backend:prod
+    restart: unless-stopped
+    environment:
+      ASPNETCORE_URLS: http://+:8080
+      ConnectionStrings__Default: Data Source=/data/openidle.db
+      AllowedWsOrigins__0: ${PROD_FRONTEND_ORIGIN}
+    volumes:
+      - backend-data:/data
+    ports:
+      - "${BACKEND_PORT:-8080}:8080"
+
+  frontend:
+    image: ghcr.io/${GHCR_OWNER}/openidle-frontend:prod
+    restart: unless-stopped
+    environment:
+      PUBLIC_WS_URL: ${PROD_WS_URL}
+      ORIGIN: ${PROD_FRONTEND_ORIGIN}
+    ports:
+      - "${FRONTEND_PORT:-3000}:3000"
+
+volumes:
+  backend-data:

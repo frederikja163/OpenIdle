@@ -1,0 +1,54 @@
+# Dev environment. Copy this file and .env.example (as .env) to the host, then:
+#
+#   docker compose -f docker-compose.dev.yml up -d
+#
+# If the dev backend and dev frontend are separate machines, put the same two
+# files on both and bring up only the service that belongs there:
+#
+#   docker compose -f docker-compose.dev.yml up -d backend
+#
+# TLS and the public hostname are the reverse proxy's job (Caddy, nginx,
+# Traefik — whatever the host already runs); these containers speak plain HTTP
+# on the ports below.
+
+name: openidle-dev
+
+services:
+  backend:
+    image: ghcr.io/${GHCR_OWNER}/openidle-backend:dev
+    restart: unless-stopped
+    environment:
+      ASPNETCORE_URLS: http://+:8080
+      # The volume below; kept as an env var so the image needs no rebuild to
+      # move it.
+      ConnectionStrings__Default: Data Source=/data/openidle.db
+      # Who may open a socket. Index 0 is the deployed dev frontend. Index 1 is a
+      # developer running `bun run dev` on their own machine against this
+      # backend — the local-frontend-to-dev-backend direction. Production has no
+      # equivalent second entry.
+      AllowedWsOrigins__0: ${DEV_FRONTEND_ORIGIN}
+      AllowedWsOrigins__1: http://localhost:5173
+    volumes:
+      # SQLite is a file. Without this the database is lost on every redeploy,
+      # which is exactly what a webhook-driven deploy does often.
+      - backend-data:/data
+    ports:
+      - "${BACKEND_PORT:-8080}:8080"
+
+  frontend:
+    image: ghcr.io/${GHCR_OWNER}/openidle-frontend:dev
+    restart: unless-stopped
+    environment:
+      # Read at runtime, not baked in: the same image runs in production with a
+      # different value here.
+      PUBLIC_WS_URL: ${DEV_WS_URL}
+      # Lets any developer point this frontend at the backend on their own
+      # machine with ?ws=ws://localhost:5066/ws. Deliberately absent from
+      # docker-compose.prod.yml.
+      PUBLIC_ALLOW_WS_OVERRIDE: "true"
+      ORIGIN: ${DEV_FRONTEND_ORIGIN}
+    ports:
+      - "${FRONTEND_PORT:-3000}:3000"
+
+volumes:
+  backend-data:

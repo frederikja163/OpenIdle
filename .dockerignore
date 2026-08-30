@@ -1,0 +1,40 @@
+# Applies to the backend image, which is built from the repository root because
+# Backend.csproj pulls Generators/ in as analyzers and ../types.xml in as an
+# AdditionalFile — a Backend/-only context cannot compile. That makes this list
+# load-bearing: without it the whole working tree is sent to the daemon.
+#
+# The frontend image is built with Frontend/ as its context and is governed by
+# Frontend/.dockerignore instead.
+
+.git
+.gitignore
+.gitattributes
+.github
+.vs
+.idea
+.vscode
+.claude
+.opencode
+
+# The frontend has its own image and contributes nothing to the backend build.
+Frontend
+
+# Build output — rebuilt inside the image, and host artifacts are the wrong RID.
+**/bin
+**/obj
+
+# Local state that must never be baked into an image.
+**/*.db
+**/*.db-shm
+**/*.db-wal
+**/*.db-journal
+**/.env
+**/.env.*
+!**/.env.example
+appsettings.Development.json
+**/*.user
+
+# Docs and deployment descriptors contribute nothing to a build.
+doc
+deploy
+*.md
