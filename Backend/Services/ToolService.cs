@@ -20,14 +20,19 @@ public sealed class ItemStat(ToolStat stat, float value)
     public float Value { get; } = value;
 }
 
-public sealed class ItemDefinition(params ItemStat[] stats)
+public sealed class ItemDefinition(ItemTagId[] tags, ItemStat[] stats)
 {
+    /// <summary>Ordered item tags. The first is the item's main tag, the second the secondary, and so on.</summary>
+    public IReadOnlyList<ItemTagId> Tags { get; } = tags;
     public IReadOnlyList<ItemStat> Stats { get; } = stats;
 }
 
-public sealed class SlotBinding(ItemSlotId slotId, bool required)
+public sealed class SlotBinding(ItemSlotId slotId, ItemTagId tag, bool required)
 {
     public ItemSlotId SlotId { get; } = slotId;
+
+    /// <summary>The tag an item must carry to be valid in this slot.</summary>
+    public ItemTagId Tag { get; } = tag;
     public bool Required { get; } = required;
 }
 
@@ -40,17 +45,11 @@ public sealed class SkillSlotDefinition(SkillId skillId, IReadOnlyList<SlotBindi
 public sealed class ToolService
 {
     private readonly Dictionary<ItemId, ItemDefinition> _items = new();
-    private readonly Dictionary<ItemSlotId, IReadOnlyList<ItemId>> _slotValidItems = new();
     private readonly List<SkillSlotDefinition> _skillSlots = new();
 
     public void AddItem(ItemId itemId, ItemDefinition definition)
     {
         _items.Add(itemId, definition);
-    }
-
-    public void AddItemSlot(ItemSlotId itemSlotId, IReadOnlyList<ItemId> validItems)
-    {
-        _slotValidItems.Add(itemSlotId, validItems);
     }
 
     public void AddSkillSlots(SkillId skillId, IReadOnlyList<SlotBinding> slots)
@@ -63,9 +62,13 @@ public sealed class ToolService
         return _items.TryGetValue(itemId, out definition);
     }
 
-    public bool TryGetValidItems(ItemSlotId itemSlotId, out IReadOnlyList<ItemId>? validItems)
+    /// <summary>Returns the ids of every item that carries the given tag.</summary>
+    public ItemId[] GetValidItems(ItemTagId tag)
     {
-        return _slotValidItems.TryGetValue(itemSlotId, out validItems);
+        return _items
+            .Where(kvp => kvp.Value.Tags.Contains(tag))
+            .Select(kvp => kvp.Key)
+            .ToArray();
     }
 
     public bool TryGetSkillSlots(SkillId skillId, out IReadOnlyList<SlotBinding>? slots)

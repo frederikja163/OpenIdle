@@ -13,7 +13,7 @@ public sealed class DtoModel
     public Dictionary<string, DropTable> DropTables { get; } = [];
     public Dictionary<string, Activity> Activities { get; } = [];
     public Dictionary<string, Item> Items { get; } = [];
-    public Dictionary<string, ItemSlot> ItemSlots { get; } = [];
+    public Dictionary<string, Skill> Skills { get; } = [];
     public List<SkillSlots> SkillSlots { get; } = [];
 
     public IEnumerable<Object> AllObjects => Dtos.Values.Union<Object>(Requests.Values)
@@ -115,7 +115,13 @@ public static class ItemStats
 
 public sealed class Item(string name) : NamedType(name)
 {
+    public List<ItemTag> Tags { get; } = [];
     public List<ItemStat> Stats { get; } = [];
+}
+
+public sealed class ItemTag(string name)
+{
+    public string Name { get; } = name;
 }
 
 public sealed class ItemStat(string name, float value)
@@ -124,14 +130,8 @@ public sealed class ItemStat(string name, float value)
     public float Value { get; } = value;
 }
 
-public sealed class ValidItem(string name)
+public sealed class Skill(string name) : NamedType(name)
 {
-    public string Name { get; } = name;
-}
-
-public sealed class ItemSlot(string name) : NamedType(name)
-{
-    public List<ValidItem> ValidItems { get; } = [];
 }
 
 public sealed class SkillSlots(string skill)
@@ -140,9 +140,10 @@ public sealed class SkillSlots(string skill)
     public List<Slot> Slots { get; } = [];
 }
 
-public sealed class Slot(string name, bool required)
+public sealed class Slot(string name, ItemTag tag, bool required)
 {
     public string Name { get; } = name;
+    public ItemTag Tag { get; } = tag;
     public bool Required { get; } = required;
 }
 

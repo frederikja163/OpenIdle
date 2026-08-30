@@ -17,11 +17,13 @@ public sealed class ToolParserTests
     }
 
     [Test]
-    public void Parse_PopulatesItemStats()
+    public void Parse_PopulatesItemStatsAndOrderedTags()
     {
         Parser parser = Parse("""
             <Types>
               <Item name="IronPickaxeHead">
+                <Tag name="head"/>
+                <Tag name="iron"/>
                 <Stat name="speed" value="1.1"/>
                 <Stat name="durable" value="1.5"/>
               </Item>
@@ -30,11 +32,40 @@ public sealed class ToolParserTests
 
         Item item = parser.Model.Items["IronPickaxeHead"];
         Assert.That(item.Name.UpperCamelCase, Is.EqualTo("IronPickaxeHead"));
+        Assert.That(item.Tags, Has.Count.EqualTo(2));
+        Assert.That(item.Tags[0].Name, Is.EqualTo("head"));
+        Assert.That(item.Tags[1].Name, Is.EqualTo("iron"));
         Assert.That(item.Stats, Has.Count.EqualTo(2));
         Assert.That(item.Stats[0].Name, Is.EqualTo(ItemStats.Speed));
         Assert.That(item.Stats[0].Value, Is.EqualTo(1.1f));
         Assert.That(item.Stats[1].Name, Is.EqualTo(ItemStats.Durable));
         Assert.That(item.Stats[1].Value, Is.EqualTo(1.5f));
+    }
+
+    [Test]
+    public void Parse_TagsRegisterIntoItemTagIdEnumDeduplicated()
+    {
+        Parser parser = Parse("""
+            <Types>
+              <Item name="Stone">
+                <Tag name="ore"/>
+              </Item>
+              <Item name="BrokenRock">
+                <Tag name="ore"/>
+              </Item>
+              <Item name="IronPickaxeHead">
+                <Tag name="head"/>
+                <Tag name="iron"/>
+              </Item>
+            </Types>
+            """);
+
+        Generator.Core.Enum tagEnum = parser.Model.Enums["ItemTagId"];
+        Assert.That(tagEnum.GetEnum("ore"), Is.Not.Null);
+        Assert.That(tagEnum.GetEnum("head"), Is.Not.Null);
+        Assert.That(tagEnum.GetEnum("iron"), Is.Not.Null);
+        Assert.That(parser.Model.Items["Stone"].Tags[0].Name, Is.EqualTo("ore"));
+        Assert.That(parser.Model.Items["BrokenRock"].Tags[0].Name, Is.EqualTo("ore"));
     }
 
     [Test]
@@ -65,31 +96,17 @@ public sealed class ToolParserTests
     }
 
     [Test]
-    public void Parse_ItemSlotCollectsValidItems()
-    {
-        Parser parser = Parse("""
-            <Types>
-              <ItemSlot name="MiningHead">
-                <ValidItem name="IronPickaxeHead"/>
-                <ValidItem name="StoneHead"/>
-              </ItemSlot>
-            </Types>
-            """);
-
-        ItemSlot itemSlot = parser.Model.ItemSlots["MiningHead"];
-        Assert.That(itemSlot.ValidItems, Has.Count.EqualTo(2));
-        Assert.That(itemSlot.ValidItems[0].Name, Is.EqualTo("IronPickaxeHead"));
-        Assert.That(parser.Model.Enums["ItemSlotId"].GetEnum("MiningHead"), Is.Not.Null);
-    }
-
-    [Test]
     public void Parse_SkillSlotsCollectsSlotBindings()
     {
         Parser parser = Parse("""
             <Types>
               <SkillSlots skill="Mining">
-                <Slot name="MiningHead" required="true"/>
-                <Slot name="Handle"/>
+                <Slot name="Head" required="true">
+                  <Tag name="head"/>
+                </Slot>
+                <Slot name="Handle">
+                  <Tag name="handle"/>
+                </Slot>
               </SkillSlots>
             </Types>
             """);
@@ -98,8 +115,69 @@ public sealed class ToolParserTests
         SkillSlots skillSlots = parser.Model.SkillSlots[0];
         Assert.That(skillSlots.Skill, Is.EqualTo("Mining"));
         Assert.That(skillSlots.Slots, Has.Count.EqualTo(2));
-        Assert.That(skillSlots.Slots[0].Name, Is.EqualTo("MiningHead"));
+        Assert.That(skillSlots.Slots[0].Name, Is.EqualTo("Head"));
+        Assert.That(skillSlots.Slots[0].Tag.Name, Is.EqualTo("head"));
         Assert.That(skillSlots.Slots[0].Required, Is.True);
+        Assert.That(skillSlots.Slots[1].Tag.Name, Is.EqualTo("handle"));
         Assert.That(skillSlots.Slots[1].Required, Is.False);
+    }
+
+    [Test]
+    public void Parse_ItemSlotRegistersIntoItemSlotIdEnum()
+    {
+        Parser parser = Parse("""
+            <Types>
+              <SkillSlots skill="Mining">
+                <Slot name="Head" required="true">
+                  <Tag name="head"/>
+                </Slot>
+              </SkillSlots>
+            </Types>
+            """);
+
+        Assert.That(parser.Model.Enums["ItemSlotId"].GetEnum("Head"), Is.Not.Null);
+    }
+
+    [Test]
+    public void Parse_SlotWithoutTag_Throws()
+    {
+        Assert.Throws<ParserException>(() => Parse("""
+            <Types>
+              <SkillSlots skill="Mining">
+                <Slot name="Head" required="true"/>
+              </SkillSlots>
+            </Types>
+            """));
+    }
+
+    [Test]
+    public void Parse_SkillRegistersIntoSkillIdEnum()
+    {
+        Parser parser = Parse("""
+            <Types>
+              <Skill name="Mining"/>
+              <Skill name="LumberJacking"/>
+            </Types>
+            """);
+
+        Assert.That(parser.Model.Skills, Has.Count.EqualTo(2));
+        Assert.That(parser.Model.Enums["SkillId"].GetEnum("Mining"), Is.Not.Null);
+        Assert.That(parser.Model.Enums["SkillId"].GetEnum("LumberJacking"), Is.Not.Null);
+    }
+
+    [Test]
+    public void Parse_ExplicitEnumIsStillSupported()
+    {
+        Parser parser = Parse("""
+            <Types>
+              <Enum name="Weather">
+                <Value name="Sunny"/>
+                <Value name="Rainy"/>
+              </Enum>
+            </Types>
+            """);
+
+        Assert.That(parser.Model.Enums["Weather"].GetEnum("Sunny"), Is.Not.Null);
+        Assert.That(parser.Model.Enums["Weather"].GetEnum("Rainy"), Is.Not.Null);
     }
 }

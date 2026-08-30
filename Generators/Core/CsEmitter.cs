@@ -98,16 +98,10 @@ public sealed class CsEmitter : IDtoEmitter
             {
                 foreach (Item item in model.Items.Values)
                 {
+                    string tags = string.Join(", ", item.Tags.Select(t => $"ItemTagId.{new Casing(t.Name).UpperCamelCase}"));
                     string stats = string.Join(", ", item.Stats.Select(ItemStatExpression));
                     _textWriter.WriteLine(
-                        $"service.AddItem(ItemId.{item.Name.UpperCamelCase}, new ItemDefinition([{stats}]));");
-                }
-
-                foreach (ItemSlot itemSlot in model.ItemSlots.Values)
-                {
-                    string validItems = string.Join(", ", itemSlot.ValidItems.Select(vi => $"ItemId.{new Casing(vi.Name).UpperCamelCase}"));
-                    _textWriter.WriteLine(
-                        $"service.AddItemSlot(ItemSlotId.{itemSlot.Name.UpperCamelCase}, [{validItems}]);");
+                        $"service.AddItem(ItemId.{item.Name.UpperCamelCase}, new ItemDefinition(tags: [{tags}], stats: [{stats}]));");
                 }
 
                 foreach (SkillSlots skillSlots in model.SkillSlots)
@@ -127,7 +121,7 @@ public sealed class CsEmitter : IDtoEmitter
 
     private static string SlotExpression(Slot slot)
     {
-        return $"new SlotBinding(ItemSlotId.{new Casing(slot.Name).UpperCamelCase}, {slot.Required.ToString().ToLowerInvariant()})";
+        return $"new SlotBinding(ItemSlotId.{new Casing(slot.Name).UpperCamelCase}, ItemTagId.{new Casing(slot.Tag.Name).UpperCamelCase}, {slot.Required.ToString().ToLowerInvariant()})";
     }
 
     private void EmitDropTable(DropTable dropTable)

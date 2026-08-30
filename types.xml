@@ -1,36 +1,25 @@
-<?xml version="1.0" encoding="utf-8"?>
+﻿<?xml version="1.0" encoding="utf-8"?>
 <Types>
-  <Enum name="ItemId">
-    <Value name="Stone"/>
-    <Value name="BrokenRock"/>
-    <Value name="Wood"/>
-    <Value name="Food"/>
-  </Enum>
-  
-  <Enum name="SkillId">
-    <Value name="Mining"/>
-    <Value name="LumberJacking"/>
-    <Value name="Crafting"/>
-  </Enum>
-  
-  <DropTable name="BrokenRockTable">
-    <ItemReward item="None" weight="10" count="0"/>
-    <ItemReward item="BrokenRock" weight="1" count="1"/>
-  </DropTable>
-  
-  <DropTable name="StoneTable">
-    <ItemReward item="Stone" weight="5" count="2"/>
-    <TableReward table="BrokenRockTable" weight="1" count="1"/>
-  </DropTable>
-  
-  <Activity name="Stone">
-    <ItemReward item="Stone" count="4"/>
-    <XpReward skill="Mining" count="10"/>
-    <TableReward table="StoneTable" count="1"/>
-    <LevelRequirement skill="Mining" count="1"/>
-  </Activity>
+  <Skill name="Mining"/>
+  <Skill name="LumberJacking"/>
+  <Skill name="Crafting"/>
+
+  <Item name="Stone">
+    <Tag name="ore"/>
+  </Item>
+  <Item name="BrokenRock">
+    <Tag name="ore"/>
+  </Item>
+  <Item name="Wood">
+    <Tag name="wood"/>
+  </Item>
+  <Item name="Food">
+    <Tag name="food"/>
+  </Item>
 
   <Item name="IronPickaxeHead">
+    <Tag name="head"/>
+    <Tag name="iron"/>
     <Stat name="speed" value="1.1"/>
     <Stat name="itemProductivity" value="1.25"/>
     <Stat name="xpProductivity" value="1.0"/>
@@ -38,34 +27,48 @@
   </Item>
 
   <Item name="OakHandle">
+    <Tag name="handle"/>
     <Stat name="speed" value="0.9"/>
     <Stat name="durable" value="1.2"/>
   </Item>
 
-  <ItemSlot name="MiningHead">
-    <ValidItem name="IronPickaxeHead"/>
-  </ItemSlot>
+  <DropTable name="BrokenRockTable">
+    <ItemReward item="None" weight="10" count="0"/>
+    <ItemReward item="BrokenRock" weight="1" count="1"/>
+  </DropTable>
 
-  <ItemSlot name="Handle">
-    <ValidItem name="OakHandle"/>
-  </ItemSlot>
+  <DropTable name="StoneTable">
+    <ItemReward item="Stone" weight="5" count="2"/>
+    <TableReward table="BrokenRockTable" weight="1" count="1"/>
+  </DropTable>
+
+  <Activity name="Stone">
+    <ItemReward item="Stone" count="4"/>
+    <XpReward skill="Mining" count="10"/>
+    <TableReward table="StoneTable" count="1"/>
+    <LevelRequirement skill="Mining" count="1"/>
+  </Activity>
 
   <SkillSlots skill="Mining">
-    <Slot name="MiningHead" required="true"/>
-    <Slot name="Handle" required="true"/>
+    <Slot name="Head" required="true">
+      <Tag name="head"/>
+    </Slot>
+    <Slot name="Handle" required="true">
+      <Tag name="handle"/>
+    </Slot>
   </SkillSlots>
-  
+
   <Dto name="Item">
     <Property name="ProfileId" type="Guid"/>
     <Property name="ItemId" type="ItemId"/>
     <Property name="Count" type="Int"/>
   </Dto>
-  
+
   <Dto name="Profile">
     <Property name="Name" type="String" />
     <Property name="ProfileId" type="Guid" />
   </Dto>
-  
+
   <Dto name="Skill">
     <Property name="ProfileId" type="Guid"/>
     <Property name="SkillId" type="SkillId"/>
