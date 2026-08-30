@@ -1,0 +1,174 @@
+name: Publish Images
+
+# The whole CD path. Both image builds are gated on the test suites below, so
+# nothing reaches GHCR from a red commit.
+#
+#   push to main     -> :dev  + :sha-<commit>           -> redeploys the dev hosts
+#   push to release  -> :prod + :latest + :sha-<commit> -> redeploys the prod hosts
+#   manual dispatch  -> as for a push to the branch it was started from
+#
+# Prod therefore only ever moves on a deliberate push to release, which is what
+# keeps the prod frontend and prod backend on versions that were released
+# together. A branch push carries no version number, so :sha-<commit> is the
+# only tag that says which commit a prod image was built from.
+on:
+  push:
+    branches: [main, release]
+  workflow_dispatch:
+
+# Serialise per ref: two runs pushing the same tag would race, and the redeploy
+# webhooks would fire in an order that need not match the pushes.
+concurrency:
+  group: publish-images-${{ github.ref }}
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+jobs:
+  backend-tests:
+    uses: ./.github/workflows/backend-build.yml
+
+  frontend-tests:
+    uses: ./.github/workflows/frontend-build.yml
+
+  publish:
+    needs: [backend-tests, frontend-tests]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+    strategy:
+      # One image failing should not hide whether the other builds.
+      fail-fast: false
+      matrix:
+        include:
+          # Both contexts are the repository root on purpose. The backend needs
+          # Generators/ and ../types.xml (Backend.csproj pulls them in); the
+          # frontend image regenerates protocol.generated.ts from types.xml in a
+          # .NET generator stage, so it needs ../Generators and ../types.xml too.
+          # See Backend/Dockerfile and Frontend/Dockerfile.
+          - name: backend
+            context: .
+            dockerfile: Backend/Dockerfile
+          - name: frontend
+            context: .
+            dockerfile: Frontend/Dockerfile
+    steps:
+      - uses: actions/checkout@v4
+
+      # GHCR rejects an uppercase path, and the owner of a fork need not be
+      # lowercase even though this repository's is.
+      - name: Resolve image name
+        id: image
+        run: echo "name=ghcr.io/$(echo '${{ github.repository_owner }}' | tr '[:upper:]' '[:lower:]')/openidle-${{ matrix.name }}" >> "$GITHUB_OUTPUT"
+
+      - uses: docker/setup-buildx-action@v3
+
+      - uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      # Keyed on github.ref rather than ref_name so that a *tag* named release,
+      # which a manual dispatch can select, does not pass for the branch.
+      - name: Compute tags
+        id: meta
+        uses: docker/metadata-action@v5
+        with:
+          images: ${{ steps.image.outputs.name }}
+          tags: |
+            type=raw,value=dev,enable=${{ github.ref != 'refs/heads/release' }}
+            type=raw,value=prod,enable=${{ github.ref == 'refs/heads/release' }}
+            type=raw,value=latest,enable=${{ github.ref == 'refs/heads/release' }}
+            type=sha
+
+      - name: Build and push
+        uses: docker/build-push-action@v6
+        with:
+          context: ${{ matrix.context }}
+          file: ${{ matrix.dockerfile }}
+          push: true
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          # Scoped per image so the two do not evict each other's layers.
+          cache-from: type=gha,scope=${{ matrix.name }}
+          cache-to: type=gha,mode=max,scope=${{ matrix.name }}
+
+  redeploy:
+    needs: publish
+    runs-on: ubuntu-latest
+    # Secrets and variables are read from the environment, so the two hosts are
+    # configured with the same names and cannot be crossed. Give `prod` a
+    # required reviewer in the repository settings to gate a push to release
+    # behind an approval. The ref check is repeated from the tags step rather
+    # than shared through env: the env context is not available here.
+    environment: ${{ github.ref == 'refs/heads/release' && 'prod' || 'dev' }}
+    steps:
+      - name: Trigger backend redeploy
+        shell: bash
+        env:
+          WEBHOOK_URL: ${{ secrets.BACKEND_REDEPLOY_URL }}
+          WEBHOOK_TOKEN: ${{ secrets.REDEPLOY_TOKEN }}
+        run: |
+          set -euo pipefail
+          if [ -z "${WEBHOOK_URL:-}" ]; then
+            echo "::notice::BACKEND_REDEPLOY_URL is not set for this environment; skipping."
+            exit 0
+          fi
+          # Built as an array so the bearer header survives with its space intact.
+          args=(--fail --silent --show-error --location --max-time 30 --request POST)
+          if [ -n "${WEBHOOK_TOKEN:-}" ]; then
+            args+=(--header "Authorization: Bearer ${WEBHOOK_TOKEN}")
+          fi
+          curl "${args[@]}" "$WEBHOOK_URL"
+          echo "Backend redeploy requested."
+
+      - name: Trigger frontend redeploy
+        shell: bash
+        env:
+          WEBHOOK_URL: ${{ secrets.FRONTEND_REDEPLOY_URL }}
+          WEBHOOK_TOKEN: ${{ secrets.REDEPLOY_TOKEN }}
+        run: |
+          set -euo pipefail
+          if [ -z "${WEBHOOK_URL:-}" ]; then
+            echo "::notice::FRONTEND_REDEPLOY_URL is not set for this environment; skipping."
+            exit 0
+          fi
+          args=(--fail --silent --show-error --location --max-time 30 --request POST)
+          if [ -n "${WEBHOOK_TOKEN:-}" ]; then
+            args+=(--header "Authorization: Bearer ${WEBHOOK_TOKEN}")
+          fi
+          curl "${args[@]}" "$WEBHOOK_URL"
+          echo "Frontend redeploy requested."
+
+      # A webhook only says the pull was requested. Without this a container that
+      # crashes on the new image leaves a green run behind it.
+      - name: Wait for the hosts to come back healthy
+        shell: bash
+        env:
+          BACKEND_HEALTH_URL: ${{ vars.BACKEND_HEALTH_URL }}
+          FRONTEND_HEALTH_URL: ${{ vars.FRONTEND_HEALTH_URL }}
+        run: |
+          set -uo pipefail
+          poll() {
+            local label="$1" url="$2"
+            if [ -z "$url" ]; then
+              echo "::notice::No health URL configured for ${label}; skipping."
+              return 0
+            fi
+            for attempt in $(seq 1 30); do
+              if curl --fail --silent --max-time 5 "$url" > /dev/null; then
+                echo "${label} healthy after ${attempt} attempt(s)."
+                return 0
+              fi
+              sleep 10
+            done
+            echo "::error::${label} did not become healthy within five minutes (${url})."
+            return 1
+          }
+          failed=0
+          poll backend "${BACKEND_HEALTH_URL:-}" || failed=1
+          poll frontend "${FRONTEND_HEALTH_URL:-}" || failed=1
+          exit "$failed"
