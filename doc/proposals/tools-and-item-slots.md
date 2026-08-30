@@ -4,7 +4,7 @@
 - Date: 2026-08-27
 - Scope: defines how tools, item slots, and per-item stats are declared in `types.xml`
 
-> **Implementation status:** the parser, model, and emitters in the generator project now support `<Item>`, `<ItemSlot>`, and `<SkillSlots>`, and a `ToolData` seeder + `Backend.Services.ToolService` populate the runtime. What is **not** done yet is wiring the stats into actual gameplay (activity speed, drop rolls, XP, durability). See [Implementation notes](#7-implementation-notes).
+> **Implementation status:** the parser, model, and emitters in the generator project now support `<Item>` (with ordered tags + stats), `<Skill>`, and `<SkillSlots>`, and a `ToolData` seeder + `Backend.Services.ToolService` populate the runtime. What is **not** done yet is wiring the stats into actual gameplay (activity speed, drop rolls, XP, durability). See [Implementation notes](#7-implementation-notes).
 
 ## 1. Problem
 
@@ -20,11 +20,13 @@ All of this is content data and should be declared declaratively in `types.xml` 
 
 ### 2.1 New contract elements
 
-Three new elements are proposed, all direct children of `<Types>` in `types.xml`:
+Two new elements (plus the standalone `<Skill>`) are direct children of `<Types>` in `types.xml`:
 
-1. **`<Item>`** — declares a concrete item and its stats.
-2. **`<ItemSlot>`** — declares a slot a skill can equip, plus the set of items valid in it.
-3. **`<SkillSlots>`** (or an attribute on `<Skill>`) — binds slots to a skill, including whether all slots are required to form a "full" tool.
+1. **`<Item>`** — declares a concrete item, its **tags**, and its **stats**. Tags are ordered: the first tag is the item's *main* tag, the second the *secondary*, and so on.
+2. **`<Skill>`** — declares a skill (auto-registers into `SkillId`).
+3. **`<SkillSlots>`** — binds slots to a skill. Each `<Slot>` is defined nested inside, carries a `required` flag and a single nested `<Tag>`; slots auto-register into `ItemSlotId`. There is no standalone `<ItemSlot>` element — slots live inside `<SkillSlots>`.
+
+Every item tag auto-registers into an `ItemTagId` enum (deduplicated). A slot accepts any item whose tags include the slot's `<Tag>`.
 
 ### 2.2 Item stats
 
@@ -40,7 +42,13 @@ The set of supported stats (each numeric, higher is better unless noted):
 ### 2.3 Example declaration
 
 ```xml
+<Skill name="Mining" />
+<Skill name="LumberJacking" />
+<Skill name="Crafting" />
+
 <Item name="IronPickaxeHead">
+  <Tag name="head" />   <!-- main tag -->
+  <Tag name="iron" />   <!-- secondary tag -->
   <Stat name="speed" value="1.1" />
   <Stat name="itemProductivity" value="1.25" />
   <Stat name="xpProductivity" value="1.0" />
@@ -48,31 +56,30 @@ The set of supported stats (each numeric, higher is better unless noted):
 </Item>
 
 <Item name="OakHandle">
+  <Tag name="handle" />
   <Stat name="speed" value="0.9" />
   <Stat name="durable" value="1.2" />
 </Item>
 
-<ItemSlot name="MiningHead">
-  <ValidItem name="IronPickaxeHead" />
-</ItemSlot>
-
-<ItemSlot name="Handle">
-  <ValidItem name="OakHandle" />
-</ItemSlot>
-
 <SkillSlots skill="Mining">
-  <Slot name="MiningHead" required="true" />
-  <Slot name="Handle" required="true" />
+  <Slot name="Head" required="true">
+    <Tag name="head" />
+  </Slot>
+  <Slot name="Handle" required="true">
+    <Tag name="handle" />
+  </Slot>
 </SkillSlots>
 ```
+
+Here the `Head` slot accepts any item tagged `head` (so `IronPickaxeHead`), and the `Handle` slot accepts any item tagged `handle` (so `OakHandle`).
 
 ## 3. Design notes & open questions
 
 - **Full-tool composition:** slotting all `required="true"` slots is what forms the "full" tool (a complete pickaxe). Whether a partial tool still grants its individual slots' stats is an open question — probably individual-item stats apply as equipped, and only a full set unlocks a set bonus (not yet defined).
 - **Where stats aggregate:** the obvious semantics are that equipped items' stats multiply together (a head ×1.1 speed and a handle ×0.9 speed = ×0.99 combined). Sum-vs-multiply for stacking is an open decision.
-- **Naming/casing:** following the existing contract, `name` values are bare PascalCase words (no suffix); emitters would append suffixes if we generate DTOs/enums from these declarations (`MiningHeadSlot`, `IronPickaxeHeadItem`, etc.).
-- **Enum generation:** like `DropTable`/`Activity` auto-register `DropTableId`/`ActivityId` enums, `Item` could auto-extend the existing `ItemId` enum, and `ItemSlot`/`SkillSlots` could generate `ItemSlotId`/`ToolId` enums for use in the socket protocol.
-- **Parser integration:** the `Parser.Elements` dispatch in `Generators/Core/Parser.cs:36-74` would gain `case "Item"`, `case "ItemSlot"`, `case "SkillSlots"`. Unknown top-level elements are currently a parse error in `Parser.cs:72` (unlike the DTO comment claiming they're skipped), so these must be added or the file won't parse.
+- **Naming/casing:** following the existing contract, `name` values are bare PascalCase words (no suffix); emitters would append suffixes if we generate DTOs/enums from these declarations (`MiningHeadSlot`, `IronPickaxeHeadItem`, etc.). Tag names are lower-case words (`head`, `iron`, `handle`).
+- **Enum generation:** like `DropTable`/`Activity` auto-register `DropTableId`/`ActivityId` enums, `Item` auto-registers into `ItemId`, `Skill` into `SkillId`, item tags into `ItemTagId`, and slots into `ItemSlotId`.
+- **Parser integration:** the `Parser.Elements` dispatch in `Generators/Core/Parser.cs` handles `case "Item"`, `case "Skill"`, `case "SkillSlots"`. Unknown top-level elements are currently a parse error, so these were added for the elements to parse.
 - **Wire-format exposure:** to include equipped tools in a socket request/response, add a DTO (e.g. `<Dto name="EquippedTool">` with a slot→item mapping) — that is a follow-up, not part of this data-shape proposal.
 - **Item base stats:** whether the stat values here are the *total* or stacked on a base (e.g. a default ×1.0 pickaxe) is open. The example uses absolute multipliers.
 
@@ -87,9 +94,9 @@ The set of supported stats (each numeric, higher is better unless noted):
 
 - Aggregate semantics for multiple slots (sum vs. multiply) and set bonuses for full tools.
 - Whether `speed`/`durable` apply per-item as equipped or only meaningfully for complete tools (e.g. `durable` needs durability — does the current game have item durability?).
-- Exact element/attribute naming — `SkillSlots` vs. slots nested under a new `<Skill>` element.
+- Whether the accepted tag on a slot is better modelled as a set of tags (match any) rather than a single tag.
 - Enum / DTO integration for exposing equipped tools over the socket.
-- How the frontend learns which items are valid for which slot (does it need the valid-item set as a generated DTO, or just in the backend validation?).
+- How the frontend learns which items are valid for which slot (do item tags expose this directly, or does it need a generated DTO?).
 
 ## 6. Related documents
 
@@ -100,9 +107,9 @@ The set of supported stats (each numeric, higher is better unless noted):
 
 The generator-side parsing is implemented as of 2026-08-27:
 
-- **Parser (`Generators/Core/Parser.cs`)** recognizes `Item`, `ItemSlot`, and `SkillSlots` elements. Item stats are validated against the known set (`speed`, `itemProductivity`, `xpProductivity`, `durable`); an unknown stat is a parse error. Items extend the existing `ItemId` enum; slots create an `ItemSlotId` enum (mirroring `DropTableId` / `ActivityId`).
-- **Model (`Generators/Core/DtoModel.cs`)** gains `Item`, `ItemStat`, `ItemSlot`, `ValidItem`, `SkillSlots`, and `Slot` types.
-- **C# emitter (`Generators/Core/CsEmitter.cs`)** emits a `ToolData.AddAll(ToolService)` seeder. It also exposed a latent culture bug: numeric literal parsing (`RequireAttribute<T>`) used the ambient culture, so decimal `value`s misparsed on non-en-US hosts (e.g. `en-DK` turned `1.1` into `11`). Fixed to parse with `CultureInfo.InvariantCulture` in `XmlElementExtensions.ConvertValue` — this affects all numeric attributes, not just the new ones.
-- **Backend (`Backend/Services/ToolService.cs`)** holds the runtime definitions (`ItemDefinition`, `ItemStat`, `SlotBinding`, `SkillSlotDefinition`) and is registered in DI and seeded from `ToolData.AddAll` in `AppHost.cs`.
+- **Parser (`Generators/Core/Parser.cs`)** recognizes `Item`, `Skill`, and `SkillSlots` elements. Item stats are validated against the known set (`speed`, `itemProductivity`, `xpProductivity`, `durable`); an unknown stat is a parse error. Items auto-populate the `ItemId` enum and `Skill`s the `SkillId` enum; each `<Item>` `<Tag>` deduplicated into an `ItemTagId` enum; each nested `<Slot>` registers an `ItemSlotId` value. Since `Item`/`Skill` are now content tags, the hand-written `ItemId`/`SkillId` `<Enum>` declarations were removed from `types.xml`; the `<Enum>` element remains supported for arbitrary enums.
+- **Model (`Generators/Core/DtoModel.cs`)** gains `Item` (with `ItemTag`/`ItemStat`), `Skill`, `SkillSlots`, and `Slot` (carrying its accepted `ItemTag`) types; the earlier standalone `ItemSlot`/`ValidItem` types were removed.
+- **C# emitter (`Generators/Core/CsEmitter.cs`)** emits a `ToolData.AddAll(ToolService)` seeder that populates `ItemDefinition(tags, stats)` and `SkillSlots` via `SlotBinding(slotId, tag, required)`. It also exposed a latent culture bug: numeric literal parsing (`RequireAttribute<T>`) used the ambient culture, so decimal `value`s misparsed on non-en-US hosts (e.g. `en-DK` turned `1.1` into `11`). Fixed to parse with `CultureInfo.InvariantCulture` in `XmlElementExtensions.ConvertValue` — this affects all numeric attributes, not just the new ones.
+- **Backend (`Backend/Services/ToolService.cs`)** holds the runtime definitions (`ItemDefinition` with ordered tags, `ItemStat`, `SlotBinding` with its accepted tag, `SkillSlotDefinition`) and resolves valid items by tag via `GetValidItems(ItemTagId)`. It is registered in DI and seeded from `ToolData.AddAll` in `AppHost.cs`.
 
 Still open (not implemented): applying stats to gameplay (activity duration from `speed`, extra drop-table rolls from `itemProductivity`, XP multiplier from `xpProductivity`, durability consumption from `durable`), equipping/unequipping without a socket/ToolService consumer, and any aggregate/set-bonus semantics.
