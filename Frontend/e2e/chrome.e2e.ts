@@ -199,3 +199,21 @@ test('the Debug button opens the protocol console and Back returns to the app', 
 	await page.getByRole('link', { name: 'Back to app' }).click();
 	await expect(page).toHaveURL(/\/profiles$/);
 });
+
+test('the traffic filter remembers which kinds are hidden across reloads', async ({ page }) => {
+	await page.goto('/debug');
+
+	// The toggle is a badge whose text oi-label-sm uppercases in CSS only, so
+	// the accessible name stays lowercase and 'event' still finds it.
+	await page.getByRole('button', { name: 'event' }).click();
+	await expect(page.getByRole('button', { name: 'event' })).toHaveAttribute(
+		'aria-pressed',
+		'false'
+	);
+
+	await page.reload();
+	await expect(page.getByRole('button', { name: 'event' })).toHaveAttribute(
+		'aria-pressed',
+		'false'
+	);
+});

@@ -1,8 +1,22 @@
 <script lang="ts">
 	import Column from '$lib/components/layout/Column.svelte';
 	import Row from '$lib/components/layout/Row.svelte';
+	import { Badge, badgeVariants, type BadgeVariant } from '$lib/components/ui/badge';
 	import { Button } from '$lib/components/ui/button';
-	import { clearTraffic, partnerOf, trafficState, type Frame } from '$lib/debug/traffic.svelte';
+	import {
+		FILTERABLE_KINDS,
+		isVisible,
+		preferences,
+		toggleKind
+	} from '$lib/debug/preferences.svelte';
+	import {
+		clearTraffic,
+		partnerOf,
+		trafficState,
+		type Frame,
+		type FrameKind
+	} from '$lib/debug/traffic.svelte';
+	import { cn } from '$lib/utils/stylingUtils';
 
 	/*
 	 * Every frame the socket carried, newest first — requests, responses, errors
@@ -15,6 +29,17 @@
 	 * apart, and moving them next to each other would cost the very ordering the
 	 * log is kept for.
 	 */
+
+	// One map feeds both the row chip and the legend, so a kind's identity (what
+	// it is called, how it is coloured) cannot drift between the two.
+	const KIND: Record<FrameKind, { label: string; variant: BadgeVariant; edge: string }> = {
+		request: { label: 'request', variant: 'accent', edge: '' },
+		response: { label: 'response', variant: 'neutral', edge: '' },
+		event: { label: 'event', variant: 'info', edge: 'border-l-(--azure-500)' },
+		unknown: { label: 'unknown', variant: 'rare', edge: 'border-l-(--amethyst-500)' }
+	};
+
+	const visible = $derived(trafficState.frames.filter((frame) => isVisible(frame.kind)));
 
 	let expanded = $state<number | null>(null);
 	/** The requestId under the pointer, and the one clicked to hold it there. */
@@ -44,7 +69,11 @@
 <Column class="min-h-0 gap-(--sp-5)">
 	<Row class="items-center gap-(--sp-5)">
 		<span class="oi-label-md text-text-strong">Traffic</span>
-		<span class="oi-body-sm text-text-faint">{trafficState.frames.length}</span>
+		<span class="oi-body-sm text-text-faint">
+			{visible.length === trafficState.frames.length
+				? visible.length
+				: `${visible.length} of ${trafficState.frames.length}`}
+		</span>
 		<Button
 			size="sm"
 			variant="ghost"
@@ -54,18 +83,41 @@
 			{trafficState.paused ? 'resume' : 'pause'}
 		</Button>
 		<Button size="sm" variant="ghost" onclick={clearTraffic}>clear</Button>
+
+		<!-- The legend *is* the control: each badge filters its own kind, saved
+		     per browser so the choice survives a reload. -->
+		<Row class="items-center gap-(--sp-2)">
+			{#each FILTERABLE_KINDS as kind (kind)}
+				{@const shown = preferences.visibleKinds.includes(kind)}
+				<button
+					type="button"
+					class={cn(
+						badgeVariants({ variant: KIND[kind].variant }),
+						'cursor-pointer transition-opacity duration-(--dur-fast) ease-out',
+						!shown && 'opacity-42'
+					)}
+					aria-pressed={shown}
+					title={shown ? `Hide ${KIND[kind].label} frames` : `Show ${KIND[kind].label} frames`}
+					onclick={() => toggleKind(kind)}>{KIND[kind].label}</button
+				>
+			{/each}
+		</Row>
 	</Row>
 
 	<Column class="oi-scroll min-h-0 grow gap-(--sp-3) overflow-y-auto">
-		{#each trafficState.frames as frame (frame.id)}
+		{#each visible as frame (frame.id)}
 			{@const partner = partnerOf(frame)}
 			<Column
 				id="frame-{frame.id}"
-				class="rounded-xs border border-l-2 {isLinked(frame)
-					? 'border-line-accent bg-surface-active'
-					: 'border-line-soft bg-surface-card hover:bg-surface-card-hover'} {frame.error !== null
-					? 'border-l-(--crimson-500)'
-					: ''}"
+				class={cn(
+					'rounded-xs border border-l-2',
+					isLinked(frame)
+						? 'border-line-accent bg-surface-active'
+						: 'border-line-soft bg-surface-card hover:bg-surface-card-hover',
+					// Side colour last: twMerge drops an earlier border-l-* colour
+					// when a later all-sides border-* colour follows.
+					frame.error !== null ? 'border-l-(--crimson-500)' : KIND[frame.kind].edge
+				)}
 				onmouseenter={() => (hoveredId = frame.requestId)}
 				onmouseleave={() => (hoveredId = null)}
 				onfocusin={() => (hoveredId = frame.requestId)}
@@ -77,13 +129,9 @@
 						class="flex min-w-0 grow cursor-pointer items-center gap-(--sp-5) text-left duration-(--dur-fast) ease-out"
 						onclick={() => (expanded = expanded === frame.id ? null : frame.id)}
 					>
-						<span
-							class="oi-label-sm {frame.direction === 'out'
-								? 'text-text-accent'
-								: 'text-text-muted'}"
-						>
-							{frame.direction === 'out' ? '↑' : '↓'}
-						</span>
+						<Badge variant={frame.error !== null ? 'danger' : KIND[frame.kind].variant}>
+							{KIND[frame.kind].label}
+						</Badge>
 						<span class="oi-num-sm text-text-faint">{frame.time}</span>
 						<span class="oi-body-sm min-w-0 truncate text-text-body">{summary(frame)}</span>
 						{#if frame.error !== null}
@@ -110,10 +158,8 @@
 						>
 							#{frame.requestId}
 						</button>
-					{:else}
-						<span class="oi-body-sm text-text-faint">event</span>
 					{/if}
-					{#if partner}
+					{#if partner && isVisible(partner.kind)}
 						<button
 							type="button"
 							class="oi-num-sm cursor-pointer rounded-xs px-(--sp-2) py-(--sp-1) text-text-muted duration-(--dur-fast) ease-out hover:bg-action-quiet-hover hover:text-text-body"
@@ -131,7 +177,11 @@
 				{/if}
 			</Column>
 		{:else}
-			<span class="oi-body-sm text-text-faint">Nothing has crossed the socket yet.</span>
+			{#if trafficState.frames.length === 0}
+				<span class="oi-body-sm text-text-faint">Nothing has crossed the socket yet.</span>
+			{:else}
+				<span class="oi-body-sm text-text-faint">Every frame is hidden by the filter.</span>
+			{/if}
 		{/each}
 	</Column>
 </Column>
