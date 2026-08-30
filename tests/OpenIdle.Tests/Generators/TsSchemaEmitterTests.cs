@@ -27,7 +27,7 @@ public sealed class TsSchemaEmitterTests
           <DropTable name="StoneTable">
             <ItemReward item="Stone" weight="5" count="2"/>
           </DropTable>
-          <Activity name="Stone">
+          <Activity name="Stone" time="2.5">
             <XpReward skill="Mining" count="10"/>
           </Activity>
           <Dto name="Profile">
