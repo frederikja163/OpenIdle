@@ -24,6 +24,9 @@ public static class LevelCurve
     public const int MaxLevel = 50;
 
     /// <summary>Base (tier 0) duration of one untooled action, in seconds.</summary>
+    // NOTE: the following pacing constants are not yet consumed by gameplay. They are the agreed
+    // tuning the ToolService stat application (activity speed, drop rolls, XP, durability) will use —
+    // see doc/proposals/tools-and-item-slots.md. Remove them if that wiring never lands.
     public const double BaseUntooledActionSecondsTier0 = 8;
 
     /// <summary>Extra seconds each tier adds to an untooled action.</summary>
@@ -96,14 +99,23 @@ public static class LevelCurve
     /// <summary>Returns the level a player with <paramref name="xp"/> earned has reached (1..<see cref="MaxLevel"/>).</summary>
     public static int LevelFromXp(int xp)
     {
-        for (int L = MaxLevel; L >= 1; L--)
+        // The XP-for-level table is non-decreasing, so binary search for the highest level
+        // whose cumulative requirement the player has met.
+        int low = 0;
+        int high = MaxLevel - 1;
+        while (low < high)
         {
-            if (xp >= XpForLevel(L))
+            int mid = low + (high - low + 1) / 2;
+            if (xp >= XpForLevelTable[mid])
             {
-                return L;
+                low = mid;
+            }
+            else
+            {
+                high = mid - 1;
             }
         }
 
-        return 1;
+        return XpForLevelTable[low] <= xp ? low + 1 : 1;
     }
 }

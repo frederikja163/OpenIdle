@@ -52,6 +52,7 @@ internal static class XmlElementExtensions
             {
                 _ when typeof(T) == typeof(int) => int.Parse(value, CultureInfo.InvariantCulture),
                 _ when typeof(T) == typeof(float) => float.Parse(value, CultureInfo.InvariantCulture),
+                // bool.Parse is already culture-invariant: it accepts only "True"/"False" (case-insensitive, ordinal).
                 _ when typeof(T) == typeof(bool) => bool.Parse(value),
                 _ => Convert.ChangeType(value, typeof(T), CultureInfo.InvariantCulture),
             };

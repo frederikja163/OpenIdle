@@ -11,6 +11,8 @@ public sealed class ToolParserTests
     {
         Parser parser = new();
         byte[] bytes = Encoding.UTF8.GetBytes(xml);
+        // The parser reads the document out of the stream during Parse (XmlDocument.Load), so it is
+        // safe to dispose the stream here; the parsed element tree is retained by the parser.
         using MemoryStream stream = new(bytes);
         parser.Parse(stream);
         return parser;
