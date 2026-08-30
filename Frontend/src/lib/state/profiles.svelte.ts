@@ -53,7 +53,7 @@ export async function loadProfiles(): Promise<void> {
 	profilesState.error = null;
 	await sessionRun(() => getWsClient().request('ListProfilesRequest', {}), {
 		ok: (response) => {
-			profilesState.profiles = response.Profiles;
+			profilesState.profiles = response.profiles;
 			profilesState.status = 'loaded';
 		},
 		fail: (message) => {
@@ -80,7 +80,7 @@ export async function createProfile(name: string): Promise<boolean> {
 	profilesState.creating = true;
 	profilesState.createError = null;
 	const outcome = await sessionRun(
-		() => getWsClient().request('CreateProfileRequest', { Name: trimmed }),
+		() => getWsClient().request('CreateProfileRequest', { name: trimmed }),
 		{
 			ok: () => {},
 			fail: (message) => {
@@ -95,7 +95,7 @@ export async function createProfile(name: string): Promise<boolean> {
 		return false;
 	}
 	// CreateProfileResponse carries no profile, so refetching is the only way to
-	// learn the new ProfileId. A failure here is a list failure and surfaces
+	// learn the new profileId. A failure here is a list failure and surfaces
 	// through `status`, not through the create form: the profile was still made.
 	await loadProfiles();
 	// Held until the refetch lands, so the form cannot be submitted a second time
@@ -116,7 +116,7 @@ export async function selectProfile(profileId: string): Promise<boolean> {
 	profilesState.selectingProfileId = profileId;
 	profilesState.selectError = null;
 	const outcome = await sessionRun(
-		() => getWsClient().request('SelectProfileRequest', { ProfileId: profileId }),
+		() => getWsClient().request('SelectProfileRequest', { profileId }),
 		{
 			ok: () => {
 				profilesState.selectedProfileId = profileId;
@@ -140,7 +140,7 @@ export async function replayProfileSelection(send: PrivilegedSend): Promise<void
 		return;
 	}
 	try {
-		await send('SelectProfileRequest', { ProfileId: profileId });
+		await send('SelectProfileRequest', { profileId });
 	} catch (error) {
 		// Unlike selectProfile(), a refusal here leaves the socket on no profile at
 		// all — the connection is new. Forgetting the intent is what stops a profile

@@ -1,5 +1,6 @@
 using System;
 using System.Linq;
+using System.Threading;
 using System.Threading.Tasks;
 using Backend;
 using Backend.Database;
@@ -89,6 +90,57 @@ public sealed class ActivityServiceTests : IDisposable
     }
 
     [Test]
+    public async Task StartActivityAsync_AlreadyDoingActivity_ThrowsBackendException()
+    {
+        Profile profile = await SeedProfileAsync();
+        await SeedSkillAsync(profile, SkillId.Mining, xp: 0, level: 1);
+        (ActivityService service, _) = CreateService();
+        AddStoneActivity(service);
+        await service.StartActivityAsync(profile.ProfileId, ActivityId.Stone);
+
+        BackendException? exception = Assert.ThrowsAsync<BackendException>(
+            () => service.StartActivityAsync(profile.ProfileId, ActivityId.Stone));
+
+        Assert.Multiple(() =>
+        {
+            Assert.That(exception, Is.Not.Null);
+            Assert.That(exception?.Message, Does.Contain("already doing an activity"));
+        });
+    }
+
+    [Test]
+    public async Task StartActivityAsync_CompletionTimeElapsed_ResolvesRewardsAndClearsState()
+    {
+        Profile profile = await SeedProfileAsync();
+        await SeedSkillAsync(profile, SkillId.Mining, xp: 0, level: 1);
+        SocketRegistryService socketRegistry = new(NullLogger<SocketRegistryService>.Instance);
+        ActivitySchedulerService scheduler = new();
+        ActivityService service = new(_db.Factory, new DropTableService(), new ProfileService(_db.Factory, socketRegistry),
+            new ItemService(_db.Factory), new SkillService(_db.Factory), socketRegistry, scheduler);
+        service.AddActivity(ActivityId.Stone, new ActivityDefinition(
+            time: 0.01f,
+            rewards: [new ItemReward(2, null, ItemId.Stone)],
+            requirements: []));
+
+        await service.StartActivityAsync(profile.ProfileId, ActivityId.Stone);
+        Assert.That(await GetItemsAsync(profile.ProfileId), Is.Empty);
+
+        Thread.Sleep(100);
+        scheduler.NextEvent();
+
+        Item[] items = await GetItemsAsync(profile.ProfileId);
+        await using GameDbContext dbContext = await _db.Factory.CreateDbContextAsync();
+        Profile? updated = await dbContext.Profiles.FindAsync(profile.ProfileId);
+        Assert.Multiple(() =>
+        {
+            Assert.That(items, Has.Length.EqualTo(1));
+            Assert.That(items[0].ItemId, Is.EqualTo(ItemId.Stone));
+            Assert.That(items[0].Count, Is.EqualTo(2));
+            Assert.That(updated?.ActivityId, Is.Null);
+        });
+    }
+
+    [Test]
     public async Task ResolveActivityAsync_NoActivity_ThrowsBackendException()
     {
         Profile profile = await SeedProfileAsync();
@@ -110,6 +162,7 @@ public sealed class ActivityServiceTests : IDisposable
         Profile profile = await SeedProfileAsync();
         (ActivityService service, _) = CreateService();
         service.AddActivity(ActivityId.Stone, new ActivityDefinition(
+            time: 1f,
             rewards: [new ItemReward(4, null, ItemId.Stone), new XpReward(10, null, SkillId.Mining)],
             requirements: []));
         await service.StartActivityAsync(profile.ProfileId, ActivityId.Stone);
@@ -142,11 +195,13 @@ public sealed class ActivityServiceTests : IDisposable
         await SeedSkillAsync(profile, SkillId.Mining, xp: 5, level: 1);
         (ActivityService service, _) = CreateService();
         service.AddActivity(ActivityId.Stone, new ActivityDefinition(
+            time: 1f,
             rewards: [new ItemReward(4, null, ItemId.Stone), new XpReward(10, null, SkillId.Mining)],
             requirements: []));
         await service.StartActivityAsync(profile.ProfileId, ActivityId.Stone);
 
         await service.ResolveActivityAsync(profile.ProfileId);
+        await service.StartActivityAsync(profile.ProfileId, ActivityId.Stone);
         await service.ResolveActivityAsync(profile.ProfileId);
 
         await Assert.MultipleAsync(async () =>
@@ -164,8 +219,10 @@ public sealed class ActivityServiceTests : IDisposable
         Profile profile = await SeedProfileAsync();
         DropTableService dropTableService = new();
         dropTableService.AddDropTable(DropTableId.StoneTable, new DropTable(new ItemReward(1, 1, ItemId.Stone)));
-        ActivityService service = new(_db.Factory, dropTableService, CreateProfileService(), new ItemService(_db.Factory), new SkillService(_db.Factory));
+        SocketRegistryService socketRegistry = new(NullLogger<SocketRegistryService>.Instance);
+        ActivityService service = new(_db.Factory, dropTableService, new ProfileService(_db.Factory, socketRegistry), new ItemService(_db.Factory), new SkillService(_db.Factory), socketRegistry, new ActivitySchedulerService());
         service.AddActivity(ActivityId.Stone, new ActivityDefinition(
+            time: 1f,
             rewards: [new TableReward(1, null, DropTableId.StoneTable)],
             requirements: []));
         await service.StartActivityAsync(profile.ProfileId, ActivityId.Stone);
@@ -188,6 +245,7 @@ public sealed class ActivityServiceTests : IDisposable
         Profile profile = await SeedProfileAsync();
         (ActivityService service, _) = CreateService();
         service.AddActivity(ActivityId.Stone, new ActivityDefinition(
+            time: 1f,
             rewards: [new ItemReward(2, 5, ItemId.Stone), new XpReward(10, 5, SkillId.Mining)],
             requirements: []));
         await service.StartActivityAsync(profile.ProfileId, ActivityId.Stone);
@@ -207,6 +265,7 @@ public sealed class ActivityServiceTests : IDisposable
         Profile profile = await SeedProfileAsync();
         (ActivityService service, _) = CreateService();
         service.AddActivity(ActivityId.Stone, new ActivityDefinition(
+            time: 1f,
             rewards: [new ItemReward(4, null, ItemId.Stone), new ItemReward(2, 5, ItemId.Wood), new XpReward(10, 5, SkillId.Mining)],
             requirements: []));
         await service.StartActivityAsync(profile.ProfileId, ActivityId.Stone);
@@ -229,6 +288,7 @@ public sealed class ActivityServiceTests : IDisposable
         Profile profile = await SeedProfileAsync();
         (ActivityService service, _) = CreateService();
         service.AddActivity(ActivityId.Stone, new ActivityDefinition(
+            time: 1f,
             rewards: [new ItemReward(0, null, ItemId.None)],
             requirements: []));
         await service.StartActivityAsync(profile.ProfileId, ActivityId.Stone);
@@ -246,15 +306,16 @@ public sealed class ActivityServiceTests : IDisposable
     public void AddActivity_DuplicateKey_ThrowsArgumentException()
     {
         (ActivityService service, _) = CreateService();
-        service.AddActivity(ActivityId.Stone, new ActivityDefinition(rewards: [], requirements: []));
+        service.AddActivity(ActivityId.Stone, new ActivityDefinition(time: 1f, rewards: [], requirements: []));
 
         Assert.Throws<ArgumentException>(() =>
-            service.AddActivity(ActivityId.Stone, new ActivityDefinition(rewards: [], requirements: [])));
+            service.AddActivity(ActivityId.Stone, new ActivityDefinition(time: 1f, rewards: [], requirements: [])));
     }
 
     private static void AddStoneActivity(ActivityService service)
     {
         service.AddActivity(ActivityId.Stone, new ActivityDefinition(
+            time: 1f,
             rewards: [new ItemReward(4, null, ItemId.Stone), new XpReward(10, null, SkillId.Mining)],
             requirements: [new LevelRequirement(SkillId.Mining, 1)]));
     }
@@ -268,13 +329,9 @@ public sealed class ActivityServiceTests : IDisposable
         dropTableService.AddDropTable(DropTableId.BrokenRockTable, new DropTable(
             new ItemReward(0, 10, ItemId.None),
             new ItemReward(1, 1, ItemId.BrokenRock)));
-        ActivityService service = new(_db.Factory, dropTableService, CreateProfileService(), new ItemService(_db.Factory), new SkillService(_db.Factory));
+        SocketRegistryService socketRegistry = new(NullLogger<SocketRegistryService>.Instance);
+        ActivityService service = new(_db.Factory, dropTableService, new ProfileService(_db.Factory, socketRegistry), new ItemService(_db.Factory), new SkillService(_db.Factory), socketRegistry, new ActivitySchedulerService());
         return (service, dropTableService);
-    }
-
-    private ProfileService CreateProfileService()
-    {
-        return new ProfileService(_db.Factory, new SocketRegistryService(NullLogger<SocketRegistryService>.Instance));
     }
 
     private async Task<Profile> SeedProfileAsync()

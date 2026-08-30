@@ -8,7 +8,7 @@ namespace Backend.Services;
 
 public sealed class UserService(IDbContextFactory<GameDbContext> dbContextFactory, SocketRegistryService socketRegistry)
 {
-    internal async Task<Guid> GetTestUserAsync()
+    internal async Task<UserId> GetTestUserAsync()
     {
         await using GameDbContext dbContext = await dbContextFactory.CreateDbContextAsync();
 
@@ -23,7 +23,7 @@ public sealed class UserService(IDbContextFactory<GameDbContext> dbContextFactor
         return user.UserId;
     }
 
-    internal void SignIn(Socket socket, Guid userId)
+    internal void SignIn(Socket socket, UserId userId)
     {
         socket.UserId = userId;
         socketRegistry.SetUser(socket, userId);

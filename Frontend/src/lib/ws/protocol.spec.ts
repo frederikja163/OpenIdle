@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { classifyMessage, encodeRequest, MAX_MESSAGE_BYTES } from './protocol';
+import { classifyMessage, encodeRequest, MAX_MESSAGE_BYTES, readRequestId } from './protocol';
 
 describe('encodeRequest', () => {
 	it('emits $type as the first property', () => {
@@ -7,12 +7,12 @@ describe('encodeRequest', () => {
 		expect(json.startsWith('{"$type":"PingRequest"')).toBe(true);
 	});
 
-	it('includes the request id and PascalCase payload', () => {
-		const json = encodeRequest('CreateProfileRequest', 7, { Name: 'Alice' });
+	it('includes the request id and camelCase payload', () => {
+		const json = encodeRequest('CreateProfileRequest', 7, { name: 'Alice' });
 		expect(JSON.parse(json)).toEqual({
 			$type: 'CreateProfileRequest',
-			Id: 7,
-			Name: 'Alice'
+			requestId: 7,
+			name: 'Alice'
 		});
 	});
 
@@ -21,43 +21,60 @@ describe('encodeRequest', () => {
 		// the byte budget — proving the limit counts bytes.
 		const name = 'æ'.repeat(600);
 		expect(name.length).toBeLessThan(MAX_MESSAGE_BYTES);
-		expect(() => encodeRequest('CreateProfileRequest', 1, { Name: name })).toThrow(/frame limit/);
+		expect(() => encodeRequest('CreateProfileRequest', 1, { name })).toThrow(/frame limit/);
 	});
 });
 
 describe('classifyMessage', () => {
-	it('classifies a message with a numeric Id as a response', () => {
-		const classified = classifyMessage('{"$type":"LoginAsTestUserResponse","Id":3}');
+	it('classifies a message with a numeric requestId as a response', () => {
+		const classified = classifyMessage('{"$type":"LoginAsTestUserResponse","requestId":3}');
 		expect(classified).toEqual({
 			kind: 'response',
 			id: 3,
-			message: { $type: 'LoginAsTestUserResponse', Id: 3 }
+			message: { $type: 'LoginAsTestUserResponse', requestId: 3 }
 		});
 	});
 
-	it('classifies ErrorResponse as an error even though its Id is null', () => {
-		const classified = classifyMessage('{"$type":"ErrorResponse","Id":null,"Message":"boom"}');
+	it('classifies ErrorResponse as an error whatever its requestId', () => {
+		const classified = classifyMessage('{"$type":"ErrorResponse","requestId":0,"message":"boom"}');
 		expect(classified).toEqual({
 			kind: 'error',
-			message: { $type: 'ErrorResponse', Id: null, Message: 'boom' }
+			message: { $type: 'ErrorResponse', requestId: 0, message: 'boom' }
 		});
 	});
 
-	it('classifies an Id-less message as a server event', () => {
-		const classified = classifyMessage('{"$type":"SomeFutureEvent","Value":1}');
+	it('classifies a requestId-less message as a server event', () => {
+		const classified = classifyMessage('{"$type":"SomeFutureEvent","value":1}');
 		expect(classified).toEqual({
 			kind: 'event',
-			message: { $type: 'SomeFutureEvent', Value: 1 }
+			message: { $type: 'SomeFutureEvent', value: 1 }
 		});
 	});
 
-	it('classifies a known response type with a null Id as unknown, not an event', () => {
-		const raw = '{"$type":"LoginAsTestUserResponse","Id":null}';
+	it('classifies a known response type with no requestId as unknown, not an event', () => {
+		// What the backend sends when it never read an id off the request:
+		// DefaultIgnoreCondition.WhenWritingDefault drops the null rather than
+		// echoing it, and there is no request such a frame could answer.
+		const raw = '{"$type":"LoginAsTestUserResponse"}';
 		expect(classifyMessage(raw)).toEqual({ kind: 'unknown', raw });
 	});
 
 	it('classifies malformed or untyped payloads as unknown', () => {
 		expect(classifyMessage('not json')).toEqual({ kind: 'unknown', raw: 'not json' });
-		expect(classifyMessage('{"Id":1}')).toEqual({ kind: 'unknown', raw: '{"Id":1}' });
+		expect(classifyMessage('{"requestId":1}')).toEqual({ kind: 'unknown', raw: '{"requestId":1}' });
+	});
+});
+
+describe('readRequestId', () => {
+	it('reads the id out of a frame', () => {
+		expect(readRequestId('{"$type":"PingRequest","requestId":7}')).toBe(7);
+	});
+
+	it('returns null for a frame with no id, a non-numeric one, or no JSON at all', () => {
+		// The console sends whatever is typed, so all three reach this.
+		expect(readRequestId('{"$type":"PingRequest"}')).toBeNull();
+		expect(readRequestId('{"requestId":"7"}')).toBeNull();
+		expect(readRequestId('{ half a frame')).toBeNull();
+		expect(readRequestId('42')).toBeNull();
 	});
 });

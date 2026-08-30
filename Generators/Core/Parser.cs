@@ -186,7 +186,8 @@ public sealed class Parser
 
     private Activity Activity(XmlElement element)
     {
-        Activity activity = new Activity(element.RequireAttribute("name"));
+        float time = element.RequireAttribute<float>("time");
+        Activity activity = new Activity(element.RequireAttribute("name"), time);
         foreach (XmlElement rewardElement in element.ChildNodes.OfType<XmlElement>())
         {
             switch (rewardElement.Name)

@@ -13,11 +13,11 @@ public abstract class SocketControllerBase
     internal RequestBase Request => Context.Request;
     internal SocketRegistryService SocketRegistry => Context.SocketRegistry;
 
-    internal Guid UserId
+    internal UserId UserId
     {
         get
         {
-            Guid? userId = Socket.UserId;
+            UserId? userId = Socket.UserId;
             if (userId is null)
             {
                 throw new BackendException("You are not signed in.");
@@ -26,11 +26,11 @@ public abstract class SocketControllerBase
         }
     }
 
-    internal Guid ProfileId
+    internal ProfileId ProfileId
     {
         get
         {
-            Guid? profileId = Socket.ProfileId;
+            ProfileId? profileId = Socket.ProfileId;
             if (profileId is null)
             {
                 throw new BackendException("You must select a profile first.");

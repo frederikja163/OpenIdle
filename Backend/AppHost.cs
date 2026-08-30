@@ -29,6 +29,8 @@ internal static class AppHost
         builder.Services.AddSingleton<ItemService>();
         builder.Services.AddSingleton<ActivityService>();
         builder.Services.AddSingleton<ToolService>();
+        builder.Services.AddSingleton<ActivitySchedulerService>();
+        builder.Services.AddHostedService<ActivitySchedulerHostedService>();
 
         WebApplication app = builder.Build();
         app.MapControllers();

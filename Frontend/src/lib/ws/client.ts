@@ -3,6 +3,7 @@ import { env } from '$env/dynamic/public';
 import {
 	classifyMessage,
 	encodeRequest,
+	readRequestId,
 	type EventType,
 	type RequestMap,
 	type RequestType,
@@ -32,6 +33,9 @@ export type PrivilegedSend = <K extends RequestType>(
 	payload: RequestMap[K]['payload']
 ) => Promise<RequestMap[K]['response']>;
 
+/** Which way a frame crossed the socket. `out` is a request, `in` anything received. */
+export type FrameDirection = 'in' | 'out';
+
 export interface WsClientOptions {
 	url: string;
 	requestTimeoutMs?: number;
@@ -56,7 +60,7 @@ interface PendingRequest {
 }
 
 export class WsClient {
-	private readonly url: string;
+	private url: string;
 	private readonly requestTimeoutMs: number;
 	private readonly connectTimeoutMs: number;
 	private readonly reconnectBaseMs: number;
@@ -78,6 +82,7 @@ export class WsClient {
 	private readonly anyEventHandlers = new Set<(event: ServerEvent) => void>();
 	private readonly closeHandlers = new Set<() => void>();
 	private readonly statusHandlers = new Set<(status: WsStatus) => void>();
+	private readonly frameHandlers = new Set<(direction: FrameDirection, raw: string) => void>();
 
 	/**
 	 * Bumped every time a connection is retired, so a caller can tell whether the
@@ -114,6 +119,28 @@ export class WsClient {
 
 	get status(): WsStatus {
 		return this.statusValue;
+	}
+
+	get currentUrl(): string {
+		return this.url;
+	}
+
+	/**
+	 * Repoints the client at another backend. Goes through close()/reopen() rather
+	 * than swapping the url under a live socket, because moving to a different
+	 * server ends the session — the backend session *is* the connection — and that
+	 * is a deliberate shutdown, not a fault for the reconnect loop to recover from.
+	 *
+	 * The instance survives, which is what matters to wireSession(): its handler
+	 * registration happens once, so a replacement client would come up unwired.
+	 */
+	setUrl(url: string): void {
+		if (url === this.url) {
+			return;
+		}
+		this.close();
+		this.url = url;
+		this.reopen();
 	}
 
 	connect(): Promise<void> {
@@ -197,16 +224,70 @@ export class WsClient {
 		type: K,
 		payload: RequestMap[K]['payload']
 	): Promise<RequestMap[K]['response']> {
+		return this.send(type, payload, false) as Promise<RequestMap[K]['response']>;
+	}
+
+	/**
+	 * Sends a request the RequestMap does not describe. For the debug console,
+	 * which builds its catalogue from the backend's own types.xml and so knows
+	 * about requests this file does not — everything downstream of the frame
+	 * (id correlation, timeouts, the replay gate) is the ordinary path.
+	 */
+	async requestRaw(type: string, payload: Record<string, unknown>): Promise<unknown> {
 		return this.send(type, payload, false);
 	}
 
-	private send<K extends RequestType>(
-		type: K,
-		payload: RequestMap[K]['payload'],
+	/**
+	 * Puts this exact text on the socket. Nothing here validates, re-encodes or
+	 * measures it: the debug console exists to be able to produce a frame the
+	 * backend rejects — a bad $type, a missing field, a truncated brace — and
+	 * anything that tidied the text up first would make that impossible.
+	 *
+	 * Correlation is therefore best-effort. A frame carrying a numeric requestId
+	 * is tracked like any other request, and its reply settles this promise; one
+	 * carrying none resolves as soon as the bytes are away, and whatever the
+	 * backend makes of it shows up only in the traffic log.
+	 */
+	async sendRaw(frame: string): Promise<unknown> {
+		const id = readRequestId(frame);
+		if (id === null) {
+			return this.dispatchUntracked(frame);
+		}
+		// A hand-typed id must never be handed out again, or one frame's reply
+		// would settle another frame's promise.
+		this.nextRequestId = Math.max(this.nextRequestId, id + 1);
+		// Reusing an id is worth simulating, so the frame still goes out — but
+		// `pending` holds one entry per id, and the promise this is about to
+		// replace would otherwise hang until its own timeout.
+		this.takePending(id)?.reject(new WsError(`requestId ${id} was reused by a later frame`));
+		return this.track(id, frame, `requestId ${id}`, false);
+	}
+
+	/**
+	 * Takes the next request id without sending anything, for a caller that has
+	 * to show the id before the frame goes out — the debug console writes it into
+	 * its editor. The counter is the client's, so two callers can never pick the
+	 * same number.
+	 */
+	reserveRequestId(): number {
+		return this.nextRequestId++;
+	}
+
+	private send(
+		type: string,
+		payload: Record<string, unknown>,
 		privileged: boolean
-	): Promise<RequestMap[K]['response']> {
+	): Promise<unknown> {
 		const id = this.nextRequestId++;
-		const frame = encodeRequest(type, id, payload);
+		return this.track(id, encodeRequest(type, id, payload), type, privileged);
+	}
+
+	/**
+	 * Arms the deadline, registers the pending entry and starts the dispatch.
+	 * `label` only names the caller in the timeout message: a raw frame has no
+	 * type to quote.
+	 */
+	private track(id: number, frame: string, label: string, privileged: boolean): Promise<unknown> {
 		return new Promise((resolve, reject) => {
 			// Armed before connecting rather than after, so requestTimeoutMs bounds
 			// the whole call. Otherwise a connection that never opens would blow
@@ -216,30 +297,39 @@ export class WsClient {
 				// caller does not cancel the request, and the backend still owes a
 				// reply that the error branch has to account for.
 				this.pending.delete(id);
-				reject(new WsError(`${type} timed out after ${this.requestTimeoutMs}ms`));
+				reject(new WsError(`${label} timed out after ${this.requestTimeoutMs}ms`));
 			}, this.requestTimeoutMs);
 			this.pending.set(id, { resolve, reject, timer, sent: false });
 			void this.dispatch(id, frame, privileged);
 		});
 	}
 
+	/**
+	 * Waits until a frame can actually be written: connected, past the replay
+	 * gate, and holding a socket that is still open. Throws rather than rejecting
+	 * a pending entry, because the untracked path below has none.
+	 */
+	private async ready(privileged: boolean): Promise<WebSocket> {
+		await this.connect();
+		// A reconnected socket is unauthenticated — the backend session is the
+		// connection — so ordinary traffic waits behind the replay. The replay's
+		// own requests are privileged, which is what keeps this from deadlocking.
+		if (!privileged && this.resumeGate) {
+			await this.resumeGate;
+		}
+		const socket = this.socket;
+		// send() on a CLOSING or CLOSED socket discards the frame and throws
+		// nothing, so this check is the only way the caller hears about it
+		// before the timeout.
+		if (!socket || socket.readyState !== WebSocket.OPEN) {
+			throw new WsError('WebSocket is not open');
+		}
+		return socket;
+	}
+
 	private async dispatch(id: number, frame: string, privileged: boolean): Promise<void> {
 		try {
-			await this.connect();
-			// A reconnected socket is unauthenticated — the backend session is the
-			// connection — so ordinary traffic waits behind the replay. The replay's
-			// own requests are privileged, which is what keeps this from deadlocking.
-			if (!privileged && this.resumeGate) {
-				await this.resumeGate;
-			}
-			const socket = this.socket;
-			// send() on a CLOSING or CLOSED socket discards the frame and throws
-			// nothing, so this check is the only way the caller hears about it
-			// before the timeout.
-			if (!socket || socket.readyState !== WebSocket.OPEN) {
-				this.takePending(id)?.reject(new WsError('WebSocket is not open'));
-				return;
-			}
+			const socket = await this.ready(privileged);
 			const request = this.pending.get(id);
 			if (!request) {
 				// Timed out while it waited for the connection or the replay.
@@ -248,9 +338,26 @@ export class WsClient {
 			request.sent = true;
 			this.outstanding.push(id);
 			socket.send(frame);
+			this.dispatchFrame('out', frame);
 		} catch (error) {
 			this.takePending(id)?.reject(error instanceof WsError ? error : new WsError(String(error)));
 		}
+	}
+
+	/**
+	 * A raw frame with no requestId to track it by. The 0 pushed onto
+	 * `outstanding` is a marker rather than an id: the backend answers a frame it
+	 * could not deserialize with requestId 0, and handleMessage attributes such a
+	 * reply to the oldest unanswered request. Without the marker that reply would
+	 * reject an unrelated request; with it, the frame that caused the error
+	 * absorbs it — takePending(0) finds nothing, since ids start at 1.
+	 */
+	private async dispatchUntracked(frame: string): Promise<undefined> {
+		const socket = await this.ready(false);
+		this.outstanding.push(0);
+		socket.send(frame);
+		this.dispatchFrame('out', frame);
+		return undefined;
 	}
 
 	/**
@@ -278,7 +385,11 @@ export class WsClient {
 	private async replaySession(): Promise<void> {
 		try {
 			if (this.resumeSession) {
-				await this.resumeSession((type, payload) => this.send(type, payload, true));
+				// The cast restores what send() gave up when it was loosened for
+				// requestRaw: the caller here is typed, so its response type is known
+				// even though the shared implementation no longer tracks it.
+				await this.resumeSession(((type: string, payload: Record<string, unknown>) =>
+					this.send(type, payload, true)) as PrivilegedSend);
 			}
 		} catch {
 			// A failed replay leaves an open but unrestored socket, and the stores
@@ -311,6 +422,28 @@ export class WsClient {
 	onStatus(handler: (status: WsStatus) => void): () => void {
 		this.statusHandlers.add(handler);
 		return () => this.statusHandlers.delete(handler);
+	}
+
+	/**
+	 * Every frame that crosses the socket, verbatim and unclassified. Purely
+	 * diagnostic — the debug console's traffic log — so it sees the raw text
+	 * rather than the parsed message, including one nothing could parse.
+	 */
+	onFrame(handler: (direction: FrameDirection, raw: string) => void): () => void {
+		this.frameHandlers.add(handler);
+		return () => this.frameHandlers.delete(handler);
+	}
+
+	private dispatchFrame(direction: FrameDirection, raw: string): void {
+		// Snapshotted and isolated like dispatchEvent: a log that throws must not
+		// take the connection down with it.
+		for (const handler of [...this.frameHandlers]) {
+			try {
+				handler(direction, raw);
+			} catch (error) {
+				console.error('Frame handler threw:', error);
+			}
+		}
 	}
 
 	/**
@@ -357,6 +490,7 @@ export class WsClient {
 	}
 
 	private handleMessage(raw: string): void {
+		this.dispatchFrame('in', raw);
 		const classified = classifyMessage(raw);
 		switch (classified.kind) {
 			case 'response': {
@@ -366,18 +500,22 @@ export class WsClient {
 				break;
 			}
 			case 'error': {
-				// ErrorResponse.Id is always null on the backend, so it cannot be
-				// matched by id. The backend handles messages FIFO per connection,
-				// so the error answers the oldest request it has not replied to —
-				// which is why the cursor is `outstanding` and not `pending`.
-				const id = this.outstanding.shift();
+				// The backend echoes the failed request's id, except for a frame it
+				// could not deserialize far enough to read one — it sends 0 there,
+				// and 0 is never a request id. Falling back on the oldest unanswered
+				// request is right for that case because the backend handles messages
+				// FIFO per connection, which is why the cursor is `outstanding` and
+				// not `pending`.
+				const echoed = classified.message.requestId;
+				const id = echoed > 0 ? echoed : this.outstanding.shift();
 				if (id === undefined) {
 					console.warn('Websocket error with no request to attribute it to:', classified.message);
 					break;
 				}
+				this.clearOutstanding(id);
 				// Absent from `pending` when that request already timed out: this is
 				// its answer, arriving too late for anyone to receive it.
-				this.takePending(id)?.reject(new WsError(classified.message.Message));
+				this.takePending(id)?.reject(new WsError(classified.message.message));
 				break;
 			}
 			case 'event':
@@ -510,11 +648,83 @@ export function getWsClient(): WsClient {
 }
 
 /**
+ * Where a URL chosen on the debug page is kept. Deliberately per-browser and
+ * persistent: pointing the app at a local backend is a decision about this
+ * machine, and one that should survive a reload rather than have to be made
+ * again on every page load.
+ */
+const WS_URL_STORAGE_KEY = 'openidle.wsUrl';
+
+/**
+ * Every access is guarded: localStorage is absent during SSR and *throws* rather
+ * than returning null in a browser configured to block site data, which would
+ * otherwise take the whole socket down with it.
+ */
+function readStoredWsUrl(): string | null {
+	try {
+		return localStorage.getItem(WS_URL_STORAGE_KEY);
+	} catch {
+		return null;
+	}
+}
+
+function writeStoredWsUrl(url: string | null): void {
+	try {
+		if (url === null) {
+			localStorage.removeItem(WS_URL_STORAGE_KEY);
+		} else {
+			localStorage.setItem(WS_URL_STORAGE_KEY, url);
+		}
+	} catch {
+		// A URL that cannot be persisted is still applied to the live client below;
+		// it just will not survive the reload.
+	}
+}
+
+/** The URL the app is using, or would use on its next connect. */
+export function getWsUrl(): string {
+	return client?.currentUrl ?? resolveWsUrl();
+}
+
+/** The URL the app would use with no override in place. */
+export function getDefaultWsUrl(): string {
+	return resolveConfiguredWsUrl();
+}
+
+/** Whether the app is on a URL chosen here rather than the configured one. */
+export function hasWsUrlOverride(): boolean {
+	return readStoredWsUrl() !== null;
+}
+
+/**
+ * Points the whole app at another backend, now and on every later load. The
+ * caller is responsible for ending the session it is leaving — see logout() in
+ * $lib/state/user.svelte, which the debug page uses for exactly that.
+ */
+export function setWsUrl(url: string): void {
+	writeStoredWsUrl(url);
+	client?.setUrl(url);
+}
+
+/** Drops the override and returns the app to PUBLIC_WS_URL (or the dev default). */
+export function clearWsUrl(): void {
+	writeStoredWsUrl(null);
+	client?.setUrl(resolveConfiguredWsUrl());
+}
+
+function resolveWsUrl(): string {
+	// The stored override wins over the build-time configuration on purpose: it is
+	// the more recent and more specific decision, made by someone sitting at this
+	// browser. It is only ever written by the debug page.
+	return readStoredWsUrl() ?? resolveConfiguredWsUrl();
+}
+
+/**
  * The development default is only safe for a local backend. In any deployed
  * build a missing PUBLIC_WS_URL is a configuration error worth failing fast on
  * rather than silently pointing every client at localhost.
  */
-function resolveWsUrl(): string {
+function resolveConfiguredWsUrl(): string {
 	const configured = env.PUBLIC_WS_URL;
 	if (configured) {
 		return configured;

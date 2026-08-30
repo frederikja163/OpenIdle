@@ -33,8 +33,8 @@ internal sealed class Socket : IDisposable
 
     internal WebSocketState State => _webSocket.State;
     
-    internal Guid? UserId { get; set; }
-    internal Guid? ProfileId { get; set; }
+    internal UserId? UserId { get; set; }
+    internal ProfileId? ProfileId { get; set; }
 
     internal event AsyncEventHandler<MessageReceivedEventArgs>? MessageReceived;
     internal event AsyncEventHandler<SocketCloseEventArgs>? Close;

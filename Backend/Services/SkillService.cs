@@ -11,7 +11,7 @@ namespace Backend.Services;
 
 public sealed class SkillService(IDbContextFactory<GameDbContext> dbContextFactory)
 {
-    internal async Task<Skill[]> GetSkillsAsync(Guid profileId)
+    internal async Task<Skill[]> GetSkillsAsync(ProfileId profileId)
     {
         await using GameDbContext dbContext = await dbContextFactory.CreateDbContextAsync();
 
@@ -21,7 +21,7 @@ public sealed class SkillService(IDbContextFactory<GameDbContext> dbContextFacto
             .ToArrayAsync();
     }
 
-    internal async Task<Skill[]> GetSkillsAsync(Guid profileId, IEnumerable<SkillId> skillIds)
+    internal async Task<Skill[]> GetSkillsAsync(ProfileId profileId, IEnumerable<SkillId> skillIds)
     {
         await using GameDbContext dbContext = await dbContextFactory.CreateDbContextAsync();
 
@@ -31,7 +31,7 @@ public sealed class SkillService(IDbContextFactory<GameDbContext> dbContextFacto
             .ToArrayAsync();
     }
 
-    internal async Task<Skill[]> AddSkillsAsync(Guid profileId, IEnumerable<XpReward> rewards)
+    internal async Task<Skill[]> AddSkillsAsync(ProfileId profileId, IEnumerable<XpReward> rewards)
     {
         await using GameDbContext dbContext = await dbContextFactory.CreateDbContextAsync();
 
@@ -40,7 +40,7 @@ public sealed class SkillService(IDbContextFactory<GameDbContext> dbContextFacto
         return skills;
     }
 
-    internal async Task<Skill[]> AddSkillsAsync(GameDbContext dbContext, Guid profileId, IEnumerable<XpReward> rewards)
+    internal async Task<Skill[]> AddSkillsAsync(GameDbContext dbContext, ProfileId profileId, IEnumerable<XpReward> rewards)
     {
         List<Skill> skills = [];
         foreach (XpReward reward in rewards)
