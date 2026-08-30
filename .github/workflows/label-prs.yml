@@ -1,0 +1,32 @@
+name: Label PRs
+
+# Applies area labels (backend, frontend, generator, devops) to every pull
+# request from the paths it touches; the mapping lives in .github/labeler.yml.
+# Reviewer requests for the same areas are made by GitHub itself through
+# .github/CODEOWNERS, not by this workflow.
+#
+# pull_request_target rather than pull_request so the job also has a
+# write-capable token for pull requests from forks. That trigger runs this
+# workflow and reads labeler.yml from the base branch, which is also why the
+# job never checks out the pull request: nothing from the PR is executed here,
+# only its list of changed files is read through the API.
+on:
+  pull_request_target:
+
+# A quick second push only needs the latest run to finish.
+concurrency:
+  group: label-prs-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+  pull-requests: write
+
+jobs:
+  label:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/labeler@v7
+        with:
+          # Drop a label again when a later push no longer touches its paths.
+          sync-labels: true

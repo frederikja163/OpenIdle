@@ -1,0 +1,33 @@
+# Path-based pull request labels, applied by .github/workflows/label-prs.yml
+# (actions/labeler). Patterns are minimatch globs matched against each changed
+# file's full path from the repository root, so `Backend/**` does not match
+# Generators/Backend/. A PR gets every label with at least one matching file;
+# the workflow's sync-labels removes a label from this file again once no
+# changed file matches. Keep .github/CODEOWNERS in step with this file.
+
+backend:
+  - changed-files:
+      - any-glob-to-any-file:
+          - Backend/**
+          - tests/**
+          - types.xml
+
+frontend:
+  - changed-files:
+      - any-glob-to-any-file:
+          - Frontend/**
+
+generator:
+  - changed-files:
+      - any-glob-to-any-file:
+          - Generators/**
+
+# Docker, deployment and CI. Quoted because YAML reads a leading `*` as an alias.
+devops:
+  - changed-files:
+      - any-glob-to-any-file:
+          - "**/Dockerfile*"
+          - "**/.dockerignore"
+          - "**/*compose*.y*ml"
+          - deploy/**
+          - .github/**
