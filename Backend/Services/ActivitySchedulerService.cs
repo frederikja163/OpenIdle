@@ -8,7 +8,7 @@ namespace Backend.Services;
 public abstract class ActivityCompletion(Guid profileId) : IEquatable<ActivityCompletion>
 {
     public ProfileId ProfileId { get; } = profileId;
-    public abstract void Complete();
+    public abstract Task Complete();
 
     public bool Equals(ActivityCompletion? other)
     {
@@ -61,7 +61,7 @@ public sealed class ActivitySchedulerService
         }
     }
 
-    public void NextEvent()
+    public async Task NextEvent()
     {
         WaitNext();
 
@@ -79,7 +79,7 @@ public sealed class ActivitySchedulerService
                 return;
             }
         }
-        activityCompletion.Complete();
+        await activityCompletion.Complete();
     }
 
     private void WaitNext()

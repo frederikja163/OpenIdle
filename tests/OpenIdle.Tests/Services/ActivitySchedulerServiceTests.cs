@@ -37,7 +37,7 @@ public sealed class ActivitySchedulerServiceTests
     }
 
     [Test]
-    public void RemoveEvent_ExistingActivity_RemovesIt()
+    public async Task RemoveEvent_ExistingActivity_RemovesIt()
     {
         ActivitySchedulerService service = new();
         FakeCompletion completion = new(Guid.NewGuid());
@@ -45,7 +45,7 @@ public sealed class ActivitySchedulerServiceTests
 
         service.RemoveEvent(completion.ProfileId);
 
-        service.NextEvent();
+        await service.NextEvent();
         Assert.That(completion.CompleteCalled, Is.False);
     }
 
@@ -58,39 +58,39 @@ public sealed class ActivitySchedulerServiceTests
     }
 
     [Test]
-    public void NextEvent_NoEvents_DoesNotThrow()
+    public async Task NextEvent_NoEvents_DoesNotThrow()
     {
         ActivitySchedulerService service = new();
 
-        Assert.DoesNotThrow(() => service.NextEvent());
+        await service.NextEvent();
     }
 
     [Test]
-    public void NextEvent_EventInFuture_DoesNotComplete()
+    public async Task NextEvent_EventInFuture_DoesNotComplete()
     {
         ActivitySchedulerService service = new();
         FakeCompletion completion = new(Guid.NewGuid());
         service.StartEvent(completion, DateTime.UtcNow.AddMinutes(10));
 
-        service.NextEvent();
+        await service.NextEvent();
 
         Assert.That(completion.CompleteCalled, Is.False);
     }
 
     [Test]
-    public void NextEvent_EventReady_CompletesIt()
+    public async Task NextEvent_EventReady_CompletesIt()
     {
         ActivitySchedulerService service = new();
         FakeCompletion completion = new(Guid.NewGuid());
         service.StartEvent(completion, DateTime.UtcNow.AddSeconds(-1));
 
-        service.NextEvent();
+        await service.NextEvent();
 
         Assert.That(completion.CompleteCalled, Is.True);
     }
 
     [Test]
-    public void NextEvent_MultipleReady_CompletesEarliestFirst()
+    public async Task NextEvent_MultipleReady_CompletesEarliestFirst()
     {
         ActivitySchedulerService service = new();
         Guid id1 = Guid.NewGuid();
@@ -100,7 +100,7 @@ public sealed class ActivitySchedulerServiceTests
         service.StartEvent(first, DateTime.UtcNow.AddSeconds(-2));
         service.StartEvent(second, DateTime.UtcNow.AddSeconds(-1));
 
-        service.NextEvent();
+        await service.NextEvent();
 
         Assert.Multiple(() =>
         {
@@ -110,7 +110,7 @@ public sealed class ActivitySchedulerServiceTests
     }
 
     [Test]
-    public void NextEvent_CompleteThenNext_CompletesSecond()
+    public async Task NextEvent_CompleteThenNext_CompletesSecond()
     {
         ActivitySchedulerService service = new();
         Guid id1 = Guid.NewGuid();
@@ -120,8 +120,8 @@ public sealed class ActivitySchedulerServiceTests
         service.StartEvent(first, DateTime.UtcNow.AddSeconds(-2));
         service.StartEvent(second, DateTime.UtcNow.AddSeconds(-1));
 
-        service.NextEvent();
-        service.NextEvent();
+        await service.NextEvent();
+        await service.NextEvent();
 
         Assert.Multiple(() =>
         {
@@ -131,20 +131,20 @@ public sealed class ActivitySchedulerServiceTests
     }
 
     [Test]
-    public void RemoveEvent_BeforeNextEvent_PreventsCompletion()
+    public async Task RemoveEvent_BeforeNextEvent_PreventsCompletion()
     {
         ActivitySchedulerService service = new();
         FakeCompletion completion = new(Guid.NewGuid());
         service.StartEvent(completion, DateTime.UtcNow.AddSeconds(-1));
 
         service.RemoveEvent(completion.ProfileId);
-        service.NextEvent();
+        await service.NextEvent();
 
         Assert.That(completion.CompleteCalled, Is.False);
     }
 
     [Test]
-    public void NextEvent_RemovedEvent_SkipsToNext()
+    public async Task NextEvent_RemovedEvent_SkipsToNext()
     {
         ActivitySchedulerService service = new();
         Guid id1 = Guid.NewGuid();
@@ -155,7 +155,7 @@ public sealed class ActivitySchedulerServiceTests
         service.StartEvent(second, DateTime.UtcNow.AddSeconds(-1));
 
         service.RemoveEvent(id1);
-        service.NextEvent();
+        await service.NextEvent();
 
         Assert.Multiple(() =>
         {
@@ -219,9 +219,10 @@ public sealed class ActivitySchedulerServiceTests
     {
         public bool CompleteCalled { get; private set; }
 
-        public override void Complete()
+        public override Task Complete()
         {
             CompleteCalled = true;
+            return Task.CompletedTask;
         }
     }
 }
