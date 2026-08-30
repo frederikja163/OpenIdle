@@ -15,6 +15,7 @@ internal sealed class ActivitySchedulerHostedService(ActivitySchedulerService sc
             {
                 try
                 {
+                    scheduler.WaitForNextEvent();
                     await scheduler.NextEvent();
                 }
                 catch (Exception exception)

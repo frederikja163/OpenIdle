@@ -42,10 +42,20 @@ public sealed class ActivitySchedulerService
     {
         lock (_lock)
         {
+            bool isNewEarliest = _priorityQueue.Count == 0;
+            if (!isNewEarliest && _priorityQueue.TryPeek(out _, out DateTime currentEndTime))
+            {
+                isNewEarliest = endTime < currentEndTime;
+            }
+
             _priorityQueue.Enqueue(activityCompletion.ProfileId, endTime);
             _activityMap.Add(activityCompletion.ProfileId, activityCompletion);
-            if (!_priorityQueue.TryPeek(out ProfileId _, out endTime))
+
+            // Wake a background waiter that may be sleeping until a later event: the new event
+            // is earlier, so it should re-check now instead of sleeping to the old end time.
+            if (isNewEarliest)
             {
+                _resetEvent.Reset();
                 _resetEvent.Set();
             }
         }
@@ -61,43 +71,59 @@ public sealed class ActivitySchedulerService
         }
     }
 
-    public async Task NextEvent()
+    /// <summary>
+    /// A single non-blocking poll: completes the earliest event whose end time has passed, if any.
+    /// Returns whether an event was processed. The background loop calls this after
+    /// <see cref="WaitForNextEvent"/> so it does not busy-spin.
+    /// </summary>
+    public async Task<bool> NextEvent()
     {
-        WaitNext();
-
         ActivityCompletion? activityCompletion;
         lock (_lock)
         {
             if (!_priorityQueue.TryPeek(out ProfileId profileId, out DateTime endTime) || DateTime.UtcNow < endTime)
             {
-                return;
+                return false;
             }
 
             profileId = _priorityQueue.Dequeue();
             if (!_activityMap.Remove(profileId, out activityCompletion))
             {
-                return;
+                return false;
             }
         }
+
         await activityCompletion.Complete();
+        return true;
     }
 
-    private void WaitNext()
+    /// <summary>
+    /// Blocks until the earliest scheduled event is due, or a new earlier event is added via
+    /// <see cref="StartEvent"/> (whichever comes first). Returns promptly — at most the idle poll
+    /// interval — so the caller can react to shutdown and newly-arriving events.
+    /// </summary>
+    public void WaitForNextEvent()
     {
-        DateTime endTime;
+        TimeSpan? waitDuration;
         lock (_lock)
         {
-            if (!_priorityQueue.TryPeek(out ProfileId _, out endTime))
+            _resetEvent.Reset();
+            if (!_priorityQueue.TryPeek(out _, out DateTime endTime))
             {
-                _resetEvent.WaitOne(TimeSpan.FromSeconds(1));
-                return;
+                waitDuration = TimeSpan.FromSeconds(1);
+            }
+            else
+            {
+                TimeSpan remaining = endTime - DateTime.UtcNow;
+                waitDuration = remaining <= TimeSpan.Zero ? TimeSpan.Zero : remaining;
             }
         }
 
-        TimeSpan remaining = endTime - DateTime.UtcNow;
-        if (remaining <= TimeSpan.Zero || !_resetEvent.WaitOne(remaining))
+        if (waitDuration is null || waitDuration == TimeSpan.Zero)
         {
             return;
         }
+
+        _resetEvent.WaitOne(waitDuration.Value);
     }
 }
