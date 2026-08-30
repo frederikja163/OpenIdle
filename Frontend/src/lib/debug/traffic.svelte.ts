@@ -1,4 +1,5 @@
 import { getWsClient, type FrameDirection } from '$lib/ws/client';
+import { classifyMessage } from '$lib/ws/protocol';
 
 /*
  * The console's record of what crossed the socket.
@@ -11,9 +12,21 @@ import { getWsClient, type FrameDirection } from '$lib/ws/client';
  * A disconnect is a line in it, not a reason to empty it.
  */
 
+/**
+ * What a frame is, to this side's eyes. `unknown` is anything this side could
+ * not classify — the frame most worth seeing, so it is never filterable.
+ */
+export type FrameKind = 'request' | 'response' | 'event' | 'unknown';
+
 export interface Frame {
 	id: number;
 	direction: FrameDirection;
+	/**
+	 * What the frame was, to this side's eyes. `unknown` is anything here that
+	 * did not parse as a known exchange — the frame most worth seeing, so the
+	 * traffic filter never hides it.
+	 */
+	kind: FrameKind;
 	/** Wall-clock, for reading against the server log. */
 	time: string;
 	/** The same instant as `time`, kept for measuring a round trip. */
@@ -115,11 +128,24 @@ function pair(frame: Frame): void {
 	frame.elapsedMs = frame.at - request.at;
 }
 
+function kindOf(direction: FrameDirection, raw: string): FrameKind {
+	if (direction === 'out') {
+		return 'request';
+	}
+	// classifyMessage rather than describe()'s own parse, so the log agrees with
+	// what WsClient dispatches — including its rule that a known response type
+	// without a requestId is malformed, not an event. An ErrorResponse answers a
+	// request, so it is a response; the row already carries its message.
+	const classified = classifyMessage(raw);
+	return classified.kind === 'error' ? 'response' : classified.kind;
+}
+
 function describe(direction: FrameDirection, raw: string): Frame {
 	const now = new Date();
 	const frame: Frame = {
 		id: nextFrameId++,
 		direction,
+		kind: kindOf(direction, raw),
 		time: now.toLocaleTimeString(),
 		at: now.getTime(),
 		type: null,
