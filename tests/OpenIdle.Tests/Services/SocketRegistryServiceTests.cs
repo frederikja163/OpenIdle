@@ -2,7 +2,6 @@ using System.Net.WebSockets;
 using Backend;
 using Backend.Dtos;
 using Backend.Services;
-using Microsoft.Extensions.Logging.Abstractions;
 using OpenIdle.Tests.TestDoubles;
 
 namespace OpenIdle.Tests.Services;
@@ -239,7 +238,7 @@ public sealed class SocketRegistryServiceTests
 
     private static SocketRegistryService CreateRegistry()
     {
-        return new SocketRegistryService(NullLogger<SocketRegistryService>.Instance);
+        return new SocketRegistryService();
     }
 
     private static TestSocket CreateRegisteredSocket(SocketRegistryService registry)

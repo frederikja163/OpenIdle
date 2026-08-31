@@ -1,4 +1,5 @@
 using System;
+using System.Diagnostics;
 using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
@@ -7,7 +8,6 @@ using Backend.Database;
 using Backend.Database.Entities;
 using Backend.Dtos;
 using Backend.Services;
-using Microsoft.Extensions.Logging.Abstractions;
 using OpenIdle.Tests.Database;
 using OpenIdle.Tests.TestDoubles;
 
@@ -132,7 +132,8 @@ public sealed class ActivityServiceTests : IDisposable
         (ActivityService service, _) = CreateService();
         AddStoneActivity(service);
 
-        BackendException? exception = Assert.ThrowsAsync<BackendException>(() => service.ResolveActivityAsync(profile.ProfileId));
+        BackendException? exception = Assert.ThrowsAsync<BackendException>(
+            () => service.ResolveActivityAsync(profile.ProfileId, DateTime.UtcNow));
 
         Assert.Multiple(() =>
         {
@@ -154,8 +155,8 @@ public sealed class ActivityServiceTests : IDisposable
             requirements: []));
         await service.StartActivityAsync(profile.ProfileId, ActivityId.Stone);
 
-        await service.ResolveActivityAsync(profile.ProfileId);
-        await service.ResolveActivityAsync(profile.ProfileId);
+        await service.ResolveActivityAsync(profile.ProfileId, DateTime.UtcNow);
+        await service.ResolveActivityAsync(profile.ProfileId, DateTime.UtcNow);
 
         await Assert.MultipleAsync(async () =>
         {
@@ -172,7 +173,7 @@ public sealed class ActivityServiceTests : IDisposable
         Profile profile = await SeedProfileAsync();
         DropTableService dropTableService = new();
         dropTableService.AddDropTable(DropTableId.StoneTable, new DropTable(new ItemReward(1, 1, ItemId.Stone)));
-        SocketRegistryService socketRegistry = new(NullLogger<SocketRegistryService>.Instance);
+        SocketRegistryService socketRegistry = new();
         ActivityService service = new(_db.Factory, dropTableService, new ProfileService(_db.Factory, socketRegistry), new ItemService(_db.Factory), new SkillService(_db.Factory), socketRegistry, new ActivitySchedulerService());
         service.AddActivity(ActivityId.Stone, new ActivityDefinition(
             time: 1f,
@@ -180,11 +181,11 @@ public sealed class ActivityServiceTests : IDisposable
             requirements: []));
         await service.StartActivityAsync(profile.ProfileId, ActivityId.Stone);
 
-        Reward[] rewards = await service.ResolveActivityAsync(profile.ProfileId);
+        List<Reward> rewards = await service.ResolveActivityAsync(profile.ProfileId, DateTime.UtcNow);
 
         await Assert.MultipleAsync(async () =>
         {
-            Assert.That(rewards, Has.Length.EqualTo(1));
+            Assert.That(rewards, Has.Count.EqualTo(1));
             Assert.That(rewards.Single(), Is.InstanceOf<ItemReward>());
             Item item = (await GetItemsAsync(profile.ProfileId)).Single();
             Assert.That(item.ItemId, Is.EqualTo(ItemId.Stone));
@@ -203,11 +204,11 @@ public sealed class ActivityServiceTests : IDisposable
             requirements: []));
         await service.StartActivityAsync(profile.ProfileId, ActivityId.Stone);
 
-        Reward[] rewards = await service.ResolveActivityAsync(profile.ProfileId);
+        List<Reward> rewards = await service.ResolveActivityAsync(profile.ProfileId, DateTime.UtcNow);
 
         Assert.Multiple(() =>
         {
-            Assert.That(rewards, Has.Length.EqualTo(1));
+            Assert.That(rewards, Has.Count.EqualTo(1));
             Assert.That(rewards.Single(), Is.InstanceOf<ItemReward>().Or.InstanceOf<XpReward>());
         });
     }
@@ -223,11 +224,11 @@ public sealed class ActivityServiceTests : IDisposable
             requirements: []));
         await service.StartActivityAsync(profile.ProfileId, ActivityId.Stone);
 
-        Reward[] rewards = await service.ResolveActivityAsync(profile.ProfileId);
+        List<Reward> rewards = await service.ResolveActivityAsync(profile.ProfileId, DateTime.UtcNow);
 
         await Assert.MultipleAsync(async () =>
         {
-            Assert.That(rewards, Has.Length.EqualTo(2));
+            Assert.That(rewards, Has.Count.EqualTo(2));
             ItemReward itemReward = rewards.OfType<ItemReward>().Single(r => r.ItemId == ItemId.Stone);
             Assert.That(itemReward.Count, Is.EqualTo(4));
             Item stone = (await GetItemsAsync(profile.ProfileId)).Single(i => i.ItemId == ItemId.Stone);
@@ -246,11 +247,11 @@ public sealed class ActivityServiceTests : IDisposable
             requirements: []));
         await service.StartActivityAsync(profile.ProfileId, ActivityId.Stone);
 
-        Reward[] rewards = await service.ResolveActivityAsync(profile.ProfileId);
+        List<Reward> rewards = await service.ResolveActivityAsync(profile.ProfileId, DateTime.UtcNow);
 
         await Assert.MultipleAsync(async () =>
         {
-            Assert.That(rewards, Is.Empty);
+            Assert.That(rewards, Has.Count.EqualTo(1));
             Assert.That(await GetItemsAsync(profile.ProfileId), Is.Empty);
         });
     }
@@ -265,10 +266,10 @@ public sealed class ActivityServiceTests : IDisposable
             service.AddActivity(ActivityId.Stone, new ActivityDefinition(time: 1f, rewards: [], requirements: [])));
     }
 
-    private static void AddStoneActivity(ActivityService service)
+    private static void AddStoneActivity(ActivityService service, float time = 1f)
     {
         service.AddActivity(ActivityId.Stone, new ActivityDefinition(
-            time: 1f,
+            time: time,
             rewards: [new ItemReward(4, null, ItemId.Stone), new XpReward(10, null, SkillId.Mining)],
             requirements: [new LevelRequirement(SkillId.Mining, 1)]));
     }
@@ -287,9 +288,9 @@ public sealed class ActivityServiceTests : IDisposable
     {
         Profile profile = await SeedProfileAsync();
         (ActivityService service, _, ActivitySchedulerService scheduler, _) = CreateServiceWithInternals();
-        AddStoneActivity(service);
+        AddStoneActivity(service, time: 10f);
         await SeedSkillAsync(profile, SkillId.Mining, xp: 0, level: 1);
-        await service.StartActivityAsync(profile.ProfileId, ActivityId.Stone, DateTime.UtcNow.AddSeconds(-10));
+        await service.StartActivityAsync(profile.ProfileId, ActivityId.Stone, DateTime.UtcNow.AddSeconds(-100));
 
         await service.OnProfileOffline(this, new ProfileOfflineEventArgs(profile.ProfileId));
         await scheduler.NextEvent();
@@ -300,7 +301,7 @@ public sealed class ActivityServiceTests : IDisposable
 
         Item item = (await GetItemsAsync(profile.ProfileId)).Single();
         Assert.That(item.ItemId, Is.EqualTo(ItemId.Stone));
-        Assert.That(item.Count, Is.EqualTo(4));
+        Assert.That(item.Count, Is.EqualTo(40));
     }
 
     [Test]
@@ -326,17 +327,17 @@ public sealed class ActivityServiceTests : IDisposable
         Profile profile = await SeedProfileAsync();
         (ActivityService service, SocketRegistryService socketRegistry, _, _) =
             CreateServiceWithInternals();
-        AddStoneActivity(service);
+        AddStoneActivity(service, time: 10f);
         await SeedSkillAsync(profile, SkillId.Mining, xp: 0, level: 1);
         FakeWebSocket webSocket = await RegisterSocket(socketRegistry, profile.ProfileId);
-        await service.StartActivityAsync(profile.ProfileId, ActivityId.Stone, DateTime.UtcNow.AddSeconds(-10));
+        await service.StartActivityAsync(profile.ProfileId, ActivityId.Stone, DateTime.UtcNow.AddSeconds(-100));
 
         await service.OnProfileOffline(this, new ProfileOfflineEventArgs(profile.ProfileId));
         await service.OnProfileOnline(this, new ProfileOnlineEventArgs(profile.ProfileId));
 
         Assert.That(webSocket.FirstSentText, Does.Contain("ActivityEndedEvent"));
         Item item = (await GetItemsAsync(profile.ProfileId)).Single();
-        Assert.That(item.Count, Is.EqualTo(4));
+        Assert.That(item.Count, Is.EqualTo(40));
     }
 
     private (ActivityService, SocketRegistryService, ActivitySchedulerService, DropTableService) CreateServiceWithInternals()
@@ -348,7 +349,7 @@ public sealed class ActivityServiceTests : IDisposable
         dropTableService.AddDropTable(DropTableId.BrokenRockTable, new DropTable(
             new ItemReward(0, 10, ItemId.None),
             new ItemReward(1, 1, ItemId.BrokenRock)));
-        SocketRegistryService socketRegistry = new(NullLogger<SocketRegistryService>.Instance);
+        SocketRegistryService socketRegistry = new();
         ActivitySchedulerService scheduler = new();
         ActivityService service = new(_db.Factory, dropTableService, new ProfileService(_db.Factory, socketRegistry),
             new ItemService(_db.Factory), new SkillService(_db.Factory), socketRegistry, scheduler);
@@ -364,7 +365,7 @@ public sealed class ActivityServiceTests : IDisposable
         dropTableService.AddDropTable(DropTableId.BrokenRockTable, new DropTable(
             new ItemReward(0, 10, ItemId.None),
             new ItemReward(1, 1, ItemId.BrokenRock)));
-        SocketRegistryService socketRegistry = new(NullLogger<SocketRegistryService>.Instance);
+        SocketRegistryService socketRegistry = new();
         ActivityService service = new(_db.Factory, dropTableService, new ProfileService(_db.Factory, socketRegistry), new ItemService(_db.Factory), new SkillService(_db.Factory), socketRegistry, new ActivitySchedulerService());
         return (service, dropTableService);
     }
