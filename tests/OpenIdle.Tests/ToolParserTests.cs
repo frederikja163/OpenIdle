@@ -85,6 +85,20 @@ public sealed class ToolParserTests
         Assert.Throws<ParserException>(() => Parse(xml));
     }
 
+    [TestCase("NaN")]
+    [TestCase("Infinity")]
+    [TestCase("-Infinity")]
+    public void Parse_NonFiniteStatValue_Throws(string value)
+    {
+        Assert.Throws<ParserException>(() => Parse($$"""
+            <Types>
+              <Item name="Rock">
+                <Stat name="speed" value="{{value}}"/>
+              </Item>
+            </Types>
+            """));
+    }
+
     [Test]
     public void Parse_ItemRegistersIntoItemIdEnum()
     {

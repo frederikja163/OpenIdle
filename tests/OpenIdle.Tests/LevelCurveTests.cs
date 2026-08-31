@@ -17,6 +17,12 @@ public sealed class LevelCurveTests
         Assert.That(LevelCurve.XpForLevel(level), Is.EqualTo(expectedXp));
     }
 
+    [Test]
+    public void XpForLevel_WhenRequirementExceedsIntMax_ReturnsIntMax()
+    {
+        Assert.That(LevelCurve.XpForLevel(int.MaxValue), Is.EqualTo(int.MaxValue));
+    }
+
     [TestCase(0, 1)]
     [TestCase(894, 1)]
     [TestCase(895, 2)]

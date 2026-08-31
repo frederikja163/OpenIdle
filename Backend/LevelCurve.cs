@@ -88,6 +88,10 @@ public static class LevelCurve
         for (int L = MaxLevel + 1; L <= level; L++)
         {
             xp += (long)Math.Round(Base * Math.Pow(R, L - 1));
+            if (xp >= int.MaxValue)
+            {
+                return int.MaxValue;
+            }
         }
 
         return (int)Math.Min(xp, int.MaxValue);
