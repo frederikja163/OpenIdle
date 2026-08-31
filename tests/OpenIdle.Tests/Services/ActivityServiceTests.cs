@@ -273,12 +273,12 @@ public sealed class ActivityServiceTests : IDisposable
             requirements: [new LevelRequirement(SkillId.Mining, 1)]));
     }
 
-    private static FakeWebSocket RegisterSocket(SocketRegistryService socketRegistry, Guid profileId)
+    private static async Task<FakeWebSocket> RegisterSocket(SocketRegistryService socketRegistry, Guid profileId)
     {
         FakeWebSocket webSocket = new();
         Socket socket = new Socket(webSocket);
         socketRegistry.RegisterSocket(socket);
-        socketRegistry.SetProfile(socket, profileId);
+        await socketRegistry.SetProfile(socket, profileId);
         return webSocket;
     }
 

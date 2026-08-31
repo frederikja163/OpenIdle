@@ -21,6 +21,8 @@ public sealed class SocketRegistryService
 
     internal event AsyncEventHandler<MessageReceivedEventArgs>? MessageReceived;
     internal event AsyncEventHandler<SocketCloseEventArgs>? Close;
+    internal event AsyncEventHandler<ProfileOnlineEventArgs>? ProfileOnline;
+    internal event AsyncEventHandler<ProfileOfflineEventArgs>? ProfileOffline;
 
     public SocketRegistryService(ILogger<SocketRegistryService> logger)
     {
@@ -33,7 +35,7 @@ public sealed class SocketRegistryService
         socket.Close += SocketOnClose;
     }
 
-    internal void SetProfile(Socket socket, ProfileId profileId)
+    internal async Task SetProfile(Socket socket, ProfileId profileId)
     {
         if (_profileBySocket.TryRemove(socket, out ProfileId previousProfileId) &&
             _socketsByProfile.TryGetValue(previousProfileId, out ConcurrentDictionary<Socket, byte>? previousSockets))
@@ -43,7 +45,16 @@ public sealed class SocketRegistryService
 
         _profileBySocket[socket] = profileId;
         ConcurrentDictionary<Socket, byte> sockets = _socketsByProfile.GetOrAdd(profileId, _ => new());
+        bool becameOnline = sockets.IsEmpty;
         sockets[socket] = 0;
+        if (becameOnline)
+        {
+            _logger.LogInformation("Profile {ProfileId} came online.", profileId);
+            if (ProfileOnline is { } onlineHandlers)
+            {
+                await onlineHandlers.InvokeAsync(this, new ProfileOnlineEventArgs(profileId));
+            }
+        }
     }
 
     internal void SetUser(Socket socket, UserId userId)
@@ -77,7 +88,7 @@ public sealed class SocketRegistryService
             catch (Exception exception) when (IsTransportException(exception))
             {
                 _logger.LogError(exception, "Failed to send event {EventType} to socket.", eventBase.GetType().Name);
-                RemoveSocket(socket);
+                await RemoveSocket(socket);
             }
         }
     }
@@ -100,7 +111,7 @@ public sealed class SocketRegistryService
             catch (Exception exception) when (IsTransportException(exception))
             {
                 _logger.LogError(exception, "Failed to send event {EventType} to socket.", eventBase.GetType().Name);
-                RemoveSocket(socket);
+                await RemoveSocket(socket);
             }
         }
     }
@@ -124,18 +135,26 @@ public sealed class SocketRegistryService
         finally
         {
             Socket socket = ArgumentException.ThrowIfNotOfType<Socket>(sender);
-            RemoveSocket(socket);
+            await RemoveSocket(socket);
             socket.MessageReceived -= SocketOnMessageReceived;
             socket.Close -= SocketOnClose;
         }
     }
 
-    private void RemoveSocket(Socket socket)
+    private async Task RemoveSocket(Socket socket)
     {
         if (_profileBySocket.TryRemove(socket, out ProfileId profileId) &&
             _socketsByProfile.TryGetValue(profileId, out ConcurrentDictionary<Socket, byte>? profileSockets))
         {
             profileSockets.TryRemove(socket, out _);
+            if (profileSockets.IsEmpty)
+            {
+                _logger.LogInformation("Profile {ProfileId} went offline.", profileId);
+                if (ProfileOffline is { } offlineHandlers)
+                {
+                    await offlineHandlers.InvokeAsync(this, new ProfileOfflineEventArgs(profileId));
+                }
+            }
         }
 
         if (_userBySocket.TryRemove(socket, out UserId userId) &&
