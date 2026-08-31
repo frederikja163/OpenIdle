@@ -282,6 +282,79 @@ public sealed class ActivityServiceTests : IDisposable
         return webSocket;
     }
 
+    [Test]
+    public async Task ProfileOffline_RemovesScheduledEvent_AndOnlineResolves()
+    {
+        Profile profile = await SeedProfileAsync();
+        (ActivityService service, _, ActivitySchedulerService scheduler, _) = CreateServiceWithInternals();
+        AddStoneActivity(service);
+        await SeedSkillAsync(profile, SkillId.Mining, xp: 0, level: 1);
+        await service.StartActivityAsync(profile.ProfileId, ActivityId.Stone, DateTime.UtcNow.AddSeconds(-10));
+
+        await service.OnProfileOffline(this, new ProfileOfflineEventArgs(profile.ProfileId));
+        await scheduler.NextEvent();
+
+        Assert.That(await GetItemsAsync(profile.ProfileId), Is.Empty);
+
+        await service.OnProfileOnline(this, new ProfileOnlineEventArgs(profile.ProfileId));
+
+        Item item = (await GetItemsAsync(profile.ProfileId)).Single();
+        Assert.That(item.ItemId, Is.EqualTo(ItemId.Stone));
+        Assert.That(item.Count, Is.EqualTo(4));
+    }
+
+    [Test]
+    public async Task ProfileOnline_ReschedulesFutureActivity_DoesNotCompleteEarly()
+    {
+        Profile profile = await SeedProfileAsync();
+        (ActivityService service, _, ActivitySchedulerService scheduler, _) = CreateServiceWithInternals();
+        AddStoneActivity(service);
+        await SeedSkillAsync(profile, SkillId.Mining, xp: 0, level: 1);
+        await service.StartActivityAsync(profile.ProfileId, ActivityId.Stone, DateTime.UtcNow.AddSeconds(60));
+
+        await service.OnProfileOffline(this, new ProfileOfflineEventArgs(profile.ProfileId));
+        await service.OnProfileOnline(this, new ProfileOnlineEventArgs(profile.ProfileId));
+
+        await scheduler.NextEvent();
+
+        Assert.That(await GetItemsAsync(profile.ProfileId), Is.Empty);
+    }
+
+    [Test]
+    public async Task ProfileOnline_ResolvesExpiredActivity_CompletesAndSendsEvent()
+    {
+        Profile profile = await SeedProfileAsync();
+        (ActivityService service, SocketRegistryService socketRegistry, _, _) =
+            CreateServiceWithInternals();
+        AddStoneActivity(service);
+        await SeedSkillAsync(profile, SkillId.Mining, xp: 0, level: 1);
+        FakeWebSocket webSocket = await RegisterSocket(socketRegistry, profile.ProfileId);
+        await service.StartActivityAsync(profile.ProfileId, ActivityId.Stone, DateTime.UtcNow.AddSeconds(-10));
+
+        await service.OnProfileOffline(this, new ProfileOfflineEventArgs(profile.ProfileId));
+        await service.OnProfileOnline(this, new ProfileOnlineEventArgs(profile.ProfileId));
+
+        Assert.That(webSocket.FirstSentText, Does.Contain("ActivityEndedEvent"));
+        Item item = (await GetItemsAsync(profile.ProfileId)).Single();
+        Assert.That(item.Count, Is.EqualTo(4));
+    }
+
+    private (ActivityService, SocketRegistryService, ActivitySchedulerService, DropTableService) CreateServiceWithInternals()
+    {
+        DropTableService dropTableService = new();
+        dropTableService.AddDropTable(DropTableId.StoneTable, new DropTable(
+            new ItemReward(2, 5, ItemId.Stone),
+            new TableReward(1, 1, DropTableId.BrokenRockTable)));
+        dropTableService.AddDropTable(DropTableId.BrokenRockTable, new DropTable(
+            new ItemReward(0, 10, ItemId.None),
+            new ItemReward(1, 1, ItemId.BrokenRock)));
+        SocketRegistryService socketRegistry = new(NullLogger<SocketRegistryService>.Instance);
+        ActivitySchedulerService scheduler = new();
+        ActivityService service = new(_db.Factory, dropTableService, new ProfileService(_db.Factory, socketRegistry),
+            new ItemService(_db.Factory), new SkillService(_db.Factory), socketRegistry, scheduler);
+        return (service, socketRegistry, scheduler, dropTableService);
+    }
+
     private (ActivityService, DropTableService) CreateService()
     {
         DropTableService dropTableService = new();
