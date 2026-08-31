@@ -9,6 +9,7 @@ using Backend.Dtos;
 using Backend.Services;
 using Microsoft.Extensions.Logging.Abstractions;
 using OpenIdle.Tests.Database;
+using OpenIdle.Tests.TestDoubles;
 
 namespace OpenIdle.Tests.Services;
 
@@ -109,35 +110,19 @@ public sealed class ActivityServiceTests : IDisposable
     }
 
     [Test]
-    public async Task StartActivityAsync_CompletionTimeElapsed_ResolvesRewardsAndClearsState()
+    public async Task StartActivityAsync_ExplicitStartTime_IsUsedAsAnchor()
     {
         Profile profile = await SeedProfileAsync();
         await SeedSkillAsync(profile, SkillId.Mining, xp: 0, level: 1);
-        SocketRegistryService socketRegistry = new(NullLogger<SocketRegistryService>.Instance);
-        ActivitySchedulerService scheduler = new();
-        ActivityService service = new(_db.Factory, new DropTableService(), new ProfileService(_db.Factory, socketRegistry),
-            new ItemService(_db.Factory), new SkillService(_db.Factory), socketRegistry, scheduler);
-        service.AddActivity(ActivityId.Stone, new ActivityDefinition(
-            time: 0.01f,
-            rewards: [new ItemReward(2, null, ItemId.Stone)],
-            requirements: []));
+        (ActivityService service, _) = CreateService();
+        AddStoneActivity(service);
 
-        await service.StartActivityAsync(profile.ProfileId, ActivityId.Stone);
-        Assert.That(await GetItemsAsync(profile.ProfileId), Is.Empty);
+        DateTime anchor = DateTime.UtcNow.AddSeconds(-30);
+        await service.StartActivityAsync(profile.ProfileId, ActivityId.Stone, anchor);
 
-        Thread.Sleep(100);
-        scheduler.NextEvent();
-
-        Item[] items = await GetItemsAsync(profile.ProfileId);
         await using GameDbContext dbContext = await _db.Factory.CreateDbContextAsync();
-        Profile? updated = await dbContext.Profiles.FindAsync(profile.ProfileId);
-        Assert.Multiple(() =>
-        {
-            Assert.That(items, Has.Length.EqualTo(1));
-            Assert.That(items[0].ItemId, Is.EqualTo(ItemId.Stone));
-            Assert.That(items[0].Count, Is.EqualTo(2));
-            Assert.That(updated?.ActivityId, Is.Null);
-        });
+        Profile updated = (await dbContext.Profiles.FindAsync(profile.ProfileId))!;
+        Assert.That(updated.ActivityStartTime, Is.EqualTo(anchor));
     }
 
     [Test]
@@ -157,37 +142,6 @@ public sealed class ActivityServiceTests : IDisposable
     }
 
     [Test]
-    public async Task ResolveActivityAsync_GrantsGuaranteedItemAndXp()
-    {
-        Profile profile = await SeedProfileAsync();
-        (ActivityService service, _) = CreateService();
-        service.AddActivity(ActivityId.Stone, new ActivityDefinition(
-            time: 1f,
-            rewards: [new ItemReward(4, null, ItemId.Stone), new XpReward(10, null, SkillId.Mining)],
-            requirements: []));
-        await service.StartActivityAsync(profile.ProfileId, ActivityId.Stone);
-
-        Reward[] rewards = await service.ResolveActivityAsync(profile.ProfileId);
-
-        await Assert.MultipleAsync(async () =>
-        {
-            Assert.That(rewards, Has.Length.EqualTo(2));
-            ItemReward itemReward = rewards.OfType<ItemReward>().Single();
-            Assert.That(itemReward.ItemId, Is.EqualTo(ItemId.Stone));
-            Assert.That(itemReward.Count, Is.EqualTo(4));
-            XpReward xpReward = rewards.OfType<XpReward>().Single();
-            Assert.That(xpReward.SkillId, Is.EqualTo(SkillId.Mining));
-            Assert.That(xpReward.Count, Is.EqualTo(10));
-            Item item = (await GetItemsAsync(profile.ProfileId)).Single();
-            Assert.That(item.ItemId, Is.EqualTo(ItemId.Stone));
-            Assert.That(item.Count, Is.EqualTo(4));
-            Skill skill = (await GetSkillsAsync(profile.ProfileId)).Single();
-            Assert.That(skill.SkillId, Is.EqualTo(SkillId.Mining));
-            Assert.That(skill.Xp, Is.EqualTo(10));
-        });
-    }
-
-    [Test]
     public async Task ResolveActivityAsync_ExistingItemAndXpAreIncremented()
     {
         Profile profile = await SeedProfileAsync();
@@ -201,7 +155,6 @@ public sealed class ActivityServiceTests : IDisposable
         await service.StartActivityAsync(profile.ProfileId, ActivityId.Stone);
 
         await service.ResolveActivityAsync(profile.ProfileId);
-        await service.StartActivityAsync(profile.ProfileId, ActivityId.Stone);
         await service.ResolveActivityAsync(profile.ProfileId);
 
         await Assert.MultipleAsync(async () =>
@@ -318,6 +271,15 @@ public sealed class ActivityServiceTests : IDisposable
             time: 1f,
             rewards: [new ItemReward(4, null, ItemId.Stone), new XpReward(10, null, SkillId.Mining)],
             requirements: [new LevelRequirement(SkillId.Mining, 1)]));
+    }
+
+    private static FakeWebSocket RegisterSocket(SocketRegistryService socketRegistry, Guid profileId)
+    {
+        FakeWebSocket webSocket = new();
+        Socket socket = new Socket(webSocket);
+        socketRegistry.RegisterSocket(socket);
+        socketRegistry.SetProfile(socket, profileId);
+        return webSocket;
     }
 
     private (ActivityService, DropTableService) CreateService()

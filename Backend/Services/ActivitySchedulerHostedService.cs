@@ -9,13 +9,14 @@ internal sealed class ActivitySchedulerHostedService(ActivitySchedulerService sc
 {
     protected override Task ExecuteAsync(CancellationToken stoppingToken)
     {
-        return Task.Run(() =>
+        return Task.Run(async () =>
         {
             while (!stoppingToken.IsCancellationRequested)
             {
                 try
                 {
-                    scheduler.NextEvent();
+                    scheduler.WaitForNextEvent();
+                    await scheduler.NextEvent();
                 }
                 catch (Exception exception)
                 {

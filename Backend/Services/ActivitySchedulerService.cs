@@ -5,10 +5,11 @@ using System.Threading.Tasks;
 
 namespace Backend.Services;
 
-public abstract class ActivityCompletion(Guid profileId) : IEquatable<ActivityCompletion>
+public abstract class ActivityCompletion(Guid profileId, TimeSpan duration) : IEquatable<ActivityCompletion>
 {
     public ProfileId ProfileId { get; } = profileId;
-    public abstract void Complete();
+    public TimeSpan Duration { get; } = duration;
+    public abstract Task Complete();
 
     public bool Equals(ActivityCompletion? other)
     {
@@ -38,14 +39,23 @@ public sealed class ActivitySchedulerService
     private readonly ManualResetEvent _resetEvent = new(true);
     private readonly PriorityQueue<ProfileId, DateTime> _priorityQueue = new();
 
-    public void StartEvent(ActivityCompletion activityCompletion, DateTime endTime)
+    public void StartEvent(ActivityCompletion activityCompletion, DateTime startTime)
     {
         lock (_lock)
         {
-            _priorityQueue.Enqueue(activityCompletion.ProfileId, endTime);
-            _activityMap.Add(activityCompletion.ProfileId, activityCompletion);
-            if (!_priorityQueue.TryPeek(out ProfileId _, out endTime))
+            DateTime endTime = startTime + activityCompletion.Duration;
+            bool isNewEarliest = _priorityQueue.Count == 0;
+            if (!isNewEarliest && _priorityQueue.TryPeek(out _, out DateTime currentEndTime))
             {
+                isNewEarliest = endTime < currentEndTime;
+            }
+
+            _priorityQueue.Enqueue(activityCompletion.ProfileId, endTime);
+            _activityMap[activityCompletion.ProfileId] = activityCompletion;
+
+            if (isNewEarliest)
+            {
+                _resetEvent.Reset();
                 _resetEvent.Set();
             }
         }
@@ -61,10 +71,8 @@ public sealed class ActivitySchedulerService
         }
     }
 
-    public void NextEvent()
+    public async Task NextEvent()
     {
-        WaitNext();
-
         ActivityCompletion? activityCompletion;
         lock (_lock)
         {
@@ -74,30 +82,39 @@ public sealed class ActivitySchedulerService
             }
 
             profileId = _priorityQueue.Dequeue();
-            if (!_activityMap.Remove(profileId, out activityCompletion))
+            
+            if (!_activityMap.TryGetValue(profileId, out activityCompletion))
             {
                 return;
             }
+            StartEvent(activityCompletion, endTime);
         }
-        activityCompletion.Complete();
+
+        await activityCompletion.Complete();
     }
 
-    private void WaitNext()
+    public void WaitForNextEvent()
     {
-        DateTime endTime;
+        TimeSpan? waitDuration;
         lock (_lock)
         {
-            if (!_priorityQueue.TryPeek(out ProfileId _, out endTime))
+            _resetEvent.Reset();
+            if (!_priorityQueue.TryPeek(out _, out DateTime endTime))
             {
-                _resetEvent.WaitOne(TimeSpan.FromSeconds(1));
-                return;
+                waitDuration = TimeSpan.FromSeconds(1);
+            }
+            else
+            {
+                TimeSpan remaining = endTime - DateTime.UtcNow;
+                waitDuration = remaining <= TimeSpan.Zero ? TimeSpan.Zero : remaining;
             }
         }
 
-        TimeSpan remaining = endTime - DateTime.UtcNow;
-        if (remaining <= TimeSpan.Zero || !_resetEvent.WaitOne(remaining))
+        if (waitDuration is null || waitDuration == TimeSpan.Zero)
         {
             return;
         }
+
+        _resetEvent.WaitOne(waitDuration.Value);
     }
 }

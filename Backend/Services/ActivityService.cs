@@ -42,7 +42,7 @@ public sealed class ActivityService(IDbContextFactory<GameDbContext> dbContextFa
         _activities.Add(activityId, definition);
     }
 
-    internal async Task<Profile> StartActivityAsync(ProfileId profileId, ActivityId activityId)
+    internal async Task<Profile> StartActivityAsync(ProfileId profileId, ActivityId activityId, DateTime? startTime = null)
     {
         if (!_activities.TryGetValue(activityId, out ActivityDefinition? definition))
         {
@@ -65,22 +65,23 @@ public sealed class ActivityService(IDbContextFactory<GameDbContext> dbContextFa
             }
         }
 
+        DateTime startedAt = startTime ?? DateTime.UtcNow;
+        TimeSpan duration = TimeSpan.FromSeconds(definition.Time);
+
         await using GameDbContext dbContext = await dbContextFactory.CreateDbContextAsync();
         dbContext.Profiles.Attach(profile);
         profile.ActivityId = activityId;
-        profile.ActivityStartTime = DateTime.UtcNow;
+        profile.ActivityStartTime = startedAt;
         await dbContext.SaveChangesAsync();
 
         activitySchedulerService.StartEvent(
-            new ProfileActivityCompletion(this, socketRegistry, profileId, activityId),
-            DateTime.UtcNow.AddSeconds(definition.Time));
+            new ProfileActivityCompletion(this, socketRegistry, itemService, skillService, profileId, activityId, duration), startedAt);
 
         return profile;
     }
 
     internal async Task<Reward[]> ResolveActivityAsync(ProfileId profileId)
     {
-        activitySchedulerService.RemoveEvent(profileId);
         Profile profile = await profileService.GetProfileAsync(profileId);
 
         if (profile.ActivityId is not ActivityId activityId)
@@ -100,6 +101,7 @@ public sealed class ActivityService(IDbContextFactory<GameDbContext> dbContextFa
         }
 
         List<Reward> resolvedRewards = [];
+        List<ItemReward> itemRewards = [];
         await using GameDbContext dbContext = await dbContextFactory.CreateDbContextAsync();
         foreach (Reward reward in grantedRewards)
         {
@@ -112,7 +114,7 @@ public sealed class ActivityService(IDbContextFactory<GameDbContext> dbContextFa
             switch (resolved)
             {
                 case ItemReward itemReward when itemReward.Count > 0:
-                    await itemService.AddItemsAsync(dbContext, profileId, [itemReward]);
+                    itemRewards.Add(itemReward);
                     resolvedRewards.Add(itemReward);
                     break;
                 case ItemReward:
@@ -128,9 +130,10 @@ public sealed class ActivityService(IDbContextFactory<GameDbContext> dbContextFa
             }
         }
 
-        dbContext.Profiles.Attach(profile);
-        profile.ActivityId = null;
-        profile.ActivityStartTime = null;
+        if (itemRewards.Count > 0)
+        {
+            await itemService.AddItemsAsync(dbContext, profileId, itemRewards);
+        }
 
         await dbContext.SaveChangesAsync();
         return [.. resolvedRewards];
@@ -138,13 +141,21 @@ public sealed class ActivityService(IDbContextFactory<GameDbContext> dbContextFa
 }
 
 internal sealed class ProfileActivityCompletion(
-    ActivityService activityService, SocketRegistryService socketRegistry, ProfileId profileId, ActivityId activityId)
-    : ActivityCompletion(profileId)
+    ActivityService activityService, SocketRegistryService socketRegistry, ItemService itemService,
+    SkillService skillService, ProfileId profileId, ActivityId activityId, TimeSpan duration)
+    : ActivityCompletion(profileId, duration)
 {
-    public override void Complete()
+    public override async Task Complete()
     {
-        activityService.ResolveActivityAsync(ProfileId).GetAwaiter().GetResult();
-        socketRegistry.SendToProfileAsync(ProfileId, new ActivityEndedEvent() { ActivityId = activityId })
-            .GetAwaiter().GetResult();
+        await activityService.ResolveActivityAsync(ProfileId);
+
+        Item[] items = await itemService.GetItemsAsync(ProfileId);
+        Skill[] skills = await skillService.GetSkillsAsync(ProfileId);
+        await socketRegistry.SendToProfileAsync(ProfileId, new ActivityEndedEvent()
+        {
+            ActivityId = activityId,
+            Items = items.Select(i => i.ToDto()).ToArray(),
+            Skills = skills.Select(s => s.ToDto()).ToArray(),
+        });
     }
 }

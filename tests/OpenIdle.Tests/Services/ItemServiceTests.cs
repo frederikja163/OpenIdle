@@ -123,6 +123,29 @@ public sealed class ItemServiceTests : IDisposable
     }
 
     [Test]
+    public async Task AddItemsAsync_DuplicateItemInBatch_AggregatesCount()
+    {
+        Profile profile = await SeedProfileAsync();
+
+        ItemService service = new(_db.Factory);
+        Item[] added = await service.AddItemsAsync(profile.ProfileId,
+            new[]
+            {
+                new ItemReward(4, null, ItemId.Stone),
+                new ItemReward(3, null, ItemId.Stone),
+            });
+
+        Assert.Multiple(() =>
+        {
+            Assert.That(added, Has.Length.EqualTo(1));
+            Assert.That(added.Single().ItemId, Is.EqualTo(ItemId.Stone));
+        });
+        await using GameDbContext dbContext = await _db.Factory.CreateDbContextAsync();
+        Item stored = dbContext.Items.Single(i => i.ProfileId == profile.ProfileId && i.ItemId == ItemId.Stone);
+        Assert.That(stored.Count, Is.EqualTo(7));
+    }
+
+    [Test]
     public async Task GetItemsAsync_OrdersByItemId()
     {
         Profile profile = await SeedProfileAsync();

@@ -24,6 +24,12 @@ This is the entry point for all project documentation. It is written for **both*
 |---|---|---|
 | [`deployment.md`](./deployment.md) | The four hosted environments, the two GHCR images and their tags, the GitHub Actions pipeline and its secrets, how the frontend picks a backend (`PUBLIC_WS_URL` and the `?ws=` override), and the WebSocket origin allowlist | any change to Dockerfiles, `.github/workflows/`, `deploy/`, or how a client reaches a backend |
 
+### Proposals — planned / not-yet-implemented features
+
+| Document | What it describes |
+|---|---|
+| [`proposals/tools-and-item-slots.md`](./proposals/tools-and-item-slots.md) | Planned `types.xml` additions for tools, item slots, and per-item stats (status: proposal, not implemented) |
+
 ### Libraries — dependency decisions
 
 Every third-party dependency used or considered is documented in the library index at [`libraries/README.md`](./libraries/README.md). It is the authoritative list of what we depend on and why, and it supersedes this summary:
@@ -49,6 +55,7 @@ For AI agents: find your task, read the listed documents (fully), then the sourc
 | Add/evaluate/replace a third-party dependency | [`libraries/README.md`](./libraries/README.md), [`libraries/TEMPLATE.md`](./libraries/TEMPLATE.md) (via the `document-library` skill) |
 | Frontend work (components, styling, tests) | [`libraries/README.md`](./libraries/README.md) sections for the affected area, then the specific decision doc |
 | Security / dependency audit | [`libraries/README.md`](./libraries/README.md) (Open items + Standing notes) |
+| Planned feature (not yet implemented) — e.g. tools, item slots | [`proposals/tools-and-item-slots.md`](./proposals/tools-and-item-slots.md) |
 | Change CI, an image, or how a deployment is configured | [`deployment.md`](./deployment.md) |
 | Change which backend a frontend connects to | [`deployment.md`](./deployment.md) |
 
@@ -63,6 +70,7 @@ For AI agents: find your task, read the listed documents (fully), then the sourc
 | [`deploy/`](../deploy/) | Compose files and the env template the hosts run. See [`deployment.md`](./deployment.md). |
 | [`.github/workflows/`](../.github/workflows/) | CI (per-PR build + test) and CD (GHCR publish + redeploy webhooks). |
 | [`doc/libraries/`](./libraries/) | Library decision documents + index + template. |
+| [`doc/proposals/`](./proposals/) | Proposals for planned, not-yet-implemented features. |
 
 ## Maintaining this index
 

@@ -38,6 +38,8 @@ public sealed class CsEmitter : IDtoEmitter
         EmitDropTableData(model);
 
         EmitActivityData(model);
+
+        EmitToolData(model);
     }
 
     private void EmitEnums(DtoModel model)
@@ -85,6 +87,41 @@ public sealed class CsEmitter : IDtoEmitter
                 }
             }
         }
+    }
+
+    private void EmitToolData(DtoModel model)
+    {
+        _textWriter.WriteLine();
+        using (Scope _ = _textWriter.Scope("public static class ToolData"))
+        {
+            using (Scope __ = _textWriter.Scope("public static void AddAll(ToolService service)"))
+            {
+                foreach (Item item in model.Items.Values)
+                {
+                    string tags = string.Join(", ", item.Tags.Select(t => $"ItemTagId.{new Casing(t.Name).UpperCamelCase}"));
+                    string stats = string.Join(", ", item.Stats.Select(ItemStatExpression));
+                    _textWriter.WriteLine(
+                        $"service.AddItem(ItemId.{item.Name.UpperCamelCase}, new ItemDefinition(tags: [{tags}], stats: [{stats}]));");
+                }
+
+                foreach (Skill skill in model.Skills.Values.Where(s => s.Slots.Count > 0))
+                {
+                    string slots = string.Join(", ", skill.Slots.Select(SlotExpression));
+                    _textWriter.WriteLine(
+                        $"service.AddSkillSlots(SkillId.{skill.Name.UpperCamelCase}, [{slots}]);");
+                }
+            }
+        }
+    }
+
+    private static string ItemStatExpression(ItemStat stat)
+    {
+        return $"new ItemStat(ToolStat.{ItemStats.ByKey[stat.Name]}, {stat.Value.ToString(CultureInfo.InvariantCulture)}f)";
+    }
+
+    private static string SlotExpression(Slot slot)
+    {
+        return $"new SlotBinding(ItemSlotId.{new Casing(slot.Name).UpperCamelCase}, ItemTagId.{new Casing(slot.Tag.Name).UpperCamelCase}, {slot.Required.ToString().ToLowerInvariant()})";
     }
 
     private void EmitDropTable(DropTable dropTable)

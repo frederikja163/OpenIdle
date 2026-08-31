@@ -28,6 +28,7 @@ internal static class AppHost
         builder.Services.AddSingleton<SkillService>();
         builder.Services.AddSingleton<ItemService>();
         builder.Services.AddSingleton<ActivityService>();
+        builder.Services.AddSingleton<ToolService>();
         builder.Services.AddSingleton<ActivitySchedulerService>();
         builder.Services.AddHostedService<ActivitySchedulerHostedService>();
 
@@ -37,6 +38,7 @@ internal static class AppHost
         app.MapSocketControllers();
         DropTableData.AddAll(app.Services.GetRequiredService<DropTableService>());
         ActivityData.AddAll(app.Services.GetRequiredService<ActivityService>());
+        ToolData.AddAll(app.Services.GetRequiredService<ToolService>());
 
         return app;
     }
