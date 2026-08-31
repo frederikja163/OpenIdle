@@ -9,7 +9,7 @@ public abstract class ActivityCompletion(Guid profileId, TimeSpan duration) : IE
 {
     public ProfileId ProfileId { get; } = profileId;
     public TimeSpan Duration { get; } = duration;
-    public abstract Task Complete();
+    public abstract Task Complete(DateTime endTime);
 
     public bool Equals(ActivityCompletion? other)
     {
@@ -74,9 +74,10 @@ public sealed class ActivitySchedulerService
     public async Task NextEvent()
     {
         ActivityCompletion? activityCompletion;
+        DateTime endTime;
         lock (_lock)
         {
-            if (!_priorityQueue.TryPeek(out ProfileId profileId, out DateTime endTime) || DateTime.UtcNow < endTime)
+            if (!_priorityQueue.TryPeek(out ProfileId profileId, out endTime) || DateTime.UtcNow < endTime)
             {
                 return;
             }
@@ -87,10 +88,10 @@ public sealed class ActivitySchedulerService
             {
                 return;
             }
-            StartEvent(activityCompletion, endTime);
+            StartEvent(activityCompletion, endTime + activityCompletion.Duration);
         }
 
-        await activityCompletion.Complete();
+        await activityCompletion.Complete(endTime);
     }
 
     public void WaitForNextEvent()

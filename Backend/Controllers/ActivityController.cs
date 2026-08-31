@@ -1,3 +1,4 @@
+using System;
 using System.Threading.Tasks;
 using Backend.Attributes;
 using Backend.Dtos;
@@ -11,7 +12,7 @@ public sealed class ActivityController(ActivityService activityService) : Socket
     [Request]
     public async Task StartActivity(StartActivityRequest request)
     {
-        await activityService.StartActivityAsync(ProfileId, request.ActivityId);
+        await activityService.StartActivityAsync(ProfileId, request.ActivityId, DateTime.UtcNow);
         await RespondAsync(new StartActivityResponse());
     }
 }
