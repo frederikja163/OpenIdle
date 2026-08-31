@@ -1,4 +1,5 @@
 using System.Net.WebSockets;
+using System.Text;
 using Backend;
 using Backend.Dtos;
 using Backend.Services;
@@ -166,6 +167,27 @@ public sealed class SocketRegistryServiceTests
         await registry.SendToProfileAsync(ProfileA, CreateEvent());
 
         AssertNoEventSent(testSocket);
+    }
+
+    [Test]
+    public async Task SendToUserAsync_AssignsIncrementingEventIdsAndTimestampPerSocket()
+    {
+        SocketRegistryService registry = CreateRegistry();
+        TestSocket testSocket = CreateRegisteredSocket(registry);
+        registry.SetUser(testSocket.Socket, UserA);
+
+        await registry.SendToUserAsync(UserA, CreateEvent());
+        await registry.SendToUserAsync(UserA, CreateEvent());
+
+        Assert.That(testSocket.WebSocket.SendAttempts, Is.EqualTo(2));
+        string first = Encoding.UTF8.GetString(testSocket.WebSocket.Sent[0].Bytes);
+        string second = Encoding.UTF8.GetString(testSocket.WebSocket.Sent[1].Bytes);
+        Assert.Multiple(() =>
+        {
+            Assert.That(first, Does.Contain("\"eventId\":0"));
+            Assert.That(first, Does.Contain("\"timestamp\":"));
+            Assert.That(second, Does.Contain("\"eventId\":1"));
+        });
     }
 
     private static SocketRegistryService CreateRegistry()

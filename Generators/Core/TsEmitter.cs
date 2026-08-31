@@ -31,6 +31,7 @@ public sealed class TsEmitter : IDtoEmitter
         using (Scope _ = _textWriter.Scope("interface EventBase"))
         {
             _textWriter.WriteLine("eventId: number;");
+            _textWriter.WriteLine("timestamp: number;");
         }
         _textWriter.WriteLine();
     }
@@ -94,6 +95,7 @@ public sealed class TsEmitter : IDtoEmitter
             PropertyType.Guid => "string",
             PropertyType.UserId => "string",
             PropertyType.ProfileId => "string",
+            PropertyType.Timestamp => "number",
             _ => throw new ArgumentOutOfRangeException()
         };
         return property.Multiple ? builtIn + "[]" : builtIn;

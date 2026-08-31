@@ -24,6 +24,7 @@ internal sealed class Socket : IDisposable
 {
     private readonly WebSocket _webSocket;
     private bool _isClosed;
+    private int _nextEventId;
     private readonly SemaphoreSlim _sendLock = new(1, 1);
 
     internal Socket(WebSocket webSocket)
@@ -87,6 +88,8 @@ internal sealed class Socket : IDisposable
 
     internal async Task SendEventAsync(EventBase eventBase)
     {
+        eventBase.EventId = _nextEventId++;
+        eventBase.Timestamp = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds();
         using CancellationTokenSource timeout = new(TimeSpan.FromSeconds(5));
         await SendMessageAsync(SocketJsonSerializer.Serialize(eventBase), timeout.Token);
     }

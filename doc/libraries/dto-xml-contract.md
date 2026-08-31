@@ -106,7 +106,7 @@ Semantics:
 - A `Request` must contain exactly one child `<Response>` (the parser errors otherwise). The response's generated name defaults to `{RequestName}Response`, overridable via a `name` attribute on the `<Response>` element.
 - `Property` attributes:
   - `name` — required; cased to `UpperCamelCase` for the class member and `lowerCamelCase` for the JSON/TS key.
-  - `type` — required. Tokens: `string`, `int`, `float`, `Guid`, or the bare name of another declared contract type — a `<Dto>` (which becomes `{X}Dto`, e.g. `Profile` → `ProfileDto`) or an `<Enum>` (which becomes `{X}` as-is, e.g. `ItemId`). An unrecognized token is a parse error, not a silent `{X}Dto` reference.
+  - `type` — required. Tokens: `string`, `int`, `float`, `Guid`, `timestamp` (emitted as a `long` C# / `number` TS — Unix epoch milliseconds), or the bare name of another declared contract type — a `<Dto>` (which becomes `{X}Dto`, e.g. `Profile` → `ProfileDto`) or an `<Enum>` (which becomes `{X}` as-is, e.g. `ItemId`). An unrecognized token is a parse error, not a silent `{X}Dto` reference.
   - `multiple="true"` — optional; makes the member an array (`string[]` in C#, `type[]` in TS).
 - Every property is required; there is no optionality or validation syntax yet.
 
