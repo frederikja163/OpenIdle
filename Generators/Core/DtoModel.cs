@@ -151,6 +151,7 @@ public enum PropertyType
     Guid,
     UserId,
     ProfileId,
+    Timestamp,
 }
 
 public class Property(PropertyType type, string typeStr, string name, bool multiple, bool optional)
