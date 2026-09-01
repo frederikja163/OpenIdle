@@ -81,6 +81,52 @@ public sealed class SocketRegistryServiceTests
     }
 
     [Test]
+    public async Task SetProfile_CurrentProfile_IsNoOp()
+    {
+        SocketRegistryService registry = CreateRegistry();
+        List<Guid> online = [];
+        List<Guid> offline = [];
+        registry.ProfileOnline += (_, e) =>
+        {
+            online.Add(e.ProfileId);
+            return Task.CompletedTask;
+        };
+        registry.ProfileOffline += (_, e) =>
+        {
+            offline.Add(e.ProfileId);
+            return Task.CompletedTask;
+        };
+        TestSocket testSocket = CreateRegisteredSocket(registry);
+        await registry.SetProfile(testSocket.Socket, ProfileA);
+
+        await registry.SetProfile(testSocket.Socket, ProfileA);
+
+        Assert.Multiple(() =>
+        {
+            Assert.That(online, Is.EqualTo(new[] { ProfileA }));
+            Assert.That(offline, Is.Empty);
+        });
+    }
+
+    [Test]
+    public async Task SetProfile_MovedSocket_RaisesOfflineForPreviousProfile()
+    {
+        SocketRegistryService registry = CreateRegistry();
+        List<Guid> offline = [];
+        registry.ProfileOffline += (_, e) =>
+        {
+            offline.Add(e.ProfileId);
+            return Task.CompletedTask;
+        };
+        TestSocket testSocket = CreateRegisteredSocket(registry);
+        await registry.SetProfile(testSocket.Socket, ProfileA);
+
+        await registry.SetProfile(testSocket.Socket, ProfileB);
+
+        Assert.That(offline, Is.EqualTo(new[] { ProfileA }));
+    }
+
+    [Test]
     public async Task SendToUserAsync_WithNoSockets_DoesNotThrow()
     {
         SocketRegistryService registry = CreateRegistry();

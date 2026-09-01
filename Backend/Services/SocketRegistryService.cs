@@ -30,17 +30,19 @@ public sealed class SocketRegistryService
 
     internal async Task SetProfile(Socket socket, ProfileId profileId)
     {
-        if (_profileBySocket.TryRemove(socket, out ProfileId previousProfileId) &&
-            _socketsByProfile.TryGetValue(previousProfileId, out ConcurrentDictionary<Socket, byte>? previousSockets))
+        if (_profileBySocket.TryGetValue(socket, out ProfileId currentProfileId) && currentProfileId == profileId)
         {
-            previousSockets.TryRemove(socket, out _);
+            return;
+        }
+
+        if (_profileBySocket.TryRemove(socket, out ProfileId previousProfileId) &&
+            RemoveSocketFromProfile(socket, previousProfileId))
+        {
+            await NotifyProfileOffline(previousProfileId);
         }
 
         _profileBySocket[socket] = profileId;
-        ConcurrentDictionary<Socket, byte> sockets = _socketsByProfile.GetOrAdd(profileId, _ => new());
-        bool becameOnline = sockets.IsEmpty;
-        sockets[socket] = 0;
-        if (becameOnline)
+        if (AddSocketToProfile(socket, profileId))
         {
             Log.Debug($"Profile {profileId} came online.");
             if (ProfileOnline is { } onlineHandlers)
@@ -137,23 +139,48 @@ public sealed class SocketRegistryService
     private async Task RemoveSocket(Socket socket)
     {
         if (_profileBySocket.TryRemove(socket, out ProfileId profileId) &&
-            _socketsByProfile.TryGetValue(profileId, out ConcurrentDictionary<Socket, byte>? profileSockets))
+            RemoveSocketFromProfile(socket, profileId))
         {
-            profileSockets.TryRemove(socket, out _);
-            if (profileSockets.IsEmpty)
-            {
-                Log.Debug($"Profile {profileId} went offline.");
-                if (ProfileOffline is { } offlineHandlers)
-                {
-                    await offlineHandlers.InvokeAsync(this, new ProfileOfflineEventArgs(profileId));
-                }
-            }
+            await NotifyProfileOffline(profileId);
         }
 
         if (_userBySocket.TryRemove(socket, out UserId userId) &&
             _socketsByUser.TryGetValue(userId, out ConcurrentDictionary<Socket, byte>? userSockets))
         {
             userSockets.TryRemove(socket, out _);
+        }
+    }
+
+    private bool AddSocketToProfile(Socket socket, ProfileId profileId)
+    {
+        ConcurrentDictionary<Socket, byte> sockets = _socketsByProfile.GetOrAdd(profileId, _ => new());
+        lock (sockets)
+        {
+            bool becameOnline = sockets.IsEmpty;
+            sockets[socket] = 0;
+            return becameOnline;
+        }
+    }
+
+    private bool RemoveSocketFromProfile(Socket socket, ProfileId profileId)
+    {
+        if (!_socketsByProfile.TryGetValue(profileId, out ConcurrentDictionary<Socket, byte>? sockets))
+        {
+            return false;
+        }
+
+        lock (sockets)
+        {
+            return sockets.TryRemove(socket, out _) && sockets.IsEmpty;
+        }
+    }
+
+    private async Task NotifyProfileOffline(ProfileId profileId)
+    {
+        Log.Debug($"Profile {profileId} went offline.");
+        if (ProfileOffline is { } offlineHandlers)
+        {
+            await offlineHandlers.InvokeAsync(this, new ProfileOfflineEventArgs(profileId));
         }
     }
 }

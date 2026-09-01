@@ -97,7 +97,10 @@ public sealed class ActivityService
             startTime += duration;
         }
 
-        await SendEventAsync(rewards, profileId, activityId);
+        if (rewards.Count > 0)
+        {
+            await SendEventAsync(rewards, profileId, activityId);
+        }
         _activitySchedulerService.StartEvent(new ProfileActivityCompletion(this, profileId, activityId, duration), startTime);
     }
 

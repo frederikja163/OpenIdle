@@ -322,6 +322,35 @@ public sealed class ActivityServiceTests : IDisposable
     }
 
     [Test]
+    public async Task ProfileOnline_FutureActivity_DoesNotSendEvent()
+    {
+        Profile profile = await SeedProfileAsync();
+        (ActivityService service, SocketRegistryService socketRegistry, _, _) =
+            CreateServiceWithInternals();
+        AddStoneActivity(service);
+        await SeedSkillAsync(profile, SkillId.Mining, xp: 0, level: 1);
+        await service.StartActivityAsync(profile.ProfileId, ActivityId.Stone, DateTime.UtcNow.AddSeconds(60));
+
+        FakeWebSocket webSocket = await RegisterSocket(socketRegistry, profile.ProfileId);
+
+        Assert.That(webSocket.FirstSentText, Is.Null);
+    }
+
+    [Test]
+    public async Task ProfileOnline_ElapsedActivityWithoutRewards_DoesNotSendEvent()
+    {
+        Profile profile = await SeedProfileAsync();
+        (ActivityService service, SocketRegistryService socketRegistry, _, _) =
+            CreateServiceWithInternals();
+        service.AddActivity(ActivityId.Stone, new ActivityDefinition(time: 10f, rewards: [], requirements: []));
+        await service.StartActivityAsync(profile.ProfileId, ActivityId.Stone, DateTime.UtcNow.AddSeconds(-100));
+
+        FakeWebSocket webSocket = await RegisterSocket(socketRegistry, profile.ProfileId);
+
+        Assert.That(webSocket.FirstSentText, Is.Null);
+    }
+
+    [Test]
     public async Task ProfileOnline_ResolvesExpiredActivity_CompletesAndSendsEvent()
     {
         Profile profile = await SeedProfileAsync();

@@ -88,7 +88,7 @@ public sealed class ActivitySchedulerService
             {
                 return;
             }
-            StartEvent(activityCompletion, endTime + activityCompletion.Duration);
+            StartEvent(activityCompletion, endTime);
         }
 
         await activityCompletion.Complete(endTime);
