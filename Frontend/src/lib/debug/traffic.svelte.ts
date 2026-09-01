@@ -45,6 +45,17 @@ export interface Frame {
 	pairedFrameId: number | null;
 	/** Round trip in milliseconds, set on the response half only. */
 	elapsedMs: number | null;
+	/**
+	 * Send-to-arrival milliseconds, set on events only: arrival on this
+	 * machine's clock minus the backend's send stamp, so skew between the two
+	 * clocks is part of the number and can even push it negative.
+	 */
+	travelMs: number | null;
+	/**
+	 * The backend's per-socket event sequence. Starts at 0, so a zero here is
+	 * the connection's first event — not requestId's could-not-parse marker.
+	 */
+	eventId: number | null;
 	raw: string;
 	/** Pretty-printed, or the raw text when it is not JSON. */
 	pretty: string;
@@ -153,6 +164,8 @@ function describe(direction: FrameDirection, raw: string): Frame {
 		error: null,
 		pairedFrameId: null,
 		elapsedMs: null,
+		travelMs: null,
+		eventId: null,
 		raw,
 		pretty: raw,
 		// What the backend's 1 KiB limit is measured in — the frame's UTF-8 length,
@@ -162,13 +175,27 @@ function describe(direction: FrameDirection, raw: string): Frame {
 	try {
 		const parsed: unknown = JSON.parse(raw);
 		if (typeof parsed === 'object' && parsed !== null) {
-			const message = parsed as { $type?: unknown; requestId?: unknown; message?: unknown };
+			const message = parsed as {
+				$type?: unknown;
+				requestId?: unknown;
+				message?: unknown;
+				eventId?: unknown;
+				timestamp?: unknown;
+			};
 			frame.type = typeof message.$type === 'string' ? message.$type : null;
 			frame.requestId = typeof message.requestId === 'number' ? message.requestId : null;
 			frame.error =
 				message.$type === 'ErrorResponse' && typeof message.message === 'string'
 					? message.message
 					: null;
+			// Only an event's timestamp is the backend's send stamp. The same key in
+			// a hand-typed request is ordinary payload, and a travel time computed
+			// from it would be nonsense.
+			if (frame.kind === 'event') {
+				frame.eventId = typeof message.eventId === 'number' ? message.eventId : null;
+				frame.travelMs =
+					typeof message.timestamp === 'number' ? frame.at - message.timestamp : null;
+			}
 		}
 		frame.pretty = JSON.stringify(parsed, null, 2);
 	} catch {

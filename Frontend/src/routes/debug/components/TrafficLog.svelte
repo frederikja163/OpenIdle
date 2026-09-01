@@ -143,7 +143,22 @@
 						{/if}
 					</button>
 					{#if frame.elapsedMs !== null}
-						<span class="oi-num-sm text-text-faint">{frame.elapsedMs}ms</span>
+						<span class="oi-num-sm text-text-faint" title="Round trip, response minus request">
+							{frame.elapsedMs}ms
+						</span>
+					{/if}
+					{#if frame.travelMs !== null}
+						<span
+							class="oi-num-sm text-text-faint"
+							title="Travel, arrival minus the backend's send stamp; clock skew included"
+						>
+							{frame.travelMs}ms
+						</span>
+					{/if}
+					{#if frame.eventId !== null}
+						<span class="oi-num-sm text-text-faint" title="The backend's per-socket event sequence">
+							#{frame.eventId}
+						</span>
 					{/if}
 					{#if frame.requestId !== null}
 						<button
