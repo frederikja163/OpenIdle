@@ -11,7 +11,7 @@ namespace Backend.Services;
 
 public sealed class ProfileService(IDbContextFactory<GameDbContext> dbContextFactory, SocketRegistryService socketRegistry)
 {
-    internal async Task<Profile[]> GetProfilesAsync(Guid userId)
+    internal async Task<Profile[]> GetProfilesAsync(UserId userId)
     {
         await using GameDbContext dbContext = await dbContextFactory.CreateDbContextAsync();
 
@@ -20,7 +20,7 @@ public sealed class ProfileService(IDbContextFactory<GameDbContext> dbContextFac
             .ToArrayAsync();
     }
 
-    internal async Task<Profile> GetProfileAsync(Guid userId, Guid profileId)
+    internal async Task<Profile> GetProfileAsync(UserId userId, ProfileId profileId)
     {
         await using GameDbContext dbContext = await dbContextFactory.CreateDbContextAsync();
 
@@ -29,7 +29,7 @@ public sealed class ProfileService(IDbContextFactory<GameDbContext> dbContextFac
                ?? throw new BackendException("Profile does not belong to user.");
     }
 
-    internal async Task<Profile> GetProfileAsync(Guid profileId)
+    internal async Task<Profile> GetProfileAsync(ProfileId profileId)
     {
         await using GameDbContext dbContext = await dbContextFactory.CreateDbContextAsync();
 
@@ -38,7 +38,7 @@ public sealed class ProfileService(IDbContextFactory<GameDbContext> dbContextFac
                ?? throw new BackendException("Profile does not exist.");
     }
 
-    internal async Task<Profile> CreateProfileAsync(Guid userId, string name)
+    internal async Task<Profile> CreateProfileAsync(UserId userId, string name)
     {
         BackendException.ThrowIfNullOrWhiteSpace(name);
         if (name.Length > 30)
@@ -87,7 +87,7 @@ public sealed class ProfileService(IDbContextFactory<GameDbContext> dbContextFac
         return false;
     }
 
-    internal async Task<Profile> SelectProfileAsync(Socket socket, Guid userId, Guid profileId)
+    internal async Task<Profile> SelectProfileAsync(Socket socket, UserId userId, ProfileId profileId)
     {
         Profile profile = await GetProfileAsync(userId, profileId);
         socket.ProfileId = profileId;

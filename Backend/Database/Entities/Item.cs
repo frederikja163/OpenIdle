@@ -5,7 +5,7 @@ namespace Backend.Database.Entities;
 
 public sealed class Item
 {
-    public required Guid ProfileId { get; init; }
+    public required ProfileId ProfileId { get; init; }
     public Profile? Profile { get; init; }
     public required ItemId ItemId { get; init; }
     public int Count { get; set; }

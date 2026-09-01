@@ -108,10 +108,14 @@ public sealed class TsEmitter : IDtoEmitter
             }
         }
 
+        // Timestamp is `long?` on the C# base and Socket.SendEventAsync stamps it
+        // with epoch milliseconds on the way out, so it is optional here for the
+        // same reason the ids are: WhenWritingDefault omits an unset one.
         Separate();
         using (Scope _ = _textWriter.Scope("export interface EventBase extends DtoBase"))
         {
             _textWriter.WriteLine("eventId?: number;");
+            _textWriter.WriteLine("timestamp?: number;");
         }
     }
 
@@ -560,6 +564,7 @@ public sealed class TsEmitter : IDtoEmitter
             PropertyType.Guid => "string",
             PropertyType.UserId => "string",
             PropertyType.ProfileId => "string",
+            PropertyType.Timestamp => "number",
             _ => throw new ArgumentOutOfRangeException()
         };
         return property.Multiple ? builtIn + "[]" : builtIn;

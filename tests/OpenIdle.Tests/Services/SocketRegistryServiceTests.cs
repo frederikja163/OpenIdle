@@ -1,4 +1,5 @@
 using System.Net.WebSockets;
+using System.Text.Json;
 using Backend;
 using Backend.Dtos;
 using Backend.Services;
@@ -166,6 +167,66 @@ public sealed class SocketRegistryServiceTests
         await registry.SendToProfileAsync(ProfileA, CreateEvent());
 
         AssertNoEventSent(testSocket);
+    }
+
+    [Test]
+    public async Task SendToUserAsync_AssignsIncrementingEventIdsAndTimestampPerSocket()
+    {
+        SocketRegistryService registry = CreateRegistry();
+        TestSocket testSocket = CreateRegisteredSocket(registry);
+        registry.SetUser(testSocket.Socket, UserA);
+
+        long beforeSend = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds();
+        await registry.SendToUserAsync(UserA, CreateEvent());
+        await registry.SendToUserAsync(UserA, CreateEvent());
+        long afterSend = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds();
+
+        Assert.That(testSocket.WebSocket.SendAttempts, Is.EqualTo(2));
+        using JsonDocument first = JsonDocument.Parse(testSocket.WebSocket.Sent[0].Bytes);
+        using JsonDocument second = JsonDocument.Parse(testSocket.WebSocket.Sent[1].Bytes);
+        JsonElement firstRoot = first.RootElement;
+        JsonElement timestamp = firstRoot.GetProperty("timestamp");
+        Assert.Multiple(() =>
+        {
+            Assert.That(firstRoot.GetProperty("eventId").GetInt32(), Is.EqualTo(0));
+            Assert.That(timestamp.ValueKind, Is.EqualTo(JsonValueKind.Number));
+            Assert.That(timestamp.TryGetInt64(out long timestampValue), Is.True);
+            Assert.That(timestampValue, Is.InRange(beforeSend, afterSend));
+            Assert.That(second.RootElement.GetProperty("eventId").GetInt32(), Is.EqualTo(1));
+        });
+    }
+
+    [Test]
+    public async Task SendEventAsync_ConcurrentCalls_SendSequentialUniqueIdsInOrder()
+    {
+        const int eventCount = 200;
+        FakeWebSocket webSocket = new();
+        Socket socket = new(webSocket);
+        TaskCompletionSource start = new(TaskCreationOptions.RunContinuationsAsynchronously);
+
+        Task[] sends = Enumerable.Range(0, eventCount)
+            .Select(_ => Task.Run(async () =>
+            {
+                await start.Task;
+                await socket.SendEventAsync(CreateEvent());
+            }))
+            .ToArray();
+
+        start.SetResult();
+        await Task.WhenAll(sends);
+
+        int[] sentIds = webSocket.Sent
+            .Select(frame => JsonDocument.Parse(frame.Bytes))
+            .Select(document =>
+            {
+                using (document)
+                {
+                    return document.RootElement.GetProperty("eventId").GetInt32();
+                }
+            })
+            .ToArray();
+        Assert.That(sentIds, Is.EqualTo(Enumerable.Range(0, eventCount)));
+        Assert.That(sentIds.Distinct().Count(), Is.EqualTo(eventCount));
     }
 
     private static SocketRegistryService CreateRegistry()

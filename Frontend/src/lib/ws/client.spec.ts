@@ -97,7 +97,10 @@ describe('WsClient', () => {
 		sockets[0].open();
 		await flush();
 
-		expect(JSON.parse(sockets[0].sent[0])).toEqual({ $type: 'LoginAsTestUserRequest', requestId: 1 });
+		expect(JSON.parse(sockets[0].sent[0])).toEqual({
+			$type: 'LoginAsTestUserRequest',
+			requestId: 1
+		});
 		sockets[0].deliver({ $type: 'LoginAsTestUserResponse', requestId: 1 });
 
 		await expect(login).resolves.toEqual({ $type: 'LoginAsTestUserResponse', requestId: 1 });
@@ -138,11 +141,19 @@ describe('WsClient', () => {
 		// one, which merely happens to be the oldest one still pending.
 		const next = capture(client.request('ListProfilesRequest', {}));
 		await flush();
-		sockets[0].deliver({ $type: 'ErrorResponse', requestId: 0, message: 'Profile name already taken' });
+		sockets[0].deliver({
+			$type: 'ErrorResponse',
+			requestId: 0,
+			message: 'Profile name already taken'
+		});
 		await flush();
 
 		sockets[0].deliver({ $type: 'ListProfilesResponse', requestId: 2, profiles: [] });
-		await expect(next).resolves.toEqual({ $type: 'ListProfilesResponse', requestId: 2, profiles: [] });
+		await expect(next).resolves.toEqual({
+			$type: 'ListProfilesResponse',
+			requestId: 2,
+			profiles: []
+		});
 	});
 
 	it('charges an error to the live request once an answered one is cleared', async () => {
@@ -161,7 +172,11 @@ describe('WsClient', () => {
 		// settled request and the caller waits out the timeout for nothing.
 		const create = capture(client.request('CreateProfileRequest', { name: 'Alice' }));
 		await flush();
-		sockets[0].deliver({ $type: 'ErrorResponse', requestId: 0, message: 'Profile name already taken' });
+		sockets[0].deliver({
+			$type: 'ErrorResponse',
+			requestId: 0,
+			message: 'Profile name already taken'
+		});
 		await vi.advanceTimersByTimeAsync(50);
 
 		const error = await create;
@@ -182,7 +197,11 @@ describe('WsClient', () => {
 		// The echoed id has to beat the FIFO cursor, which still points at id 1:
 		// falling back on it here would fail the wrong caller and leave the one
 		// the backend actually refused waiting out its timeout.
-		sockets[0].deliver({ $type: 'ErrorResponse', requestId: 2, message: 'Profile name already taken' });
+		sockets[0].deliver({
+			$type: 'ErrorResponse',
+			requestId: 2,
+			message: 'Profile name already taken'
+		});
 		await flush();
 
 		const error = await second;
@@ -526,7 +545,10 @@ describe('WsClient', () => {
 			'LoginAsTestUserRequest'
 		]);
 
-		sockets[1].deliver({ $type: 'LoginAsTestUserResponse', requestId: JSON.parse(sockets[1].sent[0]).requestId });
+		sockets[1].deliver({
+			$type: 'LoginAsTestUserResponse',
+			requestId: JSON.parse(sockets[1].sent[0]).requestId
+		});
 		await flush();
 
 		expect(replayed).toEqual(['login']);
@@ -534,5 +556,111 @@ describe('WsClient', () => {
 			'LoginAsTestUserRequest',
 			'ListProfilesRequest'
 		]);
+	});
+
+	it('puts a raw frame on the wire byte for byte', async () => {
+		vi.useFakeTimers();
+		const { client, sockets } = makeClient();
+
+		// Spaced out, and carrying a property no request declares: the console has
+		// to be able to send a frame nothing here would have built.
+		const frame = '{ "$type": "PingRequest", "requestId": 4, "extra": "kept" }';
+		const sent = capture(client.sendRaw(frame));
+		await flush();
+		sockets[0].open();
+		await flush();
+
+		expect(sockets[0].sent).toEqual([frame]);
+		sockets[0].deliver({ $type: 'PongResponse', requestId: 4 });
+		await expect(sent).resolves.toEqual({ $type: 'PongResponse', requestId: 4 });
+	});
+
+	it('sends a frame that is not JSON and resolves once it is away', async () => {
+		vi.useFakeTimers();
+		const { client, sockets } = makeClient();
+
+		const sent = capture(client.sendRaw('{ not json'));
+		await flush();
+		sockets[0].open();
+		await flush();
+
+		expect(sockets[0].sent).toEqual(['{ not json']);
+		// Nothing to correlate a reply on, so the promise says only that the bytes
+		// left — whatever the backend makes of them shows up in the traffic log.
+		await expect(sent).resolves.toBeUndefined();
+	});
+
+	it('lets an id-less raw frame absorb the error it caused', async () => {
+		vi.useFakeTimers();
+		const { client, sockets } = makeClient();
+
+		const raw = capture(client.sendRaw('nonsense'));
+		await flush();
+		sockets[0].open();
+		await flush();
+		await raw;
+
+		// The untracked frame took no id, so this one is still the first.
+		const list = capture(client.request('ListProfilesRequest', {}));
+		await flush();
+		expect(JSON.parse(sockets[0].sent[1]).requestId).toBe(1);
+
+		// The backend answers a frame it could not deserialize with requestId 0.
+		// FIFO puts that error on the nonsense above, not on the request that
+		// merely happens to be the oldest one still pending.
+		sockets[0].deliver({ $type: 'ErrorResponse', requestId: 0, message: 'Unrecognized message' });
+		await flush();
+		sockets[0].deliver({ $type: 'ListProfilesResponse', requestId: 1, profiles: [] });
+
+		await expect(list).resolves.toMatchObject({ $type: 'ListProfilesResponse' });
+	});
+
+	it('never reissues an id typed into a raw frame', async () => {
+		vi.useFakeTimers();
+		const { client, sockets } = makeClient();
+
+		capture(client.sendRaw('{"$type":"PingRequest","requestId":9}'));
+		await flush();
+		sockets[0].open();
+		await flush();
+
+		capture(client.request('ListProfilesRequest', {}));
+		await flush();
+
+		expect(JSON.parse(sockets[0].sent[1]).requestId).toBe(10);
+	});
+
+	it('fails the earlier frame when a raw id is reused', async () => {
+		vi.useFakeTimers();
+		const { client, sockets } = makeClient();
+
+		const first = capture(client.sendRaw('{"$type":"PingRequest","requestId":3}'));
+		await flush();
+		sockets[0].open();
+		await flush();
+		const second = capture(client.sendRaw('{"$type":"PingRequest","requestId":3}'));
+		await flush();
+
+		// Both frames go out — reusing an id is a case worth staging — but only one
+		// promise can be settled by the reply, so the older one is let go rather
+		// than left hanging until its timeout.
+		expect(sockets[0].sent).toHaveLength(2);
+		expect(await first).toBeInstanceOf(WsError);
+
+		sockets[0].deliver({ $type: 'PongResponse', requestId: 3 });
+		await expect(second).resolves.toMatchObject({ $type: 'PongResponse' });
+	});
+
+	it('hands out a reserved id that the next request then skips', async () => {
+		vi.useFakeTimers();
+		const { client, sockets } = makeClient();
+
+		expect(client.reserveRequestId()).toBe(1);
+		capture(client.request('ListProfilesRequest', {}));
+		await flush();
+		sockets[0].open();
+		await flush();
+
+		expect(JSON.parse(sockets[0].sent[0]).requestId).toBe(2);
 	});
 });

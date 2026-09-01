@@ -18,8 +18,8 @@ yarn.lock
 .DS_Store
 Thumbs.db
 
-# Env
-.env
+# Env — .env is tracked and holds non-secret defaults; .env.local (and any
+# other .env.*) is per-machine, may hold secrets, and stays out of git.
 .env.*
 !.env.example
 !.env.test

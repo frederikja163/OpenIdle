@@ -13,6 +13,10 @@ public sealed class Parser
 {
     private const string DropTableIdEnumName = "DropTableId";
     private const string ActivityIdEnumName = "ActivityId";
+    private const string ItemIdEnumName = "ItemId";
+    private const string ItemTagIdEnumName = "ItemTagId";
+    private const string ItemSlotIdEnumName = "ItemSlotId";
+    private const string SkillIdEnumName = "SkillId";
 
     public DtoModel Model { get; } = new();
 
@@ -50,6 +54,32 @@ public sealed class Parser
                 Activity activity = Activity(element);
                 Model.Activities.Add(activity.Key, activity);
                 GetEnum(ActivityIdEnumName).AddEnum(new EnumValue(activity.Key));
+                break;
+            case "Item":
+                Item item = Item(element);
+                Model.Items.Add(item.Key, item);
+                GetEnum(ItemIdEnumName).AddEnum(new EnumValue(item.Key));
+                Enum itemTagEnum = GetEnum(ItemTagIdEnumName);
+                foreach (ItemTag tag in item.Tags)
+                {
+                    if (itemTagEnum.GetEnum(tag.Name) is null)
+                    {
+                        itemTagEnum.AddEnum(new EnumValue(tag.Name));
+                    }
+                }
+                break;
+            case "Skill":
+                Skill skill = Skill(element);
+                Model.Skills.Add(skill.Key, skill);
+                GetEnum(SkillIdEnumName).AddEnum(new EnumValue(skill.Key));
+                Enum slotEnum = GetEnum(ItemSlotIdEnumName);
+                foreach (Slot slot in skill.Slots)
+                {
+                    if (slotEnum.GetEnum(slot.Name) is null)
+                    {
+                        slotEnum.AddEnum(new EnumValue(slot.Name));
+                    }
+                }
                 break;
             case "Dto":
                 Dto dto = Dto(element);
@@ -152,7 +182,8 @@ public sealed class Parser
 
     private Activity Activity(XmlElement element)
     {
-        Activity activity = new Activity(element.RequireAttribute("name"));
+        float time = element.RequireAttribute<float>("time");
+        Activity activity = new Activity(element.RequireAttribute("name"), time);
         foreach (XmlElement rewardElement in element.ChildNodes.OfType<XmlElement>())
         {
             switch (rewardElement.Name)
@@ -175,6 +206,43 @@ public sealed class Parser
     private LevelRequirement LevelRequirement(XmlElement element)
     {
         return new LevelRequirement(element.RequireAttribute("skill"), element.RequireAttribute<int>("count"));
+    }
+
+    private Item Item(XmlElement element)
+    {
+        Item item = new(element.RequireAttribute("name"));
+        foreach (XmlElement tagElement in element.GetChildren("Tag"))
+        {
+            item.Tags.Add(new ItemTag(tagElement.RequireAttribute("name")));
+        }
+
+        foreach (XmlElement statElement in element.GetChildren("Stat"))
+        {
+            string statName = statElement.RequireAttribute("name");
+            if (!ItemStats.ByKey.ContainsKey(statName))
+            {
+                throw new ParserException($"Item '{item.Key}' declares an unknown stat '{statName}'.");
+            }
+
+            item.Stats.Add(new ItemStat(statName, statElement.RequireAttribute<float>("value")));
+        }
+        return item;
+    }
+
+    private Skill Skill(XmlElement element)
+    {
+        Skill skill = new(element.RequireAttribute("name"));
+        foreach (XmlElement slotElement in element.GetChildren("Slot"))
+        {
+            XmlElement tagElement = slotElement.GetChildren("Tag").SingleOrDefault()
+                ?? throw new ParserException($"Slot '{slotElement.RequireAttribute("name")}' must declare exactly one 'Tag'.");
+
+            skill.Slots.Add(new Slot(
+                slotElement.RequireAttribute("name"),
+                new ItemTag(tagElement.RequireAttribute("name")),
+                slotElement.GetAttribute<bool>("required", false)));
+        }
+        return skill;
     }
 
     private Dto Dto(XmlElement element)

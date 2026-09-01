@@ -14,10 +14,10 @@ namespace Backend.Services;
 public sealed class SocketRegistryService
 {
     private readonly ILogger<SocketRegistryService> _logger;
-    private readonly ConcurrentDictionary<Guid, ConcurrentDictionary<Socket, byte>> _socketsByProfile = new();
-    private readonly ConcurrentDictionary<Socket, Guid> _profileBySocket = new();
-    private readonly ConcurrentDictionary<Guid, ConcurrentDictionary<Socket, byte>> _socketsByUser = new();
-    private readonly ConcurrentDictionary<Socket, Guid> _userBySocket = new();
+    private readonly ConcurrentDictionary<ProfileId, ConcurrentDictionary<Socket, byte>> _socketsByProfile = new();
+    private readonly ConcurrentDictionary<Socket, ProfileId> _profileBySocket = new();
+    private readonly ConcurrentDictionary<UserId, ConcurrentDictionary<Socket, byte>> _socketsByUser = new();
+    private readonly ConcurrentDictionary<Socket, UserId> _userBySocket = new();
 
     internal event AsyncEventHandler<MessageReceivedEventArgs>? MessageReceived;
     internal event AsyncEventHandler<SocketCloseEventArgs>? Close;
@@ -33,9 +33,9 @@ public sealed class SocketRegistryService
         socket.Close += SocketOnClose;
     }
 
-    internal void SetProfile(Socket socket, Guid profileId)
+    internal void SetProfile(Socket socket, ProfileId profileId)
     {
-        if (_profileBySocket.TryRemove(socket, out Guid previousProfileId) &&
+        if (_profileBySocket.TryRemove(socket, out ProfileId previousProfileId) &&
             _socketsByProfile.TryGetValue(previousProfileId, out ConcurrentDictionary<Socket, byte>? previousSockets))
         {
             previousSockets.TryRemove(socket, out _);
@@ -46,9 +46,9 @@ public sealed class SocketRegistryService
         sockets[socket] = 0;
     }
 
-    internal void SetUser(Socket socket, Guid userId)
+    internal void SetUser(Socket socket, UserId userId)
     {
-        if (_userBySocket.TryRemove(socket, out Guid previousUserId) &&
+        if (_userBySocket.TryRemove(socket, out UserId previousUserId) &&
             _socketsByUser.TryGetValue(previousUserId, out ConcurrentDictionary<Socket, byte>? previousSockets))
         {
             previousSockets.TryRemove(socket, out _);
@@ -59,20 +59,19 @@ public sealed class SocketRegistryService
         sockets[socket] = 0;
     }
 
-    internal async Task SendToProfileAsync(Guid profileId, EventBase eventBase)
+    internal async Task SendToProfileAsync(ProfileId profileId, EventBase eventBase)
     {
         if (!_socketsByProfile.TryGetValue(profileId, out ConcurrentDictionary<Socket, byte>? sockets))
         {
             return;
         }
 
-        byte[] bytes = SocketJsonSerializer.Serialize(eventBase);
         foreach (Socket socket in sockets.Keys.ToArray())
         {
             using CancellationTokenSource timeout = new(TimeSpan.FromSeconds(5));
             try
             {
-                await socket.SendMessageAsync(bytes, timeout.Token);
+                await socket.SendEventAsync(eventBase);
             }
             catch (Exception exception) when (IsTransportException(exception))
             {
@@ -82,20 +81,19 @@ public sealed class SocketRegistryService
         }
     }
 
-    internal async Task SendToUserAsync(Guid userId, EventBase eventBase)
+    internal async Task SendToUserAsync(UserId userId, EventBase eventBase)
     {
         if (!_socketsByUser.TryGetValue(userId, out ConcurrentDictionary<Socket, byte>? sockets))
         {
             return;
         }
 
-        byte[] bytes = SocketJsonSerializer.Serialize(eventBase);
         foreach (Socket socket in sockets.Keys.ToArray())
         {
             using CancellationTokenSource timeout = new(TimeSpan.FromSeconds(5));
             try
             {
-                await socket.SendMessageAsync(bytes, timeout.Token);
+                await socket.SendEventAsync(eventBase);
             }
             catch (Exception exception) when (IsTransportException(exception))
             {
@@ -132,13 +130,13 @@ public sealed class SocketRegistryService
 
     private void RemoveSocket(Socket socket)
     {
-        if (_profileBySocket.TryRemove(socket, out Guid profileId) &&
+        if (_profileBySocket.TryRemove(socket, out ProfileId profileId) &&
             _socketsByProfile.TryGetValue(profileId, out ConcurrentDictionary<Socket, byte>? profileSockets))
         {
             profileSockets.TryRemove(socket, out _);
         }
 
-        if (_userBySocket.TryRemove(socket, out Guid userId) &&
+        if (_userBySocket.TryRemove(socket, out UserId userId) &&
             _socketsByUser.TryGetValue(userId, out ConcurrentDictionary<Socket, byte>? userSockets))
         {
             userSockets.TryRemove(socket, out _);

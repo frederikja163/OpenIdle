@@ -1,9 +1,12 @@
 name: Backend Build
 
+# Pull requests run this directly. Pushes to main and release reach it through
+# publish-images.yml, which calls it before it pushes anything to GHCR — so an
+# image is never published from a commit whose tests did not pass. Keeping the
+# push trigger off avoids running the whole suite twice for one commit.
 on:
-  push:
-    branches: [main]
   pull_request:
+  workflow_call:
 
 jobs:
   build:
@@ -28,10 +31,11 @@ jobs:
       - name: Run integration tests
         run: dotnet test tests/OpenIdle.IntegrationTests/OpenIdle.IntegrationTests.csproj --configuration Release --no-build
 
-      # types.xml is the source of truth for the frontend protocol too, and the
-      # generated TypeScript is committed. Regenerating here catches a contract
-      # change that was not accompanied by `bun run gen:dto`.
-      - name: Check the generated TypeScript DTOs are up to date
+      # types.xml is the source of truth for the frontend protocol too. The
+      # generated TypeScript is not committed (frontend-build.yml regenerates it
+      # via `bun run check`), so this only proves both emitters still run on the
+      # current contract — a parse error here fails the backend build too.
+      - name: Check both TypeScript emitters run
         run: |
-          dotnet run --project Generators/Generator -- -i types.xml -t Ts -o Frontend/src/lib/ws/dto.generated.ts
-          git diff --exit-code -- Frontend/src/lib/ws/dto.generated.ts
+          dotnet run --project Generators/Generator -- -i types.xml -t Ts -o /tmp/dto.generated.ts
+          dotnet run --project Generators/Generator -- -i types.xml -t TsSchema -o /tmp/protocol.generated.ts

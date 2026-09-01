@@ -38,6 +38,8 @@ public sealed class CsEmitter : IDtoEmitter
         EmitDropTableData(model);
 
         EmitActivityData(model);
+
+        EmitToolData(model);
     }
 
     private void EmitEnums(DtoModel model)
@@ -81,10 +83,45 @@ public sealed class CsEmitter : IDtoEmitter
                     string rewards = string.Join(", ", activity.Rewards.Select(RewardExpression));
                     string requirements = string.Join(", ", activity.Requirements.Select(RequirementExpression));
                     _textWriter.WriteLine(
-                        $"service.AddActivity(ActivityId.{activity.Name.UpperCamelCase}, new ActivityDefinition(rewards: [{rewards}], requirements: [{requirements}]));");
+                        $"service.AddActivity(ActivityId.{activity.Name.UpperCamelCase}, new ActivityDefinition(time: {TimeLiteral(activity.Time)}, rewards: [{rewards}], requirements: [{requirements}]));");
                 }
             }
         }
+    }
+
+    private void EmitToolData(DtoModel model)
+    {
+        _textWriter.WriteLine();
+        using (Scope _ = _textWriter.Scope("public static class ToolData"))
+        {
+            using (Scope __ = _textWriter.Scope("public static void AddAll(ToolService service)"))
+            {
+                foreach (Item item in model.Items.Values)
+                {
+                    string tags = string.Join(", ", item.Tags.Select(t => $"ItemTagId.{new Casing(t.Name).UpperCamelCase}"));
+                    string stats = string.Join(", ", item.Stats.Select(ItemStatExpression));
+                    _textWriter.WriteLine(
+                        $"service.AddItem(ItemId.{item.Name.UpperCamelCase}, new ItemDefinition(tags: [{tags}], stats: [{stats}]));");
+                }
+
+                foreach (Skill skill in model.Skills.Values.Where(s => s.Slots.Count > 0))
+                {
+                    string slots = string.Join(", ", skill.Slots.Select(SlotExpression));
+                    _textWriter.WriteLine(
+                        $"service.AddSkillSlots(SkillId.{skill.Name.UpperCamelCase}, [{slots}]);");
+                }
+            }
+        }
+    }
+
+    private static string ItemStatExpression(ItemStat stat)
+    {
+        return $"new ItemStat(ToolStat.{ItemStats.ByKey[stat.Name]}, {stat.Value.ToString(CultureInfo.InvariantCulture)}f)";
+    }
+
+    private static string SlotExpression(Slot slot)
+    {
+        return $"new SlotBinding(ItemSlotId.{new Casing(slot.Name).UpperCamelCase}, ItemTagId.{new Casing(slot.Tag.Name).UpperCamelCase}, {slot.Required.ToString().ToLowerInvariant()})";
     }
 
     private void EmitDropTable(DropTable dropTable)
@@ -127,6 +164,11 @@ public sealed class CsEmitter : IDtoEmitter
     private static string WeightLiteral(float? weight)
     {
         return weight is null ? "null" : weight.Value.ToString(CultureInfo.InvariantCulture) + "f";
+    }
+
+    private static string TimeLiteral(float time)
+    {
+        return time.ToString(CultureInfo.InvariantCulture) + "f";
     }
 
     private void EmitClass(Object obj)
@@ -190,6 +232,7 @@ public sealed class CsEmitter : IDtoEmitter
             PropertyType.Guid => "Guid",
             PropertyType.UserId => "Guid",
             PropertyType.ProfileId => "Guid",
+            PropertyType.Timestamp => "long",
             _ => throw new ArgumentOutOfRangeException()
         };
         if (property.Multiple)
@@ -223,6 +266,7 @@ public sealed class CsEmitter : IDtoEmitter
         using (Scope _ = _textWriter.Scope("public abstract class EventBase : DtoBase"))
         {
             Property(new Property(PropertyType.Int, "int", "EventId", false, true), "set");
+            Property(new Property(PropertyType.Timestamp, "long", "Timestamp", false, true), "set");
         }
         _textWriter.WriteLine();
     }

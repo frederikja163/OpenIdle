@@ -12,6 +12,8 @@ public sealed class DtoModel
     public Dictionary<string, Enum> Enums { get; } = [];
     public Dictionary<string, DropTable> DropTables { get; } = [];
     public Dictionary<string, Activity> Activities { get; } = [];
+    public Dictionary<string, Item> Items { get; } = [];
+    public Dictionary<string, Skill> Skills { get; } = [];
 
     public IEnumerable<Object> AllObjects => Dtos.Values.Union<Object>(Requests.Values)
         .Union<Object>(Responses.Values)
@@ -87,10 +89,57 @@ public sealed class LevelRequirement(string skill, int count)
     public int Count { get; } = count;
 }
 
-public sealed class Activity(string name) : NamedType(name)
+public sealed class Activity(string name, float time) : NamedType(name)
 {
+    public float Time { get; } = time;
     public List<Reward> Rewards { get; } = [];
     public List<LevelRequirement> Requirements { get; } = [];
+}
+
+/// <summary>The stat names a declared item may carry. Keep in sync with the emitted <c>ToolStat</c> enum.</summary>
+public static class ItemStats
+{
+    public const string Speed = "speed";
+    public const string ItemProductivity = "itemProductivity";
+    public const string XpProductivity = "xpProductivity";
+    public const string Durable = "durable";
+
+    public static readonly IReadOnlyDictionary<string, string> ByKey = new Dictionary<string, string>
+    {
+        [Speed] = "Speed",
+        [ItemProductivity] = "ItemProductivity",
+        [XpProductivity] = "XpProductivity",
+        [Durable] = "Durable",
+    };
+}
+
+public sealed class Item(string name) : NamedType(name)
+{
+    public List<ItemTag> Tags { get; } = [];
+    public List<ItemStat> Stats { get; } = [];
+}
+
+public sealed class ItemTag(string name)
+{
+    public string Name { get; } = name;
+}
+
+public sealed class ItemStat(string name, float value)
+{
+    public string Name { get; } = name;
+    public float Value { get; } = value;
+}
+
+public sealed class Skill(string name) : NamedType(name)
+{
+    public List<Slot> Slots { get; } = [];
+}
+
+public sealed class Slot(string name, ItemTag tag, bool required)
+{
+    public string Name { get; } = name;
+    public ItemTag Tag { get; } = tag;
+    public bool Required { get; } = required;
 }
 
 public enum PropertyType
@@ -102,6 +151,7 @@ public enum PropertyType
     Guid,
     UserId,
     ProfileId,
+    Timestamp,
 }
 
 public class Property(PropertyType type, string typeStr, string name, bool multiple, bool optional)

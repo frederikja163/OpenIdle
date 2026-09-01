@@ -20,6 +20,10 @@
 
   <ItemGroup>
     <ProjectReference Include="..\..\Backend\Backend.csproj" />
+    <!-- Referenced for its own sake, not as an analyzer: TsSchemaEmitterTests exercises the
+         parser and emitter directly. Backend.csproj pulls the same project in with
+         ReferenceOutputAssembly="false", which is why this needs its own entry. -->
+    <ProjectReference Include="..\..\Generators\Core\Generator.Core.csproj" />
   </ItemGroup>
 
 </Project>

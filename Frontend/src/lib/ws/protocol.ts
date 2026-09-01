@@ -4,13 +4,13 @@
 // What lives in this file is what a generator cannot produce: the frame size
 // limit, encoding, and the classification of an incoming frame.
 //
-// Frames are JSON text where "$type" is the exact C# class name and must be the
-// first property. Every other property is camelCase: the generator stamps an
-// explicit [JsonPropertyName] on each one, and SocketJsonSerializer sets
-// PropertyNamingPolicy = CamelCase on top of that. Requests carry a
-// client-chosen `requestId` that the matching response echoes back. Server-push
-// events carry neither id — the backend never assigns EventId — and that
-// absence is what classifyMessage uses to tell an event from a response.
+// Frames are JSON text where "$type" is the exact C# class name. Every other
+// property is camelCase: the generator stamps an explicit [JsonPropertyName] on
+// each one, and SocketJsonSerializer sets PropertyNamingPolicy = CamelCase on
+// top of that. Requests carry a client-chosen `requestId` that the matching
+// response echoes back. Server-push events carry a server-assigned `eventId`
+// and `timestamp` instead, and never a `requestId` — that absence is what
+// classifyMessage uses to tell an event from a response.
 
 import {
 	RESPONSE_TYPES,
@@ -48,15 +48,43 @@ export function encodeRequest<K extends RequestType>(
 	type: K,
 	id: number,
 	payload: RequestMap[K]['payload']
-): string {
-	// $type is inserted first on purpose: System.Text.Json requires the
-	// discriminator to be the first property, and JSON.stringify preserves
-	// insertion order.
+): string;
+/**
+ * The untyped form, for a request this file does not describe. The debug console
+ * builds its catalogue from the backend's own types.xml, which is always at least
+ * as current as RequestMap.
+ */
+export function encodeRequest(type: string, id: number, payload: Record<string, unknown>): string;
+export function encodeRequest(type: string, id: number, payload: Record<string, unknown>): string {
+	// $type is inserted first, and JSON.stringify preserves insertion order.
+	// Not load-bearing any more — SocketJsonSerializer sets
+	// AllowOutOfOrderMetadataProperties — but it is what System.Text.Json reads
+	// fastest, and it puts the discriminator where a human reading a frame in the
+	// console looks for it.
 	const json = JSON.stringify({ $type: type, requestId: id, ...payload });
 	if (new TextEncoder().encode(json).length > MAX_MESSAGE_BYTES) {
 		throw new Error(`Encoded ${type} exceeds the backend's ${MAX_MESSAGE_BYTES}-byte frame limit`);
 	}
 	return json;
+}
+
+/**
+ * The `requestId` in a frame, or null when the text is not JSON, is not an
+ * object, or carries no numeric id. For a frame this side did not build — the
+ * debug console sends its editor's text verbatim, malformations included — so
+ * it reads what is there rather than assuming a well-formed request.
+ */
+export function readRequestId(raw: string): number | null {
+	try {
+		const parsed: unknown = JSON.parse(raw);
+		if (typeof parsed !== 'object' || parsed === null) {
+			return null;
+		}
+		const id = (parsed as { requestId?: unknown }).requestId;
+		return typeof id === 'number' ? id : null;
+	} catch {
+		return null;
+	}
 }
 
 export type Classified =

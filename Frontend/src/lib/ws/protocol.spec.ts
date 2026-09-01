@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { classifyMessage, encodeRequest, MAX_MESSAGE_BYTES } from './protocol';
+import { classifyMessage, encodeRequest, MAX_MESSAGE_BYTES, readRequestId } from './protocol';
 
 describe('encodeRequest', () => {
 	it('emits $type as the first property', () => {
@@ -62,5 +62,19 @@ describe('classifyMessage', () => {
 	it('classifies malformed or untyped payloads as unknown', () => {
 		expect(classifyMessage('not json')).toEqual({ kind: 'unknown', raw: 'not json' });
 		expect(classifyMessage('{"requestId":1}')).toEqual({ kind: 'unknown', raw: '{"requestId":1}' });
+	});
+});
+
+describe('readRequestId', () => {
+	it('reads the id out of a frame', () => {
+		expect(readRequestId('{"$type":"PingRequest","requestId":7}')).toBe(7);
+	});
+
+	it('returns null for a frame with no id, a non-numeric one, or no JSON at all', () => {
+		// The console sends whatever is typed, so all three reach this.
+		expect(readRequestId('{"$type":"PingRequest"}')).toBeNull();
+		expect(readRequestId('{"requestId":"7"}')).toBeNull();
+		expect(readRequestId('{ half a frame')).toBeNull();
+		expect(readRequestId('42')).toBeNull();
 	});
 });

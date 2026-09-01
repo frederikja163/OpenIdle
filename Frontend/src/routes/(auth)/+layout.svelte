@@ -4,12 +4,14 @@
 	import { page } from '$app/state';
 	import Gamepad2 from '@lucide/svelte/icons/gamepad-2';
 	import InfinityIcon from '@lucide/svelte/icons/infinity';
+	import Bug from '@lucide/svelte/icons/bug';
 	import LogOut from '@lucide/svelte/icons/log-out';
 	import Users from '@lucide/svelte/icons/users';
 	import type { Snippet } from 'svelte';
 	import githubMark from '$lib/assets/github-mark-white.svg';
 	import Row from '$lib/components/layout/Row.svelte';
 	import { Button } from '$lib/components/ui/button';
+	import { debugEnabled } from '$lib/debug/flag';
 	import { connectionState } from '$lib/state/session.svelte';
 	import { logout, userState } from '$lib/state/user.svelte';
 	import { cn } from '$lib/utils/stylingUtils';
@@ -143,6 +145,13 @@
 				class="size-3.75 opacity-50 transition-opacity duration-(--dur-fast) ease-out group-hover:opacity-100"
 			/>
 		</a>
+
+		{#if debugEnabled()}
+			<Button variant="ghost" size="sm" href={resolve('/debug')}>
+				<Bug />
+				Debug
+			</Button>
+		{/if}
 
 		<!--
 			The design's TopBar sets this rule's own 6px margins on top of the
