@@ -72,13 +72,12 @@ public sealed class SocketRegistryService
             return;
         }
 
-        byte[] bytes = SocketJsonSerializer.Serialize(eventBase);
         foreach (Socket socket in sockets.Keys.ToArray())
         {
             using CancellationTokenSource timeout = new(TimeSpan.FromSeconds(5));
             try
             {
-                await socket.SendMessageAsync(bytes, timeout.Token);
+                await socket.SendEventAsync(eventBase);
             }
             catch (Exception exception) when (IsTransportException(exception))
             {
@@ -95,13 +94,12 @@ public sealed class SocketRegistryService
             return;
         }
 
-        byte[] bytes = SocketJsonSerializer.Serialize(eventBase);
         foreach (Socket socket in sockets.Keys.ToArray())
         {
             using CancellationTokenSource timeout = new(TimeSpan.FromSeconds(5));
             try
             {
-                await socket.SendMessageAsync(bytes, timeout.Token);
+                await socket.SendEventAsync(eventBase);
             }
             catch (Exception exception) when (IsTransportException(exception))
             {

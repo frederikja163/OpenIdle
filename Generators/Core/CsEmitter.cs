@@ -232,6 +232,7 @@ public sealed class CsEmitter : IDtoEmitter
             PropertyType.Guid => "Guid",
             PropertyType.UserId => "Guid",
             PropertyType.ProfileId => "Guid",
+            PropertyType.Timestamp => "long",
             _ => throw new ArgumentOutOfRangeException()
         };
         if (property.Multiple)
@@ -265,6 +266,7 @@ public sealed class CsEmitter : IDtoEmitter
         using (Scope _ = _textWriter.Scope("public abstract class EventBase : DtoBase"))
         {
             Property(new Property(PropertyType.Int, "int", "EventId", false, true), "set");
+            Property(new Property(PropertyType.Timestamp, "long", "Timestamp", false, true), "set");
         }
         _textWriter.WriteLine();
     }

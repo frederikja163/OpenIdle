@@ -72,7 +72,7 @@ Everything that crosses the WebSocket is a DTO in `Backend.Dtos`, generated from
 | Attribute | Required | Values | Effect |
 |---|---|---|---|
 | `name` | yes | identifier | Property name. Lower-camel-cased in JSON and TS; upper-camel-cased in C#. |
-| `type` | yes | `string` \| `int` \| `float` \| `Guid` \| `UserId` \| `ProfileId`, or the **base name of a declared `Dto`** (suffix omitted) or a **declared `Enum`** | A bare built-in, or a reference to a custom type (see below). Case-insensitive for the built-ins only. |
+| `type` | yes | `string` \| `int` \| `float` \| `Guid` \| `UserId` \| `ProfileId` \| `timestamp`, or the **base name of a declared `Dto`** (suffix omitted) or a **declared `Enum`** | A bare built-in, or a reference to a custom type (see below). Case-insensitive for the built-ins only. |
 | `multiple` | no | `true` | Emits an array type (`T[]`). Absent / `false` = single value. |
 | `optional` | no | `true` | Emits `name?: T` in TypeScript and lets the sender omit the key. On the wire an omitted key leaves the C# property at its default — there is no null. |
 
@@ -86,6 +86,7 @@ Built-in type mapping (verified against the emitter):
 | `Guid` | `Guid` | `string` | `"00000000-0000-..."` |
 | `UserId` | `Guid` | `string` | `"00000000-0000-..."` |
 | `ProfileId` | `Guid` | `string` | `"00000000-0000-..."` |
+| `timestamp` | `long` | `number` | `1760000000000` |
 | declared `Dto` (e.g. `Profile`) | `ProfileDto` | `ProfileDto` | object |
 | declared `Enum` (e.g. `ItemId`) | `ItemId` | `ItemId` (a string-literal union) | `"Stone"` |
 
@@ -119,7 +120,7 @@ Two things about enums that `types.xml` does not show:
 
 ### 2.4 Supported property types, precisely
 
-The parser (`Generators/Core/Parser.cs:225`) matches `type` against the `PropertyType` enum's member names, case-insensitively: `string`, `int`, `float`, `Guid`, `UserId`, `ProfileId`. Any other value must name a declared `<Dto>` or `<Enum>` — the parser resolves it to that type and the emitters emit a reference to the generated `{Name}Dto` (for DTOs) or `{Name}` (for enums). Consequences:
+The parser (`Generators/Core/Parser.cs:225`) matches `type` against the `PropertyType` enum's member names, case-insensitively: `string`, `int`, `float`, `Guid`, `UserId`, `ProfileId`, `timestamp`. Any other value must name a declared `<Dto>` or `<Enum>` — the parser resolves it to that type and the emitters emit a reference to the generated `{Name}Dto` (for DTOs) or `{Name}` (for enums). Consequences:
 
 - `type="Profile"` → `ProfileDto` (requires a `<Dto name="Profile">`).
 - `type="ItemId"` → `ItemId` (requires an `<Enum name="ItemId">`).
@@ -207,7 +208,7 @@ The C# emitter writes a single file, `Dto.g.cs`, into the `Backend.Dtos` namespa
 
 - The concrete classes for every DTO/request/response/event, all `sealed`.
 - `[JsonPolymorphic]` + one `[JsonDerivedType]` per generated type on `abstract class DtoBase`.
-- The three abstract bases: `DtoBase`, `RequestBase` (with `int RequestId`), `ResponseBase` (with `int RequestId`), `EventBase` (with `int EventId`).
+- The three abstract bases: `DtoBase`, `RequestBase` (with `int RequestId`), `ResponseBase` (with `int RequestId`), `EventBase` (with `int EventId` and `long Timestamp`, a Unix epoch-milliseconds value the backend stamps when it sends the event).
 - `public static class DropTableData` with `public static void AddAll(DropTableService service)` — a seeder that registers every `<DropTable>` from `types.xml` into a `Backend.Services.DropTableService`: `<ItemReward item=...>` drops become `new ItemReward(count, weight, ItemId.X)`, `<TableReward table=...>` drops become `new TableReward(count, weight, DropTableId.Y)`.
 - `public static class ActivityData` with `public static void AddAll(ActivityService service)` — a seeder that registers every `<Activity>` from `types.xml` into a `Backend.Services.ActivityService`: each activity becomes `service.AddActivity(ActivityId.X, new ActivityDefinition(time: Nf, rewards: [...], requirements: [...]))`. The `time` attribute is required — a float number of seconds for how long the activity takes to complete by default (`<Activity name="Stone" time="2.5">` emits `time: 2.5f`). Rewards are `<ItemReward>` / `<TableReward>` / `<XpReward>`; a missing `weight` makes the reward guaranteed, a present `weight` puts it into the activity's weighted roll (same weighted pick as a drop table). `<LevelRequirement skill="..." count="..."/>` becomes `new LevelRequirement(SkillId.X, N)`.
 - `public static class ToolData` with `public static void AddAll(ToolService service)` — a seeder that registers tool/item-slot content. Every `<Item name="...">` becomes `service.AddItem(ItemId.X, new ItemDefinition(tags: [ItemTagId.Y, ...], stats: [new ItemStat(ToolStat.Z, v), ...]))`. Each `<Tag name="..."/>` child maps to an `ItemTagId` value (in declaration order — the first is the main tag); each `<Stat name="..." value="..."/>` maps to a `ToolStat` and a float. Every `<Skill name="...">` with nested `<Slot>` children becomes `service.AddSkillSlots(SkillId.X, [new SlotBinding(ItemSlotId.Y, ItemTagId.T, required), ...])`; each `<Slot name="..." required="...">` carries a nested `<Tag name="..."/>` that is the accepted tag — an item is valid in that slot when one of the item's tags equals the slot's tag (resolvable via `ToolService.GetValidItems`). A `<Skill>` with no `<Slot>` children emits no `AddSkillSlots` call (the skill still auto-registers into `SkillId`). `Item`s auto-register into the `ItemId` enum, `Skill`s into the `SkillId` enum, `ItemTag`s into an `ItemTagId` enum, and slots into an `ItemSlotId` enum, exactly like `DropTableId` / `ActivityId`. These enums are **not** declared by hand in `types.xml` — declare `<Item>` and `<Skill>` elements instead (the `<Enum>` element remains available for any other enum). Ensure `Item`/`Skill` elements appear before any DTO that references `ItemId`/`SkillId`, since property types resolve against known enums at parse time.
@@ -248,11 +249,14 @@ Server→client event:
 {
   "$type": "ProfilesChangedEvent",
   "eventId": 1,
+  "timestamp": 1760000000000,
   "profiles": [
     { "name": "Hero", "profileId": "2efd7f6a-..." }
   ]
 }
 ```
+
+`eventId` and `timestamp` are stamped by the backend at send time, per socket: the first event delivered to a connection is `eventId` 0, the next 1, and so on, and `timestamp` is the Unix epoch-milliseconds moment the event was sent.
 
 Server→client event carrying the resulting inventory and skill state (the `ActivityEndedEvent` reports the **totals** after a completion, not deltas):
 
@@ -304,7 +308,7 @@ Conventions (not enforced — reviewer judgement):
 
 ## 8. Gotchas & known quirks
 
-- **`requestId`/`eventId` are numeric on both sides.** The C# bases hardcode `int RequestId` / `int EventId` and the TS emitter hardcodes `requestId: number` / `eventId: number` (`Generators/Core/TsEmitter.cs:20-33`). This matches the TS socket client ([`Frontend/src/lib/ws/client.ts`](../../Frontend/src/lib/ws/client.ts)), which assigns client-chosen numeric ids (`nextRequestId`) and expects the echoed response to carry the same number. Keep the two sides in lockstep — changing one alone breaks deserialization. The contract is strict integers: there is no `JsonNumberHandling` leniency in the backend serializer, so a quoted numeral such as `"requestId": "1"` fails deserialization — clients must send a plain JSON number.
+- **`requestId`/`eventId` are numeric on both sides, and `timestamp` (built-in type `timestamp`, emitted as a `long`/`number`) is a Unix epoch-milliseconds value.** The C# bases hardcode `int RequestId` / `int EventId` / `long Timestamp` and the TS emitter hardcodes `requestId: number` / `eventId: number` / `timestamp: number` (`Generators/Core/TsEmitter.cs`, `Generators/Core/CsEmitter.cs`). This matches the TS socket client ([`Frontend/src/lib/ws/client.ts`](../../Frontend/src/lib/ws/client.ts)), which assigns client-chosen numeric ids (`nextRequestId`) and expects the echoed response to carry the same number. Keep the two sides in lockstep — changing one alone breaks deserialization. The contract is strict integers: there is no `JsonNumberHandling` leniency in the backend serializer, so a quoted numeral such as `"requestId": "1"` (or `"timestamp": "1760000000000"`) fails deserialization — clients must send a plain JSON number.
 - **Numeric attributes are culture-invariant.** All `<Property>`/reward/activity attribute numbers (including `float` `weight` and activity `time`) are parsed with `InvariantCulture` (`Generators/Core/Extensions/XmlElementExtensions.cs`) and emitted with it too — decimals always use `.`, regardless of OS locale.
 - **No editor validation.** There is no XSD; typos in `type` values surface at parse time (DTC002 / CLI error) and other mistakes at C# build time or not at all (TS). Copy a nearby block rather than typing from memory.
 - **An unrecognized top-level element throws** — `Parser.Element` ends in a `default` branch that raises `ParserException` (`Generators/Core/Parser.cs:71-73`), so a typo'd element name fails the build rather than being skipped.
