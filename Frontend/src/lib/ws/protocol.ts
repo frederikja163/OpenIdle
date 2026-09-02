@@ -4,7 +4,8 @@
 // the generator stamps an explicit [JsonPropertyName] on each one, and
 // SocketJsonSerializer sets PropertyNamingPolicy = CamelCase on top of that.
 // Requests carry a client-chosen `requestId` that the matching response echoes
-// back. Server-push events carry `eventId` instead and never a `requestId`.
+// back. Server-push events never carry a `requestId`; the backend stamps each
+// with a per-socket `eventId` (first is 0) and a Unix-ms `timestamp` at send.
 
 export interface ProfileDto {
 	name: string;
@@ -58,6 +59,10 @@ export type ServerResponse =
 // Any server-push message: an EventBase subclass, which carries no requestId.
 export interface ServerEvent {
 	$type: string;
+	/** The backend's per-socket sequence, stamped at send; the first event is 0. */
+	eventId: number;
+	/** Unix epoch milliseconds, stamped by the backend at send. */
+	timestamp: number;
 	[key: string]: unknown;
 }
 
@@ -77,7 +82,13 @@ export type EventMap = {
 
 export type EventType = keyof EventMap;
 
-export type ServerEventOf<K extends EventType> = { $type: K } & EventMap[K];
+// The EventBase stamps are repeated here so a typed event stays assignable to
+// ServerEvent, which the handler-set casts in WsClient.onEvent rely on.
+export type ServerEventOf<K extends EventType> = {
+	$type: K;
+	eventId: number;
+	timestamp: number;
+} & EventMap[K];
 
 export type RequestMap = {
 	PingRequest: { payload: Record<string, never>; response: PongResponse };
