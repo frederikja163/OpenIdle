@@ -13,13 +13,18 @@
 # project runs @sveltejs/adapter-node instead of a static adapter — see
 # doc/libraries/sveltejs-adapter-node.md.
 
-# The .NET stage: build the generator CLI once and run it against types.xml to
-# emit the TsSchema value src/lib/debug/protocol.generated.ts needs. The root
-# .dockerignore keeps bins, objs, node_modules and local state out of the COPY.
+# The .NET stage: build the generator CLI once and run it against types.xml for
+# both TS targets — Ts for the src/lib/ws/dto.generated.ts interfaces the whole
+# protocol module re-exports, TsSchema for the value src/lib/debug needs. The
+# root .dockerignore keeps bins, objs, node_modules and local state out of the
+# COPY.
 FROM mcr.microsoft.com/dotnet/sdk:10.0 AS generate
 WORKDIR /src
 COPY . .
 RUN mkdir -p /out \
+    && dotnet run --project Generators/Generator/Generator.csproj \
+        --configuration Release -- \
+        -i types.xml -t Ts -o /out/dto.generated.ts \
     && dotnet run --project Generators/Generator/Generator.csproj \
         --configuration Release -- \
         -i types.xml -t TsSchema -o /out/protocol.generated.ts
@@ -34,8 +39,9 @@ COPY Frontend/package.json Frontend/bun.lock ./
 RUN bun install --frozen-lockfile
 
 COPY Frontend/ ./
-# Overlay the freshly generated schema over any local copy that slipped past
+# Overlay the freshly generated files over any local copy that slipped past
 # .dockerignore, so the image always builds from its own commit's types.xml.
+COPY --from=generate /out/dto.generated.ts ./src/lib/ws/dto.generated.ts
 COPY --from=generate /out/protocol.generated.ts ./src/lib/debug/protocol.generated.ts
 
 # Not `bun run build`: the local `build` script starts with `bun run generate`,

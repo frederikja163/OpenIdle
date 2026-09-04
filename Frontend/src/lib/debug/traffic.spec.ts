@@ -38,14 +38,14 @@ afterEach(() => {
 
 describe('frame kinds', () => {
 	it('marks an outbound frame a request', () => {
-		deliver('out', '{"$type":"PingRequest","requestId":1}');
+		deliver('out', '{"$type":"LoginAsTestUserRequest","requestId":1}');
 
 		expect(trafficState.frames[0].kind).toBe('request');
 	});
 
 	it('marks an inbound reply a response, paired to its request', () => {
-		deliver('out', '{"$type":"PingRequest","requestId":1}');
-		deliver('in', '{"$type":"PongResponse","requestId":1}');
+		deliver('out', '{"$type":"LoginAsTestUserRequest","requestId":1}');
+		deliver('in', '{"$type":"LoginAsTestUserResponse","requestId":1}');
 
 		const reply = trafficState.frames[0];
 		expect(reply.kind).toBe('response');
@@ -76,7 +76,9 @@ describe('frame kinds', () => {
 	});
 
 	it('marks a known response type without a requestId unknown, not an event', () => {
-		deliver('in', '{"$type":"PongResponse"}');
+		// Has to be a type RESPONSE_TYPES actually contains — that set is generated
+		// from types.xml, so an invented one would take the event path instead.
+		deliver('in', '{"$type":"ListProfilesResponse"}');
 
 		expect(trafficState.frames[0].kind).toBe('unknown');
 	});
@@ -112,7 +114,7 @@ describe('event timing', () => {
 	});
 
 	it('does not read a timestamp property on a non-event frame as a send stamp', () => {
-		deliver('out', '{"$type":"PingRequest","requestId":1,"timestamp":1760000000000}');
+		deliver('out', '{"$type":"LoginAsTestUserRequest","requestId":1,"timestamp":1760000000000}');
 
 		const frame = trafficState.frames[0];
 		expect(frame.travelMs).toBeNull();

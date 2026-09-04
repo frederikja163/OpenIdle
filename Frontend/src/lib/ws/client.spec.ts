@@ -306,10 +306,10 @@ describe('WsClient', () => {
 
 		// The socket is left in CONNECTING forever, so the only thing that can
 		// settle this is a timer armed before the connection was awaited.
-		const ping = capture(client.request('PingRequest', {}));
+		const login = capture(client.request('LoginAsTestUserRequest', {}));
 		await vi.advanceTimersByTimeAsync(50);
 
-		expect((await ping).toString()).toMatch(/PingRequest timed out after 50ms/);
+		expect((await login).toString()).toMatch(/LoginAsTestUserRequest timed out after 50ms/);
 	});
 
 	it('stops calling handlers that have unsubscribed', async () => {
@@ -340,7 +340,7 @@ describe('WsClient', () => {
 		const onProfiles = vi.fn();
 		client.onEvent('ProfilesChangedEvent', onProfiles);
 
-		capture(client.request('PingRequest', {}));
+		capture(client.request('LoginAsTestUserRequest', {}));
 		await flush();
 		sockets[0].open();
 		await flush();
@@ -363,7 +363,7 @@ describe('WsClient', () => {
 		});
 		client.onEvent('ProfilesChangedEvent', second);
 
-		capture(client.request('PingRequest', {}));
+		capture(client.request('LoginAsTestUserRequest', {}));
 		await flush();
 		sockets[0].open();
 		await flush();
@@ -471,18 +471,20 @@ describe('WsClient', () => {
 			}
 		});
 
-		expect((await capture(client.request('PingRequest', {}))).toString()).toMatch(/mixed content/);
+		expect((await capture(client.request('LoginAsTestUserRequest', {}))).toString()).toMatch(
+			/mixed content/
+		);
 
 		// The memoised rejection must not outlive the attempt that produced it, or
 		// the singleton is bricked for the life of the page.
-		const retry = capture(client.request('PingRequest', {}));
+		const retry = capture(client.request('LoginAsTestUserRequest', {}));
 		await flush();
 		expect(sockets).toHaveLength(1);
 		sockets[0].open();
 		await flush();
-		sockets[0].deliver({ $type: 'PongResponse', requestId: 2 });
+		sockets[0].deliver({ $type: 'LoginAsTestUserResponse', requestId: 2 });
 
-		await expect(retry).resolves.toMatchObject({ $type: 'PongResponse' });
+		await expect(retry).resolves.toMatchObject({ $type: 'LoginAsTestUserResponse' });
 	});
 
 	it('reconnects after an unexpected drop but not after close()', async () => {
@@ -520,7 +522,7 @@ describe('WsClient', () => {
 			replayed.push('login');
 		});
 
-		capture(client.request('PingRequest', {}));
+		capture(client.request('LoginAsTestUserRequest', {}));
 		await flush();
 		sockets[0].open();
 		await flush();
@@ -562,15 +564,15 @@ describe('WsClient', () => {
 
 		// Spaced out, and carrying a property no request declares: the console has
 		// to be able to send a frame nothing here would have built.
-		const frame = '{ "$type": "PingRequest", "requestId": 4, "extra": "kept" }';
+		const frame = '{ "$type": "LoginAsTestUserRequest", "requestId": 4, "extra": "kept" }';
 		const sent = capture(client.sendRaw(frame));
 		await flush();
 		sockets[0].open();
 		await flush();
 
 		expect(sockets[0].sent).toEqual([frame]);
-		sockets[0].deliver({ $type: 'PongResponse', requestId: 4 });
-		await expect(sent).resolves.toEqual({ $type: 'PongResponse', requestId: 4 });
+		sockets[0].deliver({ $type: 'LoginAsTestUserResponse', requestId: 4 });
+		await expect(sent).resolves.toEqual({ $type: 'LoginAsTestUserResponse', requestId: 4 });
 	});
 
 	it('sends a frame that is not JSON and resolves once it is away', async () => {
@@ -617,12 +619,12 @@ describe('WsClient', () => {
 		vi.useFakeTimers();
 		const { client, sockets } = makeClient();
 
-		capture(client.sendRaw('{"$type":"PingRequest","requestId":9}'));
+		capture(client.sendRaw('{"$type":"LoginAsTestUserRequest","requestId":9}'));
 		await flush();
 		sockets[0].open();
 		await flush();
 
-		capture(client.request('PingRequest', {}));
+		capture(client.request('ListProfilesRequest', {}));
 		await flush();
 
 		expect(JSON.parse(sockets[0].sent[1]).requestId).toBe(10);
@@ -632,11 +634,11 @@ describe('WsClient', () => {
 		vi.useFakeTimers();
 		const { client, sockets } = makeClient();
 
-		const first = capture(client.sendRaw('{"$type":"PingRequest","requestId":3}'));
+		const first = capture(client.sendRaw('{"$type":"LoginAsTestUserRequest","requestId":3}'));
 		await flush();
 		sockets[0].open();
 		await flush();
-		const second = capture(client.sendRaw('{"$type":"PingRequest","requestId":3}'));
+		const second = capture(client.sendRaw('{"$type":"LoginAsTestUserRequest","requestId":3}'));
 		await flush();
 
 		// Both frames go out — reusing an id is a case worth staging — but only one
@@ -645,8 +647,8 @@ describe('WsClient', () => {
 		expect(sockets[0].sent).toHaveLength(2);
 		expect(await first).toBeInstanceOf(WsError);
 
-		sockets[0].deliver({ $type: 'PongResponse', requestId: 3 });
-		await expect(second).resolves.toMatchObject({ $type: 'PongResponse' });
+		sockets[0].deliver({ $type: 'LoginAsTestUserResponse', requestId: 3 });
+		await expect(second).resolves.toMatchObject({ $type: 'LoginAsTestUserResponse' });
 	});
 
 	it('hands out a reserved id that the next request then skips', async () => {
@@ -654,7 +656,7 @@ describe('WsClient', () => {
 		const { client, sockets } = makeClient();
 
 		expect(client.reserveRequestId()).toBe(1);
-		capture(client.request('PingRequest', {}));
+		capture(client.request('ListProfilesRequest', {}));
 		await flush();
 		sockets[0].open();
 		await flush();

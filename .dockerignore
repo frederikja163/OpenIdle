@@ -1,9 +1,10 @@
 # Both images are built from the repository root. The backend needs it because
 # Backend.csproj pulls Generators/ in as analyzers and ../types.xml in as an
 # AdditionalFile. The frontend needs it because its Dockerfile regenerates
-# src/lib/debug/protocol.generated.ts from types.xml via a .NET generator stage
-# before running vite build. This list is therefore load-bearing for both:
-# without it the whole working tree is sent to the daemon.
+# src/lib/ws/dto.generated.ts and src/lib/debug/protocol.generated.ts from
+# types.xml via a .NET generator stage before running vite build. This list is
+# therefore load-bearing for both: without it the whole working tree is sent to
+# the daemon.
 
 .git
 .gitignore

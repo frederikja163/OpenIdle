@@ -400,10 +400,14 @@ export class WsClient {
 	}
 
 	onEvent<K extends EventType>(type: K, handler: (event: ServerEventOf<K>) => void): () => void {
+		// Through `unknown`: the handler is narrower than the open `ServerEvent`
+		// the set is typed on, and only the `type` key it is filed under decides
+		// which events reach it — a relationship the compiler cannot see.
+		const narrowed = handler as unknown as (event: ServerEvent) => void;
 		const handlers = this.eventHandlers.get(type) ?? new Set();
-		handlers.add(handler as (event: ServerEvent) => void);
+		handlers.add(narrowed);
 		this.eventHandlers.set(type, handlers);
-		return () => handlers.delete(handler as (event: ServerEvent) => void);
+		return () => handlers.delete(narrowed);
 	}
 
 	/** Every server-push message, whatever its type. For diagnostics. */
@@ -498,13 +502,15 @@ export class WsClient {
 				break;
 			}
 			case 'error': {
-				// The backend echoes the failed request's id, except for a frame it
-				// could not deserialize far enough to read one — it sends 0 there,
-				// and 0 is never a request id. Falling back on the oldest unanswered
-				// request is right for that case because the backend handles messages
-				// FIFO per connection, which is why the cursor is `outstanding` and
-				// not `pending`.
-				const echoed = classified.message.requestId;
+				// The backend echoes the failed request's id, and sends an explicit 0
+				// for a frame it could not deserialize far enough to read one — never
+				// a real id, since ids start at 1. `?? 0` only folds a frame that omits
+				// the field (it is `int?` server-side, hence optional in the generated
+				// type) onto that same path. Falling back on the oldest unanswered
+				// request is right for it because the backend handles messages FIFO
+				// per connection, which is why the cursor is `outstanding` and not
+				// `pending`.
+				const echoed = classified.message.requestId ?? 0;
 				const id = echoed > 0 ? echoed : this.outstanding.shift();
 				if (id === undefined) {
 					console.warn('Websocket error with no request to attribute it to:', classified.message);

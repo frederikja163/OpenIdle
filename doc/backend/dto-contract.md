@@ -65,7 +65,7 @@ Everything that crosses the WebSocket is a DTO in `Backend.Dtos`, generated from
 
 - The root element can be any name — [`types.xml`](../../types.xml) uses `<Types>`. Only its child elements are read.
 - `Property` elements are collected from **direct** children only (a `Request`'s `<Response>` is a direct child; the response's properties live *inside* `<Response>`).
-- Top-level element order is preserved in the generated file. An unrecognized top-level element name is a **parse error** (`Generators/Core/Parser.cs:71-73`).
+- Top-level element order is preserved in the generated file. An unrecognized top-level element name is a **parse error** (`Generators/Core/Parser.cs:101-102`).
 
 ### 2.2 `<Property>` attributes
 
@@ -92,16 +92,16 @@ Built-in type mapping (verified against the emitter):
 
 **Enums are strings on the wire, not ordinals.** The backend's serializer installs a
 `JsonStringEnumConverter` (`Backend/SocketJsonSerializer.cs:17`) and the TS emitter writes
-`type ItemId = 'None' | 'Stone' | ...` (`Generators/Core/TsEmitter.cs:54`), so the value sent
-and received is the member's UpperCamelCase name.
+`export type ItemId = 'None' | 'Stone' | ...` (`Generators/Core/TsEmitter.cs:122-130`), so the
+value sent and received is the member's UpperCamelCase name.
 
 Two things about enums that `types.xml` does not show:
 
 - **Every enum gains a `None` member as its first value**, added by the generator's `Enum`
-  constructor (`Generators/Core/DtoModel.cs:32-35`) whether or not the XML lists one.
+  constructor (`Generators/Core/DtoModel.cs:36`) whether or not the XML lists one.
 - **`DropTableId` and `ActivityId` are synthesised**, not declared: each `<DropTable>` and
   `<Activity>` element appends its name to the corresponding enum
-  (`Generators/Core/Parser.cs:47,52`). They can be referenced from a `Property` like any
+  (`Generators/Core/Parser.cs:51,56`). They can be referenced from a `Property` like any
   other enum.
 
 ### 2.3 Naming rules (enforced by the emitters)
@@ -156,10 +156,11 @@ The source generator reads `types.xml` (wired as an `AdditionalFile` in [`Backen
 ### Step 3 — generate the TypeScript (frontend only)
 
 ```powershell
-dotnet run --project Generators\Generator -- -i types.xml -t Ts -o Frontend\src\lib\dto.generated.ts
+cd Frontend; bun run gen:dto   # or, from the repo root:
+dotnet run --project Generators\Generator -- -i types.xml -t Ts -o Frontend\src\lib\ws\dto.generated.ts
 ```
 
-The TS emitter runs on demand rather than as part of `vite build` itself: locally `Frontend/package.json`'s `generate` script (which `dev`, `build` and `check` all start with) invokes it, and the frontend image regenerates the schema inside `Frontend/Dockerfile` from its commit's `types.xml`, so no output is ever checked in (the `*.generated.ts` convention excludes it via the root `.gitignore`). Target `Cs` prints the same output the source generator produces, useful for review:
+The TS emitters run on demand rather than as part of `vite build` itself. `Frontend/package.json`'s `generate` script runs both of them — `gen:dto` (target `Ts`, the interfaces) and `gen:schema` (target `TsSchema`, the debug console's runtime description) — and `dev`, `build` and `check` all start with `generate`, so simply starting the frontend regenerates both files: a contract edit cannot go unnoticed, and **a .NET SDK is a hard prerequisite for frontend work**. `Frontend/Dockerfile` does the same inside a short .NET stage, from its own commit's `types.xml`, because the Bun image has no dotnet. Target `Cs` prints the same output the source generator produces, useful for review:
 
 ```powershell
 dotnet run --project Generators\Generator -- -i types.xml -t Cs
@@ -308,10 +309,10 @@ Conventions (not enforced — reviewer judgement):
 
 ## 8. Gotchas & known quirks
 
-- **`requestId`/`eventId` are numeric on both sides, and `timestamp` (built-in type `timestamp`, emitted as a `long`/`number`) is a Unix epoch-milliseconds value.** The C# bases hardcode `int RequestId` / `int EventId` / `long Timestamp` and the TS emitter hardcodes `requestId: number` / `eventId: number` / `timestamp: number` (`Generators/Core/TsEmitter.cs`, `Generators/Core/CsEmitter.cs`). This matches the TS socket client ([`Frontend/src/lib/ws/client.ts`](../../Frontend/src/lib/ws/client.ts)), which assigns client-chosen numeric ids (`nextRequestId`) and expects the echoed response to carry the same number. Keep the two sides in lockstep — changing one alone breaks deserialization. The contract is strict integers: there is no `JsonNumberHandling` leniency in the backend serializer, so a quoted numeral such as `"requestId": "1"` (or `"timestamp": "1760000000000"`) fails deserialization — clients must send a plain JSON number.
+- **`requestId`/`eventId`/`timestamp` are numeric on both sides; `requestId` is optional, the event stamps are not.** The C# bases declare `int? RequestId` / `int? EventId` / `long? Timestamp` (`timestamp` is the built-in type, a Unix epoch-milliseconds value stamped by `Socket.SendEventAsync`, which every event passes through and which also assigns the per-socket `eventId`, starting at 0), and `SocketJsonSerializer` sets `DefaultIgnoreCondition = WhenWritingNull`, so an id left unset is *omitted from the frame entirely* rather than sent as 0 — the one exception is the error path, where `Socket` sends an explicit `requestId: 0` for a frame it could not read an id from. (`WhenWritingNull` rather than `WhenWritingDefault` on purpose: every non-nullable contract property is always written, so a genuine `0` count or `None` enum reaches the client instead of arriving as `undefined` behind a required `number` — `SocketJsonSerializerTests` pins both halves.) The TS emitter therefore emits `requestId?: number` on `RequestBase`/`ResponseBase` but a required `eventId: number` / `timestamp: number` on `EventBase` — never absent on the wire — and `classifyMessage` relies on the absence of `requestId` to tell a server-push event from a response. This matches the TS socket client ([`Frontend/src/lib/ws/client.ts`](../../Frontend/src/lib/ws/client.ts)), which assigns client-chosen numeric ids (`nextRequestId`) and expects the echoed response to carry the same number. Keep the two sides in lockstep — changing one alone breaks deserialization. The contract is strict integers: there is no `JsonNumberHandling` leniency in the backend serializer, so a quoted numeral such as `"requestId": "1"` (or `"timestamp": "1760000000000"`) fails deserialization — clients must send a plain JSON number.
 - **Numeric attributes are culture-invariant.** All `<Property>`/reward/activity attribute numbers (including `float` `weight` and activity `time`) are parsed with `InvariantCulture` (`Generators/Core/Extensions/XmlElementExtensions.cs`) and emitted with it too — decimals always use `.`, regardless of OS locale.
 - **No editor validation.** There is no XSD; typos in `type` values surface at parse time (DTC002 / CLI error) and other mistakes at C# build time or not at all (TS). Copy a nearby block rather than typing from memory.
-- **An unrecognized top-level element throws** — `Parser.Element` ends in a `default` branch that raises `ParserException` (`Generators/Core/Parser.cs:71-73`), so a typo'd element name fails the build rather than being skipped.
+- **An unrecognized top-level element throws** — `Parser.Element` ends in a `default` branch that raises `ParserException` (`Generators/Core/Parser.cs:101-102`), so a typo'd element name fails the build rather than being skipped.
 - **`optional` is mandatory for partial DTOs.** Non-optional properties are emitted as `required` in generated C#, so deserializing a payload that omits them throws `JsonException` ("missing required properties"). Any DTO whose sender legitimately leaves some fields unset defaults must mark them `optional` in `types.xml`.
 - **Agree on totals vs. deltas per event.** Whether an event carries incremental changes or the full resulting state is a protocol decision made per event in `types.xml` (see the `ActivityEndedEvent` example in [Wire format](#5-wire-format), which sends **total** `items`/`skills`). Don't mix the two meanings on one event.
 - **`GetElementsByTagName("Response")` is recursive** — the response can sit anywhere inside the request element, but keep it as a direct child.
@@ -326,11 +327,9 @@ dotnet build Backend\Backend.csproj
 # 2. Generated C# looks right
 dotnet run --project Generators\Generator -- -i types.xml -t Cs
 
-# 3. TypeScript interfaces look right (output follows *.generated.* convention for git-ignore)
-dotnet run --project Generators\Generator -- -i types.xml -t Ts -o Frontend\src\lib\dto.generated.ts
-
-# 4. The runtime schema emits, and satisfies the interface the frontend checks it against
-cd Frontend; bun run check
+# 3. Both TypeScript emitters run, and their output typechecks
+#    (`generate` runs gen:dto and gen:schema; both outputs are git-ignored)
+cd Frontend; bun run check; bun run test:unit -- --run
 ```
 
 ## 10. Related documents
