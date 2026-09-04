@@ -61,5 +61,5 @@ chore: ignore SQLite journal files
 - Only commit when asked. Do not commit as a follow-through to finishing an edit.
 - Do not push, and do not commit directly on `main` — branch first if that is where you are.
 - Never use `--no-verify` or skip signing; if a hook fails, fix the cause.
-- Do not stage secrets, `.env` files, build output, or scratch files; `.env.example` is fine.
+- Do not stage secrets, `.env.local` (or any other `.env.*`), build output, or scratch files; the tracked `.env` and `.env.example` hold no secrets and are fine.
 - Prefer a new commit over `--amend` on anything already pushed.

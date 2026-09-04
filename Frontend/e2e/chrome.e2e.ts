@@ -18,7 +18,7 @@ const WS_ROUTE = /\/ws$/;
 // protected route there, so assert on the pathname plus optional query.
 const LOGIN_URL = /\/login(\?.*)?$/;
 
-const THORIN = { Name: 'Thorin', ProfileId: 'p1' };
+const THORIN = { name: 'Thorin', profileId: 'p1' };
 
 /**
  * The whole backend, for tests that only need the socket to say yes: every
@@ -29,12 +29,12 @@ function respondToRequests(
 	profiles: (typeof THORIN)[]
 ): (frame: string | Buffer) => void {
 	return (frame) => {
-		const { $type, Id } = JSON.parse(String(frame));
+		const { $type, requestId } = JSON.parse(String(frame));
 		if ($type === 'ListProfilesRequest') {
-			ws.send(JSON.stringify({ $type: 'ListProfilesResponse', Id, Profiles: profiles }));
+			ws.send(JSON.stringify({ $type: 'ListProfilesResponse', requestId, profiles }));
 			return;
 		}
-		ws.send(JSON.stringify({ $type: `${$type.replace('Request', '')}Response`, Id }));
+		ws.send(JSON.stringify({ $type: `${$type.replace('Request', '')}Response`, requestId }));
 	};
 }
 
@@ -81,8 +81,8 @@ test('a successful login replaces /login rather than stacking /profiles on it', 
 		// connectToServer() is never called, so these frames are the whole
 		// backend as far as this test is concerned.
 		ws.onMessage((frame) => {
-			const { Id } = JSON.parse(String(frame));
-			ws.send(JSON.stringify({ $type: 'LoginAsTestUserResponse', Id }));
+			const { requestId } = JSON.parse(String(frame));
+			ws.send(JSON.stringify({ $type: 'LoginAsTestUserResponse', requestId }));
 		});
 	});
 
@@ -179,4 +179,112 @@ test('deleting a profile asks first, and confirming does nothing yet', async ({ 
 	await page.getByRole('dialog').getByRole('button', { name: 'Delete' }).click();
 	await expect(page.getByRole('dialog')).toBeHidden();
 	await expect(page.getByText('Thorin')).toBeVisible();
+});
+
+test('the Debug button opens the protocol console and Back returns to the app', async ({
+	page
+}) => {
+	await page.routeWebSocket(WS_ROUTE, (ws) => ws.onMessage(respondToRequests(ws, [THORIN])));
+
+	await page.goto('/login');
+	await page.getByRole('button', { name: 'Log in' }).click();
+	await expect(page).toHaveURL(/\/profiles$/);
+
+	await page.getByRole('link', { name: 'Debug' }).click();
+	await expect(page).toHaveURL(/\/debug$/);
+	await expect(page.getByRole('heading', { level: 1, name: 'Protocol console' })).toBeVisible();
+
+	// Client-side navigation keeps the singleton socket logged in, so the return
+	// does not bounce to /login.
+	await page.getByRole('link', { name: 'Back to app' }).click();
+	await expect(page).toHaveURL(/\/profiles$/);
+});
+
+test('the traffic filter remembers which kinds are hidden across reloads', async ({ page }) => {
+	await page.goto('/debug');
+
+	// The toggle is a badge whose text oi-label-sm uppercases in CSS only, so
+	// the accessible name stays lowercase and 'event' still finds it.
+	await page.getByRole('button', { name: 'event' }).click();
+	await expect(page.getByRole('button', { name: 'event' })).toHaveAttribute(
+		'aria-pressed',
+		'false'
+	);
+
+	await page.reload();
+	await expect(page.getByRole('button', { name: 'event' })).toHaveAttribute(
+		'aria-pressed',
+		'false'
+	);
+});
+
+// The ?ws= override is what lets the one deployed dev frontend be pointed at
+// whichever backend a developer is running locally — something no single
+// PUBLIC_WS_URL can do, since every developer's localhost is their own. These
+// run under PUBLIC_ALLOW_WS_OVERRIDE=true (see playwright.config.ts), which is
+// the deployed dev frontend's configuration and not production's.
+
+const LOCAL_BACKEND = 'ws://127.0.0.1:5066/ws';
+const OTHER_BACKEND = 'ws://127.0.0.1:9999/ws';
+
+/**
+ * Records which address the client actually dialled. The route pattern has to
+ * be broad enough to catch an overridden port, so it matches any /ws.
+ */
+async function captureDialledUrl(page: import('@playwright/test').Page): Promise<string[]> {
+	const dialled: string[] = [];
+	await page.routeWebSocket(WS_ROUTE, (ws) => {
+		dialled.push(ws.url());
+		ws.onMessage(respondToRequests(ws, [THORIN]));
+	});
+	return dialled;
+}
+
+test('a ?ws= override points the socket at another backend', async ({ page }) => {
+	const dialled = await captureDialledUrl(page);
+
+	await page.goto(`/login?ws=${encodeURIComponent(OTHER_BACKEND)}`);
+	await page.getByRole('button', { name: 'Log in' }).click();
+	await expect(page).toHaveURL(/\/profiles$/);
+
+	expect(dialled).toEqual([OTHER_BACKEND]);
+});
+
+test('an override survives a reload, so it need only be typed once', async ({ page }) => {
+	const dialled = await captureDialledUrl(page);
+
+	await page.goto(`/login?ws=${encodeURIComponent(OTHER_BACKEND)}`);
+	await page.getByRole('button', { name: 'Log in' }).click();
+	await expect(page).toHaveURL(/\/profiles$/);
+
+	// Navigating to a plain URL, with no parameter to re-supply it.
+	await page.goto('/login');
+	await page.getByRole('button', { name: 'Log in' }).click();
+	await expect(page).toHaveURL(/\/profiles$/);
+
+	expect(dialled).toEqual([OTHER_BACKEND, OTHER_BACKEND]);
+});
+
+test('an empty ?ws= hands the client back to its own backend', async ({ page }) => {
+	const dialled = await captureDialledUrl(page);
+
+	await page.goto(`/login?ws=${encodeURIComponent(OTHER_BACKEND)}`);
+	await page.getByRole('button', { name: 'Log in' }).click();
+	await expect(page).toHaveURL(/\/profiles$/);
+
+	await page.goto('/login?ws=');
+	await page.getByRole('button', { name: 'Log in' }).click();
+	await expect(page).toHaveURL(/\/profiles$/);
+
+	expect(dialled).toEqual([OTHER_BACKEND, LOCAL_BACKEND]);
+});
+
+test('a malformed override is ignored rather than breaking the client', async ({ page }) => {
+	const dialled = await captureDialledUrl(page);
+
+	await page.goto('/login?ws=not-a-url');
+	await page.getByRole('button', { name: 'Log in' }).click();
+	await expect(page).toHaveURL(/\/profiles$/);
+
+	expect(dialled).toEqual([LOCAL_BACKEND]);
 });

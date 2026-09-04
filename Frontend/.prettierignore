@@ -8,3 +8,9 @@ bun.lockb
 # Miscellaneous
 /static/
 .claude
+
+# Generated from types.xml by the DTO generator (bun run generate). The ws DTO
+# module (src/lib/ws/dto.generated.ts) is emitted prettier-conformant on purpose
+# and is checked like hand-written code; only the debug console's runtime
+# schema keeps a layout of its own.
+src/lib/debug/protocol.generated.ts

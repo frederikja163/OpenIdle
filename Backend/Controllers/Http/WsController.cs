@@ -9,7 +9,6 @@ namespace Backend.Controllers.Http;
 [ApiController]
 public sealed class WsController(SocketRegistryService socketRegistryService) : ControllerBase
 {
-    // TODO: According to claude this needs an origin check?    
     [HttpGet("/ws")]
     public async Task Ws()
     {

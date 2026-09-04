@@ -1,0 +1,123 @@
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+
+// The tap recordTraffic() registers, captured so deliver() can speak to it the
+// way the real WsClient does when a frame crosses the socket.
+const { handlers } = vi.hoisted(() => ({
+	handlers: [] as ((direction: 'in' | 'out', raw: string) => void)[]
+}));
+
+vi.mock('$lib/ws/client', () => ({
+	getWsClient: () => ({
+		onFrame: (handler: (direction: 'in' | 'out', raw: string) => void) => {
+			handlers.push(handler);
+			return () => {};
+		}
+	})
+}));
+
+const { clearTraffic, partnerOf, recordTraffic, trafficState } =
+	await import('$lib/debug/traffic.svelte');
+
+function deliver(direction: 'in' | 'out', raw: string): void {
+	for (const handler of handlers) {
+		handler(direction, raw);
+	}
+}
+
+let stop: () => void;
+
+beforeEach(() => {
+	handlers.length = 0;
+	clearTraffic();
+	stop = recordTraffic();
+});
+
+afterEach(() => {
+	stop();
+});
+
+describe('frame kinds', () => {
+	it('marks an outbound frame a request', () => {
+		deliver('out', '{"$type":"LoginAsTestUserRequest","requestId":1}');
+
+		expect(trafficState.frames[0].kind).toBe('request');
+	});
+
+	it('marks an inbound reply a response, paired to its request', () => {
+		deliver('out', '{"$type":"LoginAsTestUserRequest","requestId":1}');
+		deliver('in', '{"$type":"LoginAsTestUserResponse","requestId":1}');
+
+		const reply = trafficState.frames[0];
+		expect(reply.kind).toBe('response');
+		expect(reply.elapsedMs).not.toBeNull();
+		expect(partnerOf(reply)).toBe(trafficState.frames[1]);
+	});
+
+	it('marks an ErrorResponse a response and keeps its message on the row', () => {
+		deliver('in', '{"$type":"ErrorResponse","requestId":7,"message":"boom"}');
+
+		const frame = trafficState.frames[0];
+		expect(frame.kind).toBe('response');
+		expect(frame.error).toBe('boom');
+	});
+
+	it('marks a server-push frame an event', () => {
+		deliver('in', '{"$type":"ProfilesChangedEvent","profiles":[]}');
+
+		expect(trafficState.frames[0].kind).toBe('event');
+	});
+
+	it('marks an unparseable frame unknown, keeping the raw text', () => {
+		deliver('in', 'definitely not json');
+
+		const frame = trafficState.frames[0];
+		expect(frame.kind).toBe('unknown');
+		expect(frame.pretty).toBe(frame.raw);
+	});
+
+	it('marks a known response type without a requestId unknown, not an event', () => {
+		// Has to be a type RESPONSE_TYPES actually contains — that set is generated
+		// from types.xml, so an invented one would take the event path instead.
+		deliver('in', '{"$type":"ListProfilesResponse"}');
+
+		expect(trafficState.frames[0].kind).toBe('unknown');
+	});
+});
+
+describe('event timing', () => {
+	beforeEach(() => {
+		vi.useFakeTimers();
+		vi.setSystemTime(1_760_000_000_025);
+	});
+
+	afterEach(() => {
+		vi.useRealTimers();
+	});
+
+	it('sets travelMs from the send stamp and keeps eventId 0 as the first event', () => {
+		deliver(
+			'in',
+			'{"$type":"ProfilesChangedEvent","eventId":0,"timestamp":1760000000000,"profiles":[]}'
+		);
+
+		const frame = trafficState.frames[0];
+		expect(frame.travelMs).toBe(25);
+		expect(frame.eventId).toBe(0);
+	});
+
+	it('leaves both null on an event without the stamps', () => {
+		deliver('in', '{"$type":"ProfilesChangedEvent","profiles":[]}');
+
+		const frame = trafficState.frames[0];
+		expect(frame.travelMs).toBeNull();
+		expect(frame.eventId).toBeNull();
+	});
+
+	it('does not read a timestamp property on a non-event frame as a send stamp', () => {
+		deliver('out', '{"$type":"LoginAsTestUserRequest","requestId":1,"timestamp":1760000000000}');
+
+		const frame = trafficState.frames[0];
+		expect(frame.travelMs).toBeNull();
+		expect(frame.eventId).toBeNull();
+	});
+});

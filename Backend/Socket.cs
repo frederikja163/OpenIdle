@@ -20,10 +20,21 @@ internal sealed class SocketCloseEventArgs : EventArgs
 {
 }
 
+internal sealed class ProfileOnlineEventArgs(ProfileId profileId) : EventArgs
+{
+    public ProfileId ProfileId { get; init; } = profileId;
+}
+
+internal sealed class ProfileOfflineEventArgs(ProfileId profileId) : EventArgs
+{
+    public ProfileId ProfileId { get; init; } = profileId;
+}
+
 internal sealed class Socket : IDisposable
 {
     private readonly WebSocket _webSocket;
     private bool _isClosed;
+    private int _nextEventId;
     private readonly SemaphoreSlim _sendLock = new(1, 1);
 
     internal Socket(WebSocket webSocket)
@@ -33,8 +44,8 @@ internal sealed class Socket : IDisposable
 
     internal WebSocketState State => _webSocket.State;
     
-    internal Guid? UserId { get; set; }
-    internal Guid? ProfileId { get; set; }
+    internal UserId? UserId { get; set; }
+    internal ProfileId? ProfileId { get; set; }
 
     internal event AsyncEventHandler<MessageReceivedEventArgs>? MessageReceived;
     internal event AsyncEventHandler<SocketCloseEventArgs>? Close;
@@ -88,21 +99,36 @@ internal sealed class Socket : IDisposable
     internal async Task SendEventAsync(EventBase eventBase)
     {
         using CancellationTokenSource timeout = new(TimeSpan.FromSeconds(5));
-        await SendMessageAsync(SocketJsonSerializer.Serialize(eventBase), timeout.Token);
-    }
-
-    internal async Task SendMessageAsync(byte[] bytes, CancellationToken cancellationToken)
-    {
-        Log.Debug($"Sending: {Encoding.UTF8.GetString(bytes)}");
-        await _sendLock.WaitAsync(cancellationToken);
+        await _sendLock.WaitAsync(timeout.Token);
         try
         {
-            await _webSocket.SendAsync(bytes, WebSocketMessageType.Text, true, cancellationToken);
+            eventBase.EventId = _nextEventId++;
+            eventBase.Timestamp = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds();
+            await SendMessageCoreAsync(SocketJsonSerializer.Serialize(eventBase), timeout.Token);
         }
         finally
         {
             _sendLock.Release();
         }
+    }
+
+    internal async Task SendMessageAsync(byte[] bytes, CancellationToken cancellationToken)
+    {
+        await _sendLock.WaitAsync(cancellationToken);
+        try
+        {
+            await SendMessageCoreAsync(bytes, cancellationToken);
+        }
+        finally
+        {
+            _sendLock.Release();
+        }
+    }
+
+    private async Task SendMessageCoreAsync(byte[] bytes, CancellationToken cancellationToken)
+    {
+        Log.Debug($"Sending: {Encoding.UTF8.GetString(bytes)}");
+        await _webSocket.SendAsync(bytes, WebSocketMessageType.Text, true, cancellationToken);
     }
 
     private async Task HandleTextMessageAsync(byte[] bytes, int count)

@@ -1,8 +1,8 @@
 using System.Net.WebSockets;
+using System.Text.Json;
 using Backend;
 using Backend.Dtos;
 using Backend.Services;
-using Microsoft.Extensions.Logging.Abstractions;
 using OpenIdle.Tests.TestDoubles;
 
 namespace OpenIdle.Tests.Services;
@@ -57,8 +57,8 @@ public sealed class SocketRegistryServiceTests
         TestSocket second = CreateRegisteredSocket(registry);
         registry.SetUser(first.Socket, UserA);
         registry.SetUser(second.Socket, UserA);
-        registry.SetProfile(first.Socket, ProfileA);
-        registry.SetProfile(second.Socket, ProfileB);
+        await registry.SetProfile(first.Socket, ProfileA);
+        await registry.SetProfile(second.Socket, ProfileB);
 
         await registry.SendToProfileAsync(ProfileA, CreateEvent());
 
@@ -71,14 +71,102 @@ public sealed class SocketRegistryServiceTests
     {
         SocketRegistryService registry = CreateRegistry();
         TestSocket testSocket = CreateRegisteredSocket(registry);
-        registry.SetProfile(testSocket.Socket, ProfileA);
+        await registry.SetProfile(testSocket.Socket, ProfileA);
 
-        registry.SetProfile(testSocket.Socket, ProfileB);
+        await registry.SetProfile(testSocket.Socket, ProfileB);
 
         await registry.SendToProfileAsync(ProfileA, CreateEvent());
         await registry.SendToProfileAsync(ProfileB, CreateEvent());
         Assert.That(testSocket.WebSocket.SendAttempts, Is.EqualTo(1));
         Assert.That(testSocket.WebSocket.FirstSentText, Does.Contain("ProfilesChangedEvent"));
+    }
+
+    [Test]
+    public async Task SetProfile_CurrentProfile_IsNoOp()
+    {
+        SocketRegistryService registry = CreateRegistry();
+        List<Guid> online = [];
+        List<Guid> offline = [];
+        registry.ProfileOnline += (_, e) =>
+        {
+            online.Add(e.ProfileId);
+            return Task.CompletedTask;
+        };
+        registry.ProfileOffline += (_, e) =>
+        {
+            offline.Add(e.ProfileId);
+            return Task.CompletedTask;
+        };
+        TestSocket testSocket = CreateRegisteredSocket(registry);
+        await registry.SetProfile(testSocket.Socket, ProfileA);
+
+        await registry.SetProfile(testSocket.Socket, ProfileA);
+
+        Assert.Multiple(() =>
+        {
+            Assert.That(online, Is.EqualTo(new[] { ProfileA }));
+            Assert.That(offline, Is.Empty);
+        });
+    }
+
+    [Test]
+    public async Task SetProfile_MovedSocket_RaisesOfflineForPreviousProfile()
+    {
+        SocketRegistryService registry = CreateRegistry();
+        List<Guid> offline = [];
+        registry.ProfileOffline += (_, e) =>
+        {
+            offline.Add(e.ProfileId);
+            return Task.CompletedTask;
+        };
+        TestSocket testSocket = CreateRegisteredSocket(registry);
+        await registry.SetProfile(testSocket.Socket, ProfileA);
+
+        await registry.SetProfile(testSocket.Socket, ProfileB);
+
+        Assert.That(offline, Is.EqualTo(new[] { ProfileA }));
+    }
+
+    [Test]
+    public async Task ClosingSocket_DuringProfileAssignment_DoesNotLeaveSocketInProfile()
+    {
+        SocketRegistryService registry = CreateRegistry();
+        TaskCompletionSource assignmentPaused = new(TaskCreationOptions.RunContinuationsAsynchronously);
+        TaskCompletionSource continueAssignment = new(TaskCreationOptions.RunContinuationsAsynchronously);
+        registry.ProfileOffline += async (_, e) =>
+        {
+            if (e.ProfileId == ProfileA)
+            {
+                assignmentPaused.SetResult();
+                await continueAssignment.Task;
+            }
+        };
+        TestSocket testSocket = CreateRegisteredSocket(registry);
+        await registry.SetProfile(testSocket.Socket, ProfileA);
+
+        Task assignment = registry.SetProfile(testSocket.Socket, ProfileB);
+        await assignmentPaused.Task.WaitAsync(TimeSpan.FromSeconds(5));
+        Task removal = testSocket.Socket.CloseAsync(WebSocketCloseStatus.NormalClosure, "bye");
+        bool removalCompletedWhileHandlerBlocked;
+        try
+        {
+            removalCompletedWhileHandlerBlocked =
+                await Task.WhenAny(removal, Task.Delay(TimeSpan.FromSeconds(5))) == removal;
+        }
+        finally
+        {
+            continueAssignment.SetResult();
+        }
+
+        await Task.WhenAll(assignment, removal);
+        await registry.SendToProfileAsync(ProfileB, CreateEvent());
+
+        Assert.Multiple(() =>
+        {
+            Assert.That(removalCompletedWhileHandlerBlocked, Is.True,
+                "Profile event handlers must run after releasing synchronization.");
+            AssertNoEventSent(testSocket);
+        });
     }
 
     [Test]
@@ -116,7 +204,7 @@ public sealed class SocketRegistryServiceTests
     {
         SocketRegistryService registry = CreateRegistry();
         TestSocket testSocket = CreateRegisteredSocket(registry);
-        registry.SetProfile(testSocket.Socket, ProfileA);
+        await registry.SetProfile(testSocket.Socket, ProfileA);
         testSocket.WebSocket.ThrowOnNextSend();
 
         await registry.SendToProfileAsync(ProfileA, CreateEvent());
@@ -144,7 +232,7 @@ public sealed class SocketRegistryServiceTests
     {
         SocketRegistryService registry = CreateRegistry();
         TestSocket testSocket = CreateRegisteredSocket(registry);
-        registry.SetProfile(testSocket.Socket, ProfileA);
+        await registry.SetProfile(testSocket.Socket, ProfileA);
         testSocket.WebSocket.ThrowNonTransportOnNextSend();
 
         Assert.ThrowsAsync<InvalidOperationException>(() => registry.SendToProfileAsync(ProfileA, CreateEvent()));
@@ -159,7 +247,7 @@ public sealed class SocketRegistryServiceTests
         SocketRegistryService registry = CreateRegistry();
         TestSocket testSocket = CreateRegisteredSocket(registry);
         registry.SetUser(testSocket.Socket, UserA);
-        registry.SetProfile(testSocket.Socket, ProfileA);
+        await registry.SetProfile(testSocket.Socket, ProfileA);
 
         await testSocket.Socket.CloseAsync(WebSocketCloseStatus.NormalClosure, "bye");
         await registry.SendToUserAsync(UserA, CreateEvent());
@@ -168,9 +256,138 @@ public sealed class SocketRegistryServiceTests
         AssertNoEventSent(testSocket);
     }
 
+    [Test]
+    public async Task ProfileOnline_RaisedOnlyForFirstSocketOnProfile()
+    {
+        SocketRegistryService registry = CreateRegistry();
+        List<Guid> raised = [];
+        registry.ProfileOnline += (_, e) =>
+        {
+            raised.Add(e.ProfileId);
+            return Task.CompletedTask;
+        };
+
+        TestSocket first = CreateRegisteredSocket(registry);
+        TestSocket second = CreateRegisteredSocket(registry);
+        TestSocket other = CreateRegisteredSocket(registry);
+
+        await registry.SetProfile(first.Socket, ProfileA);
+        await registry.SetProfile(second.Socket, ProfileA);
+        await registry.SetProfile(other.Socket, ProfileB);
+
+        Assert.That(raised, Is.EqualTo(new[] { ProfileA, ProfileB }));
+    }
+
+    [Test]
+    public async Task ProfileOffline_RaisedOnlyWhenLastSocketLeavesProfile()
+    {
+        SocketRegistryService registry = CreateRegistry();
+        List<Guid> raised = [];
+        registry.ProfileOnline += (_, _) => Task.CompletedTask;
+        registry.ProfileOffline += (_, e) =>
+        {
+            raised.Add(e.ProfileId);
+            return Task.CompletedTask;
+        };
+
+        TestSocket first = CreateRegisteredSocket(registry);
+        TestSocket second = CreateRegisteredSocket(registry);
+        TestSocket other = CreateRegisteredSocket(registry);
+        await registry.SetProfile(first.Socket, ProfileA);
+        await registry.SetProfile(second.Socket, ProfileA);
+        await registry.SetProfile(other.Socket, ProfileB);
+
+        await first.Socket.CloseAsync(WebSocketCloseStatus.NormalClosure, "bye");
+        await second.Socket.CloseAsync(WebSocketCloseStatus.NormalClosure, "bye");
+        await other.Socket.CloseAsync(WebSocketCloseStatus.NormalClosure, "bye");
+
+        Assert.That(raised, Is.EqualTo(new[] { ProfileA, ProfileB }));
+    }
+
+    [Test]
+    public async Task ProfileOnline_RaisedAgainWhenProfileEmptiesAndRefills()
+    {
+        SocketRegistryService registry = CreateRegistry();
+        List<Guid> raised = [];
+        registry.ProfileOnline += (_, e) =>
+        {
+            raised.Add(e.ProfileId);
+            return Task.CompletedTask;
+        };
+
+        TestSocket first = CreateRegisteredSocket(registry);
+        TestSocket second = CreateRegisteredSocket(registry);
+        await registry.SetProfile(first.Socket, ProfileA);
+        await first.Socket.CloseAsync(WebSocketCloseStatus.NormalClosure, "bye");
+
+        await registry.SetProfile(second.Socket, ProfileA);
+
+        Assert.That(raised, Is.EqualTo(new[] { ProfileA, ProfileA }));
+    }
+
+    [Test]
+    public async Task SendToUserAsync_AssignsIncrementingEventIdsAndTimestampPerSocket()
+    {
+        SocketRegistryService registry = CreateRegistry();
+        TestSocket testSocket = CreateRegisteredSocket(registry);
+        registry.SetUser(testSocket.Socket, UserA);
+
+        long beforeSend = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds();
+        await registry.SendToUserAsync(UserA, CreateEvent());
+        await registry.SendToUserAsync(UserA, CreateEvent());
+        long afterSend = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds();
+
+        Assert.That(testSocket.WebSocket.SendAttempts, Is.EqualTo(2));
+        using JsonDocument first = JsonDocument.Parse(testSocket.WebSocket.Sent[0].Bytes);
+        using JsonDocument second = JsonDocument.Parse(testSocket.WebSocket.Sent[1].Bytes);
+        JsonElement firstRoot = first.RootElement;
+        JsonElement timestamp = firstRoot.GetProperty("timestamp");
+        Assert.Multiple(() =>
+        {
+            Assert.That(firstRoot.GetProperty("eventId").GetInt32(), Is.EqualTo(0));
+            Assert.That(timestamp.ValueKind, Is.EqualTo(JsonValueKind.Number));
+            Assert.That(timestamp.TryGetInt64(out long timestampValue), Is.True);
+            Assert.That(timestampValue, Is.InRange(beforeSend, afterSend));
+            Assert.That(second.RootElement.GetProperty("eventId").GetInt32(), Is.EqualTo(1));
+        });
+    }
+
+    [Test]
+    public async Task SendEventAsync_ConcurrentCalls_SendSequentialUniqueIdsInOrder()
+    {
+        const int eventCount = 200;
+        FakeWebSocket webSocket = new();
+        Socket socket = new(webSocket);
+        TaskCompletionSource start = new(TaskCreationOptions.RunContinuationsAsynchronously);
+
+        Task[] sends = Enumerable.Range(0, eventCount)
+            .Select(_ => Task.Run(async () =>
+            {
+                await start.Task;
+                await socket.SendEventAsync(CreateEvent());
+            }))
+            .ToArray();
+
+        start.SetResult();
+        await Task.WhenAll(sends);
+
+        int[] sentIds = webSocket.Sent
+            .Select(frame => JsonDocument.Parse(frame.Bytes))
+            .Select(document =>
+            {
+                using (document)
+                {
+                    return document.RootElement.GetProperty("eventId").GetInt32();
+                }
+            })
+            .ToArray();
+        Assert.That(sentIds, Is.EqualTo(Enumerable.Range(0, eventCount)));
+        Assert.That(sentIds.Distinct().Count(), Is.EqualTo(eventCount));
+    }
+
     private static SocketRegistryService CreateRegistry()
     {
-        return new SocketRegistryService(NullLogger<SocketRegistryService>.Instance);
+        return new SocketRegistryService();
     }
 
     private static TestSocket CreateRegisteredSocket(SocketRegistryService registry)

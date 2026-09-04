@@ -131,7 +131,7 @@ public sealed class SocketEndpointServiceTests
     private static SocketEndpointService CreateService(out SocketRegistryService registry)
     {
         ServiceProvider provider = new ServiceCollection().BuildServiceProvider();
-        registry = new SocketRegistryService(NullLogger<SocketRegistryService>.Instance);
+        registry = new SocketRegistryService();
         return new SocketEndpointService(provider, registry, NullLogger<SocketEndpointService>.Instance);
     }
 

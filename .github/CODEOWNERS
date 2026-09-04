@@ -1,0 +1,22 @@
+# Reviewer requests per area. GitHub reads this file from the base branch when
+# a non-draft pull request is opened (or a draft is marked ready for review)
+# and requests a review from the owners of every changed file, except the PR
+# author. Patterns follow .gitignore rules; the LAST matching line wins for a
+# given file. Keep the area mapping in step with .github/labeler.yml.
+
+# Backend, its tests, the socket contract, and the DTO generator pipeline.
+/Backend/          @frederikja163
+/tests/            @frederikja163
+/types.xml         @frederikja163
+/Generators/       @frederikja163
+
+# Frontend.
+/Frontend/         @OliverEngbjerg
+
+# Docker, deployment and CI. Last on purpose: Backend/Dockerfile and
+# Frontend/Dockerfile go to the devops owner, not the area owner.
+/deploy/           @OliverEngbjerg
+/.github/          @OliverEngbjerg
+**/Dockerfile*     @OliverEngbjerg
+**/.dockerignore   @OliverEngbjerg
+**/*compose*.y*ml  @OliverEngbjerg

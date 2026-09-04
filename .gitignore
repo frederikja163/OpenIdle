@@ -31,5 +31,13 @@ Desktop.ini
 *.db-wal
 *.db-journal
 
-# Generated DTO preview output (dotnet run --project Generators/Generator)
+# Generated DTO preview output (dotnet run --project Generators/Generator -t Cs)
+# and the TypeScript emitters' output. Never checked in: `bun run generate` runs
+# on dev/build/check locally, and Frontend/Dockerfile regenerates in the image
+# from its own commit's types.xml, so a stale copy can never ship.
 **/*.generated.*
+
+# Per-host deployment values. deploy/.env.example is the tracked template.
+deploy/.env
+deploy/.env.*
+!deploy/.env.example

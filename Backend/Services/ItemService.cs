@@ -11,7 +11,7 @@ namespace Backend.Services;
 
 public sealed class ItemService(IDbContextFactory<GameDbContext> dbContextFactory)
 {
-    internal async Task<Item[]> GetItemsAsync(Guid profileId)
+    internal async Task<Item[]> GetItemsAsync(ProfileId profileId)
     {
         await using GameDbContext dbContext = await dbContextFactory.CreateDbContextAsync();
 
@@ -21,7 +21,7 @@ public sealed class ItemService(IDbContextFactory<GameDbContext> dbContextFactor
             .ToArrayAsync();
     }
 
-    internal async Task<Item[]> GetItemsAsync(Guid profileId, IEnumerable<ItemId> itemIds)
+    internal async Task<Item[]> GetItemsAsync(ProfileId profileId, IEnumerable<ItemId> itemIds)
     {
         await using GameDbContext dbContext = await dbContextFactory.CreateDbContextAsync();
 
@@ -31,7 +31,7 @@ public sealed class ItemService(IDbContextFactory<GameDbContext> dbContextFactor
             .ToArrayAsync();
     }
 
-    internal async Task<Item[]> AddItemsAsync(Guid profileId, IEnumerable<ItemReward> rewards)
+    internal async Task<Item[]> AddItemsAsync(ProfileId profileId, IEnumerable<ItemReward> rewards)
     {
         await using GameDbContext dbContext = await dbContextFactory.CreateDbContextAsync();
 
@@ -40,32 +40,32 @@ public sealed class ItemService(IDbContextFactory<GameDbContext> dbContextFactor
         return items;
     }
 
-    internal async Task<Item[]> AddItemsAsync(GameDbContext dbContext, Guid profileId, IEnumerable<ItemReward> rewards)
+    internal async Task<Item[]> AddItemsAsync(GameDbContext dbContext, ProfileId profileId, IEnumerable<ItemReward> rewards)
     {
-        List<Item> items = [];
-        foreach (ItemReward reward in rewards)
-        {
-            if (reward.Count <= 0)
-            {
-                continue;
-            }
+        var countsByItem = rewards
+            .Where(r => r.Count > 0)
+            .GroupBy(r => r.ItemId)
+            .ToDictionary(g => g.Key, g => g.Sum(r => r.Count));
 
+        List<Item> items = [];
+        foreach ((ItemId itemId, int count) in countsByItem)
+        {
             Item? item = await dbContext.Items
-                .FirstOrDefaultAsync(i => i.ProfileId == profileId && i.ItemId == reward.ItemId);
+                .FirstOrDefaultAsync(i => i.ProfileId == profileId && i.ItemId == itemId);
 
             if (item is null)
             {
                 item = new Item()
                 {
                     ProfileId = profileId,
-                    ItemId = reward.ItemId,
-                    Count = reward.Count,
+                    ItemId = itemId,
+                    Count = count,
                 };
                 dbContext.Items.Add(item);
             }
             else
             {
-                item.Count += reward.Count;
+                item.Count += count;
             }
 
             items.Add(item);

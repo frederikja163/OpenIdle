@@ -1,10 +1,10 @@
 import { describe, expect, it } from 'vitest';
-import { classifyMessage, encodeRequest, MAX_MESSAGE_BYTES } from './protocol';
+import { classifyMessage, encodeRequest, MAX_MESSAGE_BYTES, readRequestId } from './protocol';
 
 describe('encodeRequest', () => {
 	it('emits $type as the first property', () => {
-		const json = encodeRequest('PingRequest', 1, {});
-		expect(json.startsWith('{"$type":"PingRequest"')).toBe(true);
+		const json = encodeRequest('LoginAsTestUserRequest', 1, {});
+		expect(json.startsWith('{"$type":"LoginAsTestUserRequest"')).toBe(true);
 	});
 
 	it('includes the request id and camelCase payload', () => {
@@ -53,7 +53,7 @@ describe('classifyMessage', () => {
 
 	it('classifies a known response type with no requestId as unknown, not an event', () => {
 		// What the backend sends when it never read an id off the request:
-		// DefaultIgnoreCondition.WhenWritingDefault drops the null rather than
+		// DefaultIgnoreCondition.WhenWritingNull drops the null rather than
 		// echoing it, and there is no request such a frame could answer.
 		const raw = '{"$type":"LoginAsTestUserResponse"}';
 		expect(classifyMessage(raw)).toEqual({ kind: 'unknown', raw });
@@ -62,5 +62,19 @@ describe('classifyMessage', () => {
 	it('classifies malformed or untyped payloads as unknown', () => {
 		expect(classifyMessage('not json')).toEqual({ kind: 'unknown', raw: 'not json' });
 		expect(classifyMessage('{"requestId":1}')).toEqual({ kind: 'unknown', raw: '{"requestId":1}' });
+	});
+});
+
+describe('readRequestId', () => {
+	it('reads the id out of a frame', () => {
+		expect(readRequestId('{"$type":"LoginAsTestUserRequest","requestId":7}')).toBe(7);
+	});
+
+	it('returns null for a frame with no id, a non-numeric one, or no JSON at all', () => {
+		// The console sends whatever is typed, so all three reach this.
+		expect(readRequestId('{"$type":"LoginAsTestUserRequest"}')).toBeNull();
+		expect(readRequestId('{"requestId":"7"}')).toBeNull();
+		expect(readRequestId('{ half a frame')).toBeNull();
+		expect(readRequestId('42')).toBeNull();
 	});
 });

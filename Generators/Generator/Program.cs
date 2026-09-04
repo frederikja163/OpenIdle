@@ -8,6 +8,7 @@ public enum Target
 {
     Cs,
     Ts,
+    TsSchema,
 }
 
 public static class Program
@@ -26,7 +27,7 @@ public static class Program
         [Option('o', "output", HelpText = "Path to write the generated output to. Defaults to stdout.")]
         public string? Output { get; set; }
 
-        [Option('t', "target", Required = true, HelpText = "Which emitter to run: Cs or Ts.")]
+        [Option('t', "target", Required = true, HelpText = "Which emitter to run: Cs, Ts, or TsSchema.")]
         public Target Target { get; set; }
     }
 
@@ -116,6 +117,7 @@ public static class Program
         {
             Target.Cs => new CsEmitter(writer),
             Target.Ts => new TsEmitter(writer),
+            Target.TsSchema => new TsSchemaEmitter(writer),
             _ => throw new ArgumentOutOfRangeException(nameof(target)),
         };
     }

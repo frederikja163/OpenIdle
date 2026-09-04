@@ -1,9 +1,11 @@
 name: Backend Build
 
 on:
-  push:
-    branches: [main]
   pull_request:
+  workflow_call:
+
+permissions:
+  contents: read
 
 jobs:
   build:
@@ -27,3 +29,8 @@ jobs:
 
       - name: Run integration tests
         run: dotnet test tests/OpenIdle.IntegrationTests/OpenIdle.IntegrationTests.csproj --configuration Release --no-build
+
+      - name: Check both TypeScript emitters run
+        run: |
+          dotnet run --project Generators/Generator -- -i types.xml -t Ts -o /tmp/dto.generated.ts
+          dotnet run --project Generators/Generator -- -i types.xml -t TsSchema -o /tmp/protocol.generated.ts

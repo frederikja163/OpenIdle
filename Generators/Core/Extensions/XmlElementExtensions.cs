@@ -1,5 +1,6 @@
 ﻿using System;
 using System.Collections.Generic;
+using System.Globalization;
 using System.Linq;
 using System.Xml;
 
@@ -47,11 +48,30 @@ internal static class XmlElementExtensions
     {
         try
         {
-            return (T)Convert.ChangeType(value, typeof(T));
+            object converted = typeof(T) switch
+            {
+                _ when typeof(T) == typeof(int) => int.Parse(value, CultureInfo.InvariantCulture),
+                _ when typeof(T) == typeof(float) => ParseFiniteFloat(element, name, value),
+                // bool.Parse is already culture-invariant: it accepts only "True"/"False" (case-insensitive, ordinal).
+                _ when typeof(T) == typeof(bool) => bool.Parse(value),
+                _ => Convert.ChangeType(value, typeof(T), CultureInfo.InvariantCulture),
+            };
+            return (T)converted;
         }
         catch (Exception ex) when (ex is FormatException or InvalidCastException or OverflowException)
         {
             throw new ParserException($"Attribute {name} on element {element.Name} has invalid value '{value}'.");
         }
+    }
+
+    private static float ParseFiniteFloat(XmlElement element, string name, string value)
+    {
+        float converted = float.Parse(value, CultureInfo.InvariantCulture);
+        if (float.IsNaN(converted) || float.IsInfinity(converted))
+        {
+            throw new ParserException($"Attribute {name} on element {element.Name} has invalid value '{value}'.");
+        }
+
+        return converted;
     }
 }

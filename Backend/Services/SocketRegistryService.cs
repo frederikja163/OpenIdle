@@ -7,25 +7,21 @@ using System.Threading;
 using System.Threading.Tasks;
 using Backend.Dtos;
 using Backend.Extensions;
-using Microsoft.Extensions.Logging;
 
 namespace Backend.Services;
 
 public sealed class SocketRegistryService
 {
-    private readonly ILogger<SocketRegistryService> _logger;
-    private readonly ConcurrentDictionary<Guid, ConcurrentDictionary<Socket, byte>> _socketsByProfile = new();
-    private readonly ConcurrentDictionary<Socket, Guid> _profileBySocket = new();
-    private readonly ConcurrentDictionary<Guid, ConcurrentDictionary<Socket, byte>> _socketsByUser = new();
-    private readonly ConcurrentDictionary<Socket, Guid> _userBySocket = new();
+    private readonly object _profileSync = new();
+    private readonly ConcurrentDictionary<ProfileId, ConcurrentDictionary<Socket, byte>> _socketsByProfile = new();
+    private readonly ConcurrentDictionary<Socket, ProfileId> _profileBySocket = new();
+    private readonly ConcurrentDictionary<UserId, ConcurrentDictionary<Socket, byte>> _socketsByUser = new();
+    private readonly ConcurrentDictionary<Socket, UserId> _userBySocket = new();
 
     internal event AsyncEventHandler<MessageReceivedEventArgs>? MessageReceived;
     internal event AsyncEventHandler<SocketCloseEventArgs>? Close;
-
-    public SocketRegistryService(ILogger<SocketRegistryService> logger)
-    {
-        _logger = logger;
-    }
+    internal event AsyncEventHandler<ProfileOnlineEventArgs>? ProfileOnline;
+    internal event AsyncEventHandler<ProfileOfflineEventArgs>? ProfileOffline;
 
     internal void RegisterSocket(Socket socket)
     {
@@ -33,22 +29,45 @@ public sealed class SocketRegistryService
         socket.Close += SocketOnClose;
     }
 
-    internal void SetProfile(Socket socket, Guid profileId)
+    internal async Task SetProfile(Socket socket, ProfileId profileId)
     {
-        if (_profileBySocket.TryRemove(socket, out Guid previousProfileId) &&
-            _socketsByProfile.TryGetValue(previousProfileId, out ConcurrentDictionary<Socket, byte>? previousSockets))
+        ProfileId? offlineProfileId = null;
+        ProfileId? onlineProfileId = null;
+
+        lock (_profileSync)
         {
-            previousSockets.TryRemove(socket, out _);
+            if (_profileBySocket.TryGetValue(socket, out ProfileId currentProfileId) && currentProfileId == profileId)
+            {
+                return;
+            }
+
+            if (_profileBySocket.TryRemove(socket, out ProfileId previousProfileId) &&
+                RemoveSocketFromProfile(socket, previousProfileId))
+            {
+                offlineProfileId = previousProfileId;
+            }
+
+            _profileBySocket[socket] = profileId;
+            if (AddSocketToProfile(socket, profileId))
+            {
+                onlineProfileId = profileId;
+            }
         }
 
-        _profileBySocket[socket] = profileId;
-        ConcurrentDictionary<Socket, byte> sockets = _socketsByProfile.GetOrAdd(profileId, _ => new());
-        sockets[socket] = 0;
+        if (offlineProfileId is { } previousProfile)
+        {
+            await NotifyProfileOffline(previousProfile);
+        }
+
+        if (onlineProfileId is { } currentProfile)
+        {
+            await NotifyProfileOnline(currentProfile);
+        }
     }
 
-    internal void SetUser(Socket socket, Guid userId)
+    internal void SetUser(Socket socket, UserId userId)
     {
-        if (_userBySocket.TryRemove(socket, out Guid previousUserId) &&
+        if (_userBySocket.TryRemove(socket, out UserId previousUserId) &&
             _socketsByUser.TryGetValue(previousUserId, out ConcurrentDictionary<Socket, byte>? previousSockets))
         {
             previousSockets.TryRemove(socket, out _);
@@ -59,48 +78,46 @@ public sealed class SocketRegistryService
         sockets[socket] = 0;
     }
 
-    internal async Task SendToProfileAsync(Guid profileId, EventBase eventBase)
+    internal async Task SendToProfileAsync(ProfileId profileId, EventBase eventBase)
     {
         if (!_socketsByProfile.TryGetValue(profileId, out ConcurrentDictionary<Socket, byte>? sockets))
         {
             return;
         }
 
-        byte[] bytes = SocketJsonSerializer.Serialize(eventBase);
         foreach (Socket socket in sockets.Keys.ToArray())
         {
             using CancellationTokenSource timeout = new(TimeSpan.FromSeconds(5));
             try
             {
-                await socket.SendMessageAsync(bytes, timeout.Token);
+                await socket.SendEventAsync(eventBase);
             }
             catch (Exception exception) when (IsTransportException(exception))
             {
-                _logger.LogError(exception, "Failed to send event {EventType} to socket.", eventBase.GetType().Name);
-                RemoveSocket(socket);
+                Log.Error(exception);
+                await RemoveSocket(socket);
             }
         }
     }
 
-    internal async Task SendToUserAsync(Guid userId, EventBase eventBase)
+    internal async Task SendToUserAsync(UserId userId, EventBase eventBase)
     {
         if (!_socketsByUser.TryGetValue(userId, out ConcurrentDictionary<Socket, byte>? sockets))
         {
             return;
         }
 
-        byte[] bytes = SocketJsonSerializer.Serialize(eventBase);
         foreach (Socket socket in sockets.Keys.ToArray())
         {
             using CancellationTokenSource timeout = new(TimeSpan.FromSeconds(5));
             try
             {
-                await socket.SendMessageAsync(bytes, timeout.Token);
+                await socket.SendEventAsync(eventBase);
             }
             catch (Exception exception) when (IsTransportException(exception))
             {
-                _logger.LogError(exception, "Failed to send event {EventType} to socket.", eventBase.GetType().Name);
-                RemoveSocket(socket);
+                Log.Error(exception);
+                await RemoveSocket(socket);
             }
         }
     }
@@ -124,24 +141,75 @@ public sealed class SocketRegistryService
         finally
         {
             Socket socket = ArgumentException.ThrowIfNotOfType<Socket>(sender);
-            RemoveSocket(socket);
+            await RemoveSocket(socket);
             socket.MessageReceived -= SocketOnMessageReceived;
             socket.Close -= SocketOnClose;
         }
     }
 
-    private void RemoveSocket(Socket socket)
+    private async Task RemoveSocket(Socket socket)
     {
-        if (_profileBySocket.TryRemove(socket, out Guid profileId) &&
-            _socketsByProfile.TryGetValue(profileId, out ConcurrentDictionary<Socket, byte>? profileSockets))
+        ProfileId? offlineProfileId = null;
+        lock (_profileSync)
         {
-            profileSockets.TryRemove(socket, out _);
+            if (_profileBySocket.TryRemove(socket, out ProfileId profileId) &&
+                RemoveSocketFromProfile(socket, profileId))
+            {
+                offlineProfileId = profileId;
+            }
         }
 
-        if (_userBySocket.TryRemove(socket, out Guid userId) &&
+        if (offlineProfileId is { } offlineProfile)
+        {
+            await NotifyProfileOffline(offlineProfile);
+        }
+
+        if (_userBySocket.TryRemove(socket, out UserId userId) &&
             _socketsByUser.TryGetValue(userId, out ConcurrentDictionary<Socket, byte>? userSockets))
         {
             userSockets.TryRemove(socket, out _);
+        }
+    }
+
+    private bool AddSocketToProfile(Socket socket, ProfileId profileId)
+    {
+        ConcurrentDictionary<Socket, byte> sockets = _socketsByProfile.GetOrAdd(profileId, _ => new());
+        lock (sockets)
+        {
+            bool becameOnline = sockets.IsEmpty;
+            sockets[socket] = 0;
+            return becameOnline;
+        }
+    }
+
+    private bool RemoveSocketFromProfile(Socket socket, ProfileId profileId)
+    {
+        if (!_socketsByProfile.TryGetValue(profileId, out ConcurrentDictionary<Socket, byte>? sockets))
+        {
+            return false;
+        }
+
+        lock (sockets)
+        {
+            return sockets.TryRemove(socket, out _) && sockets.IsEmpty;
+        }
+    }
+
+    private async Task NotifyProfileOffline(ProfileId profileId)
+    {
+        Log.Debug($"Profile {profileId} went offline.");
+        if (ProfileOffline is { } offlineHandlers)
+        {
+            await offlineHandlers.InvokeAsync(this, new ProfileOfflineEventArgs(profileId));
+        }
+    }
+
+    private async Task NotifyProfileOnline(ProfileId profileId)
+    {
+        Log.Debug($"Profile {profileId} came online.");
+        if (ProfileOnline is { } onlineHandlers)
+        {
+            await onlineHandlers.InvokeAsync(this, new ProfileOnlineEventArgs(profileId));
         }
     }
 }

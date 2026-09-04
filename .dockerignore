@@ -1,0 +1,48 @@
+# Both images are built from the repository root. The backend needs it because
+# Backend.csproj pulls Generators/ in as analyzers and ../types.xml in as an
+# AdditionalFile. The frontend needs it because its Dockerfile regenerates
+# src/lib/ws/dto.generated.ts and src/lib/debug/protocol.generated.ts from
+# types.xml via a .NET generator stage before running vite build. This list is
+# therefore load-bearing for both: without it the whole working tree is sent to
+# the daemon.
+
+.git
+.gitignore
+.gitattributes
+.github
+.vs
+.idea
+.vscode
+.claude
+.opencode
+
+# Build output, dependency trees and test artifacts — rebuilt inside the image,
+# and host artifacts are the wrong RID or platform. (Frontend/.dockerignore
+# used to carry these; the root list now governs the frontend image too.)
+**/bin
+**/obj
+**/node_modules
+Frontend/.svelte-kit
+Frontend/build
+Frontend/test-results
+Frontend/playwright-report
+
+# Generated DTO preview output. The frontend image regenerates what it needs
+# from types.xml, so a stale local copy must not reach the daemon.
+**/*.generated.*
+
+# Local state that must never be baked into an image.
+**/*.db
+**/*.db-shm
+**/*.db-wal
+**/*.db-journal
+**/.env
+**/.env.*
+!**/.env.example
+appsettings.Development.json
+**/*.user
+
+# Docs and deployment descriptors contribute nothing to a build.
+doc
+deploy
+*.md
