@@ -20,6 +20,16 @@ internal sealed class SocketCloseEventArgs : EventArgs
 {
 }
 
+internal sealed class ProfileOnlineEventArgs(ProfileId profileId) : EventArgs
+{
+    public ProfileId ProfileId { get; init; } = profileId;
+}
+
+internal sealed class ProfileOfflineEventArgs(ProfileId profileId) : EventArgs
+{
+    public ProfileId ProfileId { get; init; } = profileId;
+}
+
 internal sealed class Socket : IDisposable
 {
     private readonly WebSocket _webSocket;

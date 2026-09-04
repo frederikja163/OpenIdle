@@ -91,7 +91,7 @@ public sealed class ProfileService(IDbContextFactory<GameDbContext> dbContextFac
     {
         Profile profile = await GetProfileAsync(userId, profileId);
         socket.ProfileId = profileId;
-        socketRegistry.SetProfile(socket, profileId);
+        await socketRegistry.SetProfile(socket, profileId);
         return profile;
     }
 }
