@@ -32,14 +32,18 @@ public sealed class ActivityServiceTests : IDisposable
         AddStoneActivity(service);
 
         DateTime before = DateTime.UtcNow.AddSeconds(-1);
-        Profile result = await service.StartActivityAsync(profile.ProfileId, ActivityId.Stone);
+        Profile returned = await service.StartActivityAsync(profile.ProfileId, ActivityId.Stone);
         DateTime after = DateTime.UtcNow.AddSeconds(1);
 
+        await using GameDbContext dbContext = await _db.Factory.CreateDbContextAsync();
+        Profile updated = (await dbContext.Profiles.FindAsync(profile.ProfileId))!;
         Assert.Multiple(() =>
         {
-            Assert.That(result.ActivityId, Is.EqualTo(ActivityId.Stone));
-            Assert.That(result.ActivityStartTime, Is.Not.Null);
-            Assert.That(result.ActivityStartTime, Is.GreaterThanOrEqualTo(before).And.LessThanOrEqualTo(after));
+            Assert.That(updated.ActivityId, Is.EqualTo(ActivityId.Stone));
+            Assert.That(updated.ActivityStartTime, Is.Not.Null);
+            Assert.That(updated.ActivityStartTime, Is.GreaterThanOrEqualTo(before).And.LessThanOrEqualTo(after));
+            Assert.That(returned.ActivityId, Is.EqualTo(ActivityId.Stone));
+            Assert.That(returned.ActivityStartTime, Is.EqualTo(updated.ActivityStartTime));
         });
     }
 
@@ -132,8 +136,9 @@ public sealed class ActivityServiceTests : IDisposable
         (ActivityService service, _) = CreateService();
         AddStoneActivity(service);
 
+        RewardCollection rewards = new();
         BackendException? exception = Assert.ThrowsAsync<BackendException>(
-            () => service.ResolveActivityAsync(profile.ProfileId, DateTime.UtcNow));
+            () => service.ResolveActivityAsync(profile.ProfileId, rewards));
 
         Assert.Multiple(() =>
         {
@@ -155,8 +160,10 @@ public sealed class ActivityServiceTests : IDisposable
             requirements: []));
         await service.StartActivityAsync(profile.ProfileId, ActivityId.Stone);
 
-        await service.ResolveActivityAsync(profile.ProfileId, DateTime.UtcNow);
-        await service.ResolveActivityAsync(profile.ProfileId, DateTime.UtcNow);
+        RewardCollection rewards = new();
+        await service.ResolveActivityAsync(profile.ProfileId, rewards);
+        await service.ResolveActivityAsync(profile.ProfileId, rewards);
+        await service.ResolveRewardCollection(rewards, profile.ProfileId, DateTime.UtcNow, ActivityId.Stone);
 
         await Assert.MultipleAsync(async () =>
         {
@@ -181,12 +188,14 @@ public sealed class ActivityServiceTests : IDisposable
             requirements: []));
         await service.StartActivityAsync(profile.ProfileId, ActivityId.Stone);
 
-        List<Reward> rewards = await service.ResolveActivityAsync(profile.ProfileId, DateTime.UtcNow);
+        RewardCollection rewards = new();
+        await service.ResolveActivityAsync(profile.ProfileId, rewards);
+        await service.ResolveRewardCollection(rewards, profile.ProfileId, DateTime.UtcNow, ActivityId.Stone);
 
         await Assert.MultipleAsync(async () =>
         {
-            Assert.That(rewards, Has.Count.EqualTo(1));
-            Assert.That(rewards.Single(), Is.InstanceOf<ItemReward>());
+            Assert.That(rewards.GetItems().Count(), Is.EqualTo(1));
+            Assert.That(rewards.GetSkills(), Is.Empty);
             Item item = (await GetItemsAsync(profile.ProfileId)).Single();
             Assert.That(item.ItemId, Is.EqualTo(ItemId.Stone));
             Assert.That(item.Count, Is.EqualTo(1));
@@ -204,13 +213,10 @@ public sealed class ActivityServiceTests : IDisposable
             requirements: []));
         await service.StartActivityAsync(profile.ProfileId, ActivityId.Stone);
 
-        List<Reward> rewards = await service.ResolveActivityAsync(profile.ProfileId, DateTime.UtcNow);
+        RewardCollection rewards = new();
+        await service.ResolveActivityAsync(profile.ProfileId, rewards);
 
-        Assert.Multiple(() =>
-        {
-            Assert.That(rewards, Has.Count.EqualTo(1));
-            Assert.That(rewards.Single(), Is.InstanceOf<ItemReward>().Or.InstanceOf<XpReward>());
-        });
+        Assert.That(rewards.GetItems().Count() + rewards.GetSkills().Count(), Is.EqualTo(1));
     }
 
     [Test]
@@ -224,13 +230,15 @@ public sealed class ActivityServiceTests : IDisposable
             requirements: []));
         await service.StartActivityAsync(profile.ProfileId, ActivityId.Stone);
 
-        List<Reward> rewards = await service.ResolveActivityAsync(profile.ProfileId, DateTime.UtcNow);
+        RewardCollection rewards = new();
+        await service.ResolveActivityAsync(profile.ProfileId, rewards);
+        await service.ResolveRewardCollection(rewards, profile.ProfileId, DateTime.UtcNow, ActivityId.Stone);
 
         await Assert.MultipleAsync(async () =>
         {
-            Assert.That(rewards, Has.Count.EqualTo(2));
-            ItemReward itemReward = rewards.OfType<ItemReward>().Single(r => r.ItemId == ItemId.Stone);
-            Assert.That(itemReward.Count, Is.EqualTo(4));
+            Assert.That(rewards.GetItems().Count() + rewards.GetSkills().Count(), Is.EqualTo(2));
+            ItemReward stoneReward = rewards.GetItems().Single(r => r.ItemId == ItemId.Stone);
+            Assert.That(stoneReward.Count, Is.EqualTo(4));
             Item stone = (await GetItemsAsync(profile.ProfileId)).Single(i => i.ItemId == ItemId.Stone);
             Assert.That(stone.Count, Is.EqualTo(4));
         });
@@ -247,11 +255,13 @@ public sealed class ActivityServiceTests : IDisposable
             requirements: []));
         await service.StartActivityAsync(profile.ProfileId, ActivityId.Stone);
 
-        List<Reward> rewards = await service.ResolveActivityAsync(profile.ProfileId, DateTime.UtcNow);
+        RewardCollection rewards = new();
+        await service.ResolveActivityAsync(profile.ProfileId, rewards);
+        await service.ResolveRewardCollection(rewards, profile.ProfileId, DateTime.UtcNow, ActivityId.Stone);
 
         await Assert.MultipleAsync(async () =>
         {
-            Assert.That(rewards, Has.Count.EqualTo(1));
+            Assert.That(rewards.GetItems().Single().Count, Is.EqualTo(0));
             Assert.That(await GetItemsAsync(profile.ProfileId), Is.Empty);
         });
     }
@@ -337,7 +347,7 @@ public sealed class ActivityServiceTests : IDisposable
     }
 
     [Test]
-    public async Task ProfileOnline_ElapsedActivityWithoutRewards_DoesNotSendEvent()
+    public async Task ProfileOnline_ElapsedActivityWithoutRewards_SendsEmptyEvent()
     {
         Profile profile = await SeedProfileAsync();
         (ActivityService service, SocketRegistryService socketRegistry, _, _) =
@@ -347,7 +357,7 @@ public sealed class ActivityServiceTests : IDisposable
 
         FakeWebSocket webSocket = await RegisterSocket(socketRegistry, profile.ProfileId);
 
-        Assert.That(webSocket.FirstSentText, Is.Null);
+        Assert.That(webSocket.FirstSentText, Does.Contain("ActivityEndedEvent"));
     }
 
     [Test]
@@ -367,6 +377,35 @@ public sealed class ActivityServiceTests : IDisposable
         Assert.That(webSocket.FirstSentText, Does.Contain("ActivityEndedEvent"));
         Item item = (await GetItemsAsync(profile.ProfileId)).Single();
         Assert.That(item.Count, Is.EqualTo(40));
+    }
+
+    [Test]
+    [Category("Perf")]
+    public async Task RescheduleActivityAsync_ElapsedLongOffline_Benchmark()
+    {
+        Profile profile = await SeedProfileAsync();
+        await SeedSkillAsync(profile, SkillId.Mining, xp: 0, level: 1);
+        (ActivityService service, _, _, _) = CreateServiceWithInternals();
+        AddStoneActivity(service);
+
+        const int actions = 1_000_000;
+        await service.StartActivityAsync(profile.ProfileId, ActivityId.Stone, DateTime.UtcNow.AddSeconds(-actions));
+        await service.OnProfileOffline(this, new ProfileOfflineEventArgs(profile.ProfileId));
+
+        Stopwatch stopwatch = Stopwatch.StartNew();
+        await service.OnProfileOnline(this, new ProfileOnlineEventArgs(profile.ProfileId));
+        stopwatch.Stop();
+
+        TestContext.Progress.WriteLine(
+            $"RescheduleActivityAsync completed {actions} actions in {stopwatch.ElapsedMilliseconds} ms ({stopwatch.ElapsedMilliseconds / (double)actions:F2} ms/action)");
+
+        await Assert.MultipleAsync(async () =>
+        {
+            Item item = (await GetItemsAsync(profile.ProfileId)).Single();
+            Assert.That(item.Count, Is.GreaterThanOrEqualTo(actions * 4));
+            Skill skill = (await GetSkillsAsync(profile.ProfileId)).Single();
+            Assert.That(skill.Xp, Is.GreaterThanOrEqualTo(actions * 10));
+        });
     }
 
     private (ActivityService, SocketRegistryService, ActivitySchedulerService, DropTableService) CreateServiceWithInternals()

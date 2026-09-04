@@ -3,6 +3,7 @@ using System.Linq;
 using System.Threading.Tasks;
 using Backend.Database;
 using Backend.Database.Entities;
+using Backend.Dtos;
 using Microsoft.Data.Sqlite;
 using Microsoft.EntityFrameworkCore;
 using SQLitePCL;
@@ -93,5 +94,20 @@ public sealed class ProfileService(IDbContextFactory<GameDbContext> dbContextFac
         socket.ProfileId = profileId;
         await socketRegistry.SetProfile(socket, profileId);
         return profile;
+    }
+
+    public async Task SetActivityAsync(ProfileId profileId, ActivityId activityId, DateTime startTime)
+    {
+        await using GameDbContext dbContext = await dbContextFactory.CreateDbContextAsync();
+        await SetActivityAsync(dbContext, profileId, activityId, startTime);
+        await dbContext.SaveChangesAsync();
+    }
+
+    internal async Task SetActivityAsync(GameDbContext dbContext, ProfileId profileId, ActivityId activityId, DateTime startTime)
+    {
+        Profile profile = await dbContext.Profiles.FirstOrDefaultAsync(p => p.ProfileId == profileId)
+                          ?? throw new BackendException("Profile does not exist.");
+        profile.ActivityId = activityId;
+        profile.ActivityStartTime = startTime;
     }
 }
