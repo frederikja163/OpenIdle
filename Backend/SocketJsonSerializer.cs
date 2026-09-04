@@ -11,7 +11,13 @@ internal static class SocketJsonSerializer
     {
         AllowOutOfOrderMetadataProperties = true,
         AllowTrailingCommas = true,
-        DefaultIgnoreCondition = JsonIgnoreCondition.WhenWritingDefault,
+        // Null, not default: the nullable ids on the bases (requestId, eventId,
+        // timestamp) stay off the frame while unset — the frontend tells an event
+        // from a response by the absence of requestId — but every non-nullable
+        // contract property is always written, because the generated TypeScript
+        // declares it required. WhenWritingDefault would silently drop a genuine
+        // 0 count or a `None` enum and hand the client `undefined` behind `number`.
+        DefaultIgnoreCondition = JsonIgnoreCondition.WhenWritingNull,
         ReadCommentHandling = JsonCommentHandling.Skip,
         PropertyNamingPolicy = JsonNamingPolicy.CamelCase,
         Converters = { new JsonStringEnumConverter() },

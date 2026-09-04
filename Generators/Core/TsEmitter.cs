@@ -7,11 +7,14 @@ using System.Linq;
 namespace Generator.Core;
 
 /// <summary>
-/// Emits the protocol module the frontend imports. The output is committed and
-/// has to pass `prettier --check` under Frontend/prettier.config.js untouched,
-/// so this emitter reproduces prettier's own wrapping decisions rather than
-/// merely printing valid TypeScript — see <see cref="Fits"/>,
-/// <see cref="WriteUnion"/> and <see cref="WriteArray"/>.
+/// Emits the protocol module the frontend imports. The output is regenerated
+/// on demand rather than committed, but it still has to pass `prettier --check`
+/// under Frontend/prettier.config.js untouched — Frontend/.prettierignore
+/// exempts only the debug console's schema, so `bun run lint` checks this
+/// emitter's output whenever it is present. The emitter therefore reproduces
+/// prettier's own wrapping decisions rather than merely printing valid
+/// TypeScript — see <see cref="Fits"/>, <see cref="WriteUnion"/> and
+/// <see cref="WriteObjectArray"/>.
 /// </summary>
 public sealed class TsEmitter : IDtoEmitter
 {
@@ -97,7 +100,7 @@ public sealed class TsEmitter : IDtoEmitter
 
         // requestId and eventId are optional because the backend genuinely omits
         // them: both are `int?` on the C# bases and SocketJsonSerializer sets
-        // DefaultIgnoreCondition = WhenWritingDefault, so an unset id is absent
+        // DefaultIgnoreCondition = WhenWritingNull, so an unset id is absent
         // from the frame rather than sent as 0. classifyMessage depends on it.
         foreach (string name in new[] { "RequestBase", "ResponseBase" })
         {
@@ -110,7 +113,7 @@ public sealed class TsEmitter : IDtoEmitter
 
         // Timestamp is `long?` on the C# base and Socket.SendEventAsync stamps it
         // with epoch milliseconds on the way out, so it is optional here for the
-        // same reason the ids are: WhenWritingDefault omits an unset one.
+        // same reason the ids are: WhenWritingNull omits an unset one.
         Separate();
         using (Scope _ = _textWriter.Scope("export interface EventBase extends DtoBase"))
         {
@@ -186,7 +189,7 @@ public sealed class TsEmitter : IDtoEmitter
 
         Separate();
         WriteArray("export const RESPONSE_TYPES: ReadonlySet<string> = new Set(",
-            names.Select(Quote).ToList(), ");", elementsAreObjects: false);
+            names.Select(Quote).ToList(), ");");
     }
 
     private void EmitRequestMap(DtoModel model)
@@ -265,9 +268,11 @@ public sealed class TsEmitter : IDtoEmitter
         Separate();
         _textWriter.WriteLine("export type EventType = keyof EventMap;");
 
+        // EventBase joins the intersection so a typed handler can read the
+        // eventId/timestamp every event frame carries alongside its payload.
         Separate();
         _textWriter.WriteLine(
-            "export type ServerEventOf<K extends EventType> = { $type: K } & EventMap[K];");
+            "export type ServerEventOf<K extends EventType> = { $type: K } & EventBase & EventMap[K];");
     }
 
     private void WriteEventEntry(Event ev)
@@ -350,8 +355,7 @@ public sealed class TsEmitter : IDtoEmitter
                 string key = tables[i].Name.UpperCamelCase;
                 using (Scope __ = _textWriter.Scope($"{key}:", ScopeStyle.Curly, separator))
                 {
-                    WriteArray("rewards: ", tables[i].Rewards.Select(RewardLiteral).ToList(), "",
-                        elementsAreObjects: true);
+                    WriteObjectArray("rewards: ", tables[i].Rewards.Select(RewardMembers).ToList(), "");
                 }
             }
         }
@@ -379,11 +383,9 @@ public sealed class TsEmitter : IDtoEmitter
                 string key = activity.Name.UpperCamelCase;
                 using (Scope __ = _textWriter.Scope($"{key}:", ScopeStyle.Curly, separator))
                 {
-                    WriteArray("rewards: ", activity.Rewards.Select(RewardLiteral).ToList(), ",",
-                        elementsAreObjects: true);
-                    WriteArray("requirements: ",
-                        activity.Requirements.Select(RequirementLiteral).ToList(), "",
-                        elementsAreObjects: true);
+                    WriteObjectArray("rewards: ", activity.Rewards.Select(RewardMembers).ToList(), ",");
+                    WriteObjectArray("requirements: ",
+                        activity.Requirements.Select(RequirementMembers).ToList(), "");
                 }
             }
         }
@@ -438,12 +440,8 @@ public sealed class TsEmitter : IDtoEmitter
         }
     }
 
-    /// <param name="elementsAreObjects">Whether every element is an object
-    /// literal with more than one property. Prettier force-breaks an array of
-    /// two or more of those whatever its width, so such an array never gets the
-    /// flat form.</param>
-    private void WriteArray(string prefix, IReadOnlyList<string> elements, string suffix,
-        bool elementsAreObjects)
+    /// <summary>An array of plain (never-broken) elements such as quoted names.</summary>
+    private void WriteArray(string prefix, IReadOnlyList<string> elements, string suffix)
     {
         if (elements.Count == 0)
         {
@@ -452,8 +450,7 @@ public sealed class TsEmitter : IDtoEmitter
         }
 
         string flat = $"{prefix}[{string.Join(", ", elements)}]{suffix}";
-        bool forceBreak = elementsAreObjects && elements.Count > 1;
-        if (!forceBreak && Fits(flat))
+        if (Fits(flat))
         {
             _textWriter.WriteLine(flat);
             return;
@@ -469,6 +466,59 @@ public sealed class TsEmitter : IDtoEmitter
             }
         }
         _textWriter.WriteLine($"]{suffix}");
+    }
+
+    /// <summary>
+    /// An array of object literals, given as one member list per element.
+    /// Prettier force-breaks an array of two or more object literals whatever
+    /// its width, so only a lone element can take the flat form — and an
+    /// element too wide for its line is broken open, one member per line, the
+    /// way prettier prints an over-long object literal.
+    /// </summary>
+    private void WriteObjectArray(string prefix, IReadOnlyList<IReadOnlyList<string>> elements,
+        string suffix)
+    {
+        if (elements.Count == 0)
+        {
+            _textWriter.WriteLine($"{prefix}[]{suffix}");
+            return;
+        }
+
+        List<string> flats = elements.Select(FlatObject).ToList();
+        if (elements.Count == 1 && Fits($"{prefix}[{flats[0]}]{suffix}"))
+        {
+            _textWriter.WriteLine($"{prefix}[{flats[0]}]{suffix}");
+            return;
+        }
+
+        _textWriter.WriteLine($"{prefix}[");
+        using (Scope _ = new(ScopeStyle.Indentation, _textWriter))
+        {
+            for (int i = 0; i < elements.Count; i++)
+            {
+                string separator = i == elements.Count - 1 ? "" : ",";
+                if (Fits(flats[i] + separator))
+                {
+                    _textWriter.WriteLine($"{flats[i]}{separator}");
+                    continue;
+                }
+
+                using (Scope __ = _textWriter.Scope("", ScopeStyle.Curly, separator))
+                {
+                    for (int j = 0; j < elements[i].Count; j++)
+                    {
+                        string comma = j == elements[i].Count - 1 ? "" : ",";
+                        _textWriter.WriteLine($"{elements[i][j]}{comma}");
+                    }
+                }
+            }
+        }
+        _textWriter.WriteLine($"]{suffix}");
+    }
+
+    private static string FlatObject(IReadOnlyList<string> members)
+    {
+        return "{ " + string.Join(", ", members) + " }";
     }
 
     private void WriteProperty(Property property)
@@ -496,24 +546,32 @@ public sealed class TsEmitter : IDtoEmitter
         return $"{property.Name.LowerCamelCase}{optional}: {GetPropertyType(property)}";
     }
 
-    private static string RewardLiteral(Reward reward)
+    private static string[] RewardMembers(Reward reward)
     {
         return reward switch
         {
             ItemReward item =>
-                $"{{ kind: 'item', count: {item.Count}, weight: {WeightLiteral(item.Weight)}, item: {Quote(new Casing(item.Item).UpperCamelCase)} }}",
+            [
+                "kind: 'item'", $"count: {item.Count}", $"weight: {WeightLiteral(item.Weight)}",
+                $"item: {Quote(new Casing(item.Item).UpperCamelCase)}",
+            ],
             TableReward table =>
-                $"{{ kind: 'table', count: {table.Count}, weight: {WeightLiteral(table.Weight)}, table: {Quote(new Casing(table.Table).UpperCamelCase)} }}",
+            [
+                "kind: 'table'", $"count: {table.Count}", $"weight: {WeightLiteral(table.Weight)}",
+                $"table: {Quote(new Casing(table.Table).UpperCamelCase)}",
+            ],
             XpReward xp =>
-                $"{{ kind: 'xp', count: {xp.Count}, weight: {WeightLiteral(xp.Weight)}, skill: {Quote(new Casing(xp.Skill).UpperCamelCase)} }}",
+            [
+                "kind: 'xp'", $"count: {xp.Count}", $"weight: {WeightLiteral(xp.Weight)}",
+                $"skill: {Quote(new Casing(xp.Skill).UpperCamelCase)}",
+            ],
             _ => throw new NotSupportedException("Reward expressions should drop a table, an item or xp."),
         };
     }
 
-    private static string RequirementLiteral(LevelRequirement requirement)
+    private static string[] RequirementMembers(LevelRequirement requirement)
     {
-        string skill = Quote(new Casing(requirement.Skill).UpperCamelCase);
-        return $"{{ skill: {skill}, count: {requirement.Count} }}";
+        return [$"skill: {Quote(new Casing(requirement.Skill).UpperCamelCase)}", $"count: {requirement.Count}"];
     }
 
     private static string WeightLiteral(float? weight)

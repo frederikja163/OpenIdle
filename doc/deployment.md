@@ -26,7 +26,7 @@ Neither alone is enough. The override switch stops a prod *user* being redirecte
 | `ghcr.io/<owner>/openidle-backend` | `Backend/Dockerfile` | repository root |
 | `ghcr.io/<owner>/openidle-frontend` | `Frontend/Dockerfile` | repository root |
 
-Both contexts are the repository root deliberately. `Backend.csproj` references `Generators/Core` and `Generators/Backend` as analyzers and `../types.xml` as an `AdditionalFile`, so a `Backend/`-only context cannot compile. The frontend image needs the root for the same reason: its protocol schema (`protocol.generated.ts`) is regenerated inside the image from `../types.xml` by a .NET generator stage, because the Bun Alpine stage has no `dotnet` and the generated file is git-ignored anyway. The single root `.dockerignore` keeps the rest of the tree out of both images.
+Both contexts are the repository root deliberately. `Backend.csproj` references `Generators/Core` and `Generators/Backend` as analyzers and `../types.xml` as an `AdditionalFile`, so a `Backend/`-only context cannot compile. The frontend image needs the root for the same reason: its generated protocol TypeScript — `src/lib/ws/dto.generated.ts`, which the whole ws protocol module re-exports, so `vite build` fails without it, and the debug console's `src/lib/debug/protocol.generated.ts` — is regenerated inside the image from `../types.xml` by a .NET generator stage, because the Bun Alpine stage has no `dotnet` and the generated files are git-ignored anyway. The single root `.dockerignore` keeps the rest of the tree out of both images.
 
 Both are multi-stage and run as a non-root user. The backend runtime is Debian-based rather than Alpine because `SQLitePCLRaw.bundle_e_sqlite3` ships a glibc-linked native library.
 

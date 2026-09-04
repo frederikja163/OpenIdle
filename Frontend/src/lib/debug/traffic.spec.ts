@@ -38,14 +38,14 @@ afterEach(() => {
 
 describe('frame kinds', () => {
 	it('marks an outbound frame a request', () => {
-		deliver('out', '{"$type":"PingRequest","requestId":1}');
+		deliver('out', '{"$type":"LoginAsTestUserRequest","requestId":1}');
 
 		expect(trafficState.frames[0].kind).toBe('request');
 	});
 
 	it('marks an inbound reply a response, paired to its request', () => {
-		deliver('out', '{"$type":"PingRequest","requestId":1}');
-		deliver('in', '{"$type":"PongResponse","requestId":1}');
+		deliver('out', '{"$type":"LoginAsTestUserRequest","requestId":1}');
+		deliver('in', '{"$type":"LoginAsTestUserResponse","requestId":1}');
 
 		const reply = trafficState.frames[0];
 		expect(reply.kind).toBe('response');

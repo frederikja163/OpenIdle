@@ -53,7 +53,7 @@ describe('classifyMessage', () => {
 
 	it('classifies a known response type with no requestId as unknown, not an event', () => {
 		// What the backend sends when it never read an id off the request:
-		// DefaultIgnoreCondition.WhenWritingDefault drops the null rather than
+		// DefaultIgnoreCondition.WhenWritingNull drops the null rather than
 		// echoing it, and there is no request such a frame could answer.
 		const raw = '{"$type":"LoginAsTestUserResponse"}';
 		expect(classifyMessage(raw)).toEqual({ kind: 'unknown', raw });
@@ -67,12 +67,12 @@ describe('classifyMessage', () => {
 
 describe('readRequestId', () => {
 	it('reads the id out of a frame', () => {
-		expect(readRequestId('{"$type":"PingRequest","requestId":7}')).toBe(7);
+		expect(readRequestId('{"$type":"LoginAsTestUserRequest","requestId":7}')).toBe(7);
 	});
 
 	it('returns null for a frame with no id, a non-numeric one, or no JSON at all', () => {
 		// The console sends whatever is typed, so all three reach this.
-		expect(readRequestId('{"$type":"PingRequest"}')).toBeNull();
+		expect(readRequestId('{"$type":"LoginAsTestUserRequest"}')).toBeNull();
 		expect(readRequestId('{"requestId":"7"}')).toBeNull();
 		expect(readRequestId('{ half a frame')).toBeNull();
 		expect(readRequestId('42')).toBeNull();

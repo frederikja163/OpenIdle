@@ -45,7 +45,7 @@ Both emitters parse the same XML through one parser (`Generator.Core.Parser`), s
 - **We own the whole language.** Grammar, parser, error messages, documentation, and two emitters are ours to write and maintain.
 - **No editor validation.** Without a hand-written XSD (not worth it), typos (`type="Gud"`) surface only at generation time with our error messages (or, for unknown custom types, silently become a `{X}Dto` reference).
 - **Not consumable by the ecosystem.** No existing tool reads our format; migrating away later means a translator, not a drop-in.
-- ~~**The TS emitter is not wired into the frontend build yet.**~~ **Resolved 2026-08-21:** `gen:dto` runs as the first step of `dev`, `build` and `check`, so the frontend regenerates its own protocol types on startup (~1.5s). The cost is that **every frontend contributor now needs a .NET SDK** — the emitter is a C# program, so there is no way to run it from Node alone.
+- ~~**The TS emitter is not wired into the frontend build yet.**~~ **Resolved 2026-08-30:** `gen:dto` runs as the first step of `dev`, `build` and `check`, so the frontend regenerates its own protocol types on startup (~1.5s). The cost is that **every frontend contributor now needs a .NET SDK** — the emitter is a C# program, so there is no way to run it from Node alone.
 - **Low authoring-frequency risk is assumed.** The "copy-paste, rare edits" argument holds only if DTOs genuinely stabilize; churn in the early game-design phase will be paying down DSL friction.
 - **No optionality yet.** Every property is required; optional properties would need a grammar change (deferred).
 

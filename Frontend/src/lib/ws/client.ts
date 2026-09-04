@@ -502,13 +502,14 @@ export class WsClient {
 				break;
 			}
 			case 'error': {
-				// The backend echoes the failed request's id, except for a frame it
-				// could not deserialize far enough to read one. It sets 0 there, which
-				// the serializer then drops entirely, so the id arrives as undefined —
-				// either way never a real id. Falling back on the oldest unanswered
-				// request is right for that case because the backend handles messages
-				// FIFO per connection, which is why the cursor is `outstanding` and
-				// not `pending`.
+				// The backend echoes the failed request's id, and sends an explicit 0
+				// for a frame it could not deserialize far enough to read one — never
+				// a real id, since ids start at 1. `?? 0` only folds a frame that omits
+				// the field (it is `int?` server-side, hence optional in the generated
+				// type) onto that same path. Falling back on the oldest unanswered
+				// request is right for it because the backend handles messages FIFO
+				// per connection, which is why the cursor is `outstanding` and not
+				// `pending`.
 				const echoed = classified.message.requestId ?? 0;
 				const id = echoed > 0 ? echoed : this.outstanding.shift();
 				if (id === undefined) {

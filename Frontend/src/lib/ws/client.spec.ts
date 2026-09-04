@@ -564,15 +564,15 @@ describe('WsClient', () => {
 
 		// Spaced out, and carrying a property no request declares: the console has
 		// to be able to send a frame nothing here would have built.
-		const frame = '{ "$type": "PingRequest", "requestId": 4, "extra": "kept" }';
+		const frame = '{ "$type": "LoginAsTestUserRequest", "requestId": 4, "extra": "kept" }';
 		const sent = capture(client.sendRaw(frame));
 		await flush();
 		sockets[0].open();
 		await flush();
 
 		expect(sockets[0].sent).toEqual([frame]);
-		sockets[0].deliver({ $type: 'PongResponse', requestId: 4 });
-		await expect(sent).resolves.toEqual({ $type: 'PongResponse', requestId: 4 });
+		sockets[0].deliver({ $type: 'LoginAsTestUserResponse', requestId: 4 });
+		await expect(sent).resolves.toEqual({ $type: 'LoginAsTestUserResponse', requestId: 4 });
 	});
 
 	it('sends a frame that is not JSON and resolves once it is away', async () => {
@@ -619,7 +619,7 @@ describe('WsClient', () => {
 		vi.useFakeTimers();
 		const { client, sockets } = makeClient();
 
-		capture(client.sendRaw('{"$type":"PingRequest","requestId":9}'));
+		capture(client.sendRaw('{"$type":"LoginAsTestUserRequest","requestId":9}'));
 		await flush();
 		sockets[0].open();
 		await flush();
@@ -634,11 +634,11 @@ describe('WsClient', () => {
 		vi.useFakeTimers();
 		const { client, sockets } = makeClient();
 
-		const first = capture(client.sendRaw('{"$type":"PingRequest","requestId":3}'));
+		const first = capture(client.sendRaw('{"$type":"LoginAsTestUserRequest","requestId":3}'));
 		await flush();
 		sockets[0].open();
 		await flush();
-		const second = capture(client.sendRaw('{"$type":"PingRequest","requestId":3}'));
+		const second = capture(client.sendRaw('{"$type":"LoginAsTestUserRequest","requestId":3}'));
 		await flush();
 
 		// Both frames go out — reusing an id is a case worth staging — but only one
@@ -647,8 +647,8 @@ describe('WsClient', () => {
 		expect(sockets[0].sent).toHaveLength(2);
 		expect(await first).toBeInstanceOf(WsError);
 
-		sockets[0].deliver({ $type: 'PongResponse', requestId: 3 });
-		await expect(second).resolves.toMatchObject({ $type: 'PongResponse' });
+		sockets[0].deliver({ $type: 'LoginAsTestUserResponse', requestId: 3 });
+		await expect(second).resolves.toMatchObject({ $type: 'LoginAsTestUserResponse' });
 	});
 
 	it('hands out a reserved id that the next request then skips', async () => {
