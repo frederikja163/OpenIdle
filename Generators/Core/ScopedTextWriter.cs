@@ -3,10 +3,6 @@ using System.IO;
 
 namespace Generator.Core;
 
-/// <summary>
-/// Where a scope's opening bracket goes. C# is written Allman, TypeScript K&R —
-/// prettier reformats anything else, so the TS emitter cannot use the default.
-/// </summary>
 internal enum BraceStyle
 {
     NextLine,
@@ -26,10 +22,6 @@ internal sealed class ScopedTextWriter
 
     public int SpacesPerTab { get; set; } = 4;
 
-    /// <summary>
-    /// One level of indentation. Defaults to <see cref="SpacesPerTab"/> spaces;
-    /// set it to "\t" for output that has to satisfy a tab-indenting formatter.
-    /// </summary>
     public string IndentUnit
     {
         get => _indentUnit ?? new string(' ', SpacesPerTab);
@@ -72,13 +64,9 @@ internal sealed class ScopedTextWriter
         _newLine = true;
     }
 
-    /// <param name="endText">Appended to the closing bracket, for languages that
-    /// terminate a block with more than the bracket itself ("};", "],").</param>
+
     public Scope Scope(string startText = "", ScopeStyle scopeStyle = ScopeStyle.Curly, string endText = "")
     {
-        // Same-line placement has to happen here rather than in Scope's constructor:
-        // the bracket goes on the header's line, so it must be written before that
-        // line is terminated, and Scope only ever runs after it already has been.
         if (BraceStyle == BraceStyle.SameLine && Opener(scopeStyle) is char open)
         {
             WriteLine(startText.Length == 0 ? open.ToString() : startText + " " + open);
