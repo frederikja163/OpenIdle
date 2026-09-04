@@ -32,7 +32,7 @@ public sealed class ActivityServiceTests : IDisposable
         AddStoneActivity(service);
 
         DateTime before = DateTime.UtcNow.AddSeconds(-1);
-        await service.StartActivityAsync(profile.ProfileId, ActivityId.Stone);
+        Profile returned = await service.StartActivityAsync(profile.ProfileId, ActivityId.Stone);
         DateTime after = DateTime.UtcNow.AddSeconds(1);
 
         await using GameDbContext dbContext = await _db.Factory.CreateDbContextAsync();
@@ -42,6 +42,8 @@ public sealed class ActivityServiceTests : IDisposable
             Assert.That(updated.ActivityId, Is.EqualTo(ActivityId.Stone));
             Assert.That(updated.ActivityStartTime, Is.Not.Null);
             Assert.That(updated.ActivityStartTime, Is.GreaterThanOrEqualTo(before).And.LessThanOrEqualTo(after));
+            Assert.That(returned.ActivityId, Is.EqualTo(ActivityId.Stone));
+            Assert.That(returned.ActivityStartTime, Is.EqualTo(updated.ActivityStartTime));
         });
     }
 

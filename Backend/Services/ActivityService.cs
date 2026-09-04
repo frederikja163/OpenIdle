@@ -175,6 +175,8 @@ public sealed class ActivityService
         TimeSpan duration = TimeSpan.FromSeconds(definition.Time);
 
         await _profileService.SetActivityAsync(profileId, activityId, startedAt);
+        profile.ActivityId = activityId;
+        profile.ActivityStartTime = startedAt;
 
         _activitySchedulerService.StartEvent(
             new ProfileActivityCompletion(this, profileId, activityId, duration), startedAt);
