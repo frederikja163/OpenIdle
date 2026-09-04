@@ -166,11 +166,9 @@ export function defaultWsUrl(): string {
 }
 
 /**
- * Derives the backend's HTTP version endpoint from its WebSocket URL. Fetch is a
- * different transport on a different protocol, and the footer has nothing else
- * to name the backend by, so the origin has to come from the ws URL —
- * PUBLIC_WS_URL, an override, or the dev fallback — or it would be asking an
- * address that has nothing to do with the backend the client talks to.
+ * The backend's HTTP version endpoint, derived from its WebSocket URL: the ws
+ * URL is the only address the client knows the backend by, and fetch speaks
+ * http(s), so the derivation is what makes an override move the fetch too.
  */
 export function versionHttpUrl(wsUrl: string): string {
 	const parsed = new URL(wsUrl);

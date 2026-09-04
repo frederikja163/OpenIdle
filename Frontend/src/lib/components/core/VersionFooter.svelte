@@ -17,10 +17,9 @@
 	 * a layout, so the game view stays clear of it.
 	 */
 
-	// Asks on mount and whenever the pointed-at backend may have changed: the
-	// store answers once per URL, and a fetch that fails ends in 'failed' rather
-	// than retrying. A reconnect reaches the same URL, so the URL-keyed guard
-	// keeps the effect from turning into a second ask for one backend.
+	// Asks on mount and whenever the pointed-at backend may have changed, i.e.
+	// when the socket (re)opens. Each ask is a fresh fetch; a failure ends in
+	// 'failed' rather than retrying, so this stays quiet once answered or failed.
 	onMount(() => {
 		void loadBackendVersion();
 	});

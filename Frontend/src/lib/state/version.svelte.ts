@@ -6,10 +6,10 @@ import type { BuildInfo } from '$lib/utils/version';
  * backend it points at, fetched over HTTP. Plain module state rather than
  * sessionState(): a build is not session data and must outlive a session drop.
  *
- * The backend half is deliberately not the socket: asking the version is
- * plumbing, and it should not pull a WebSocket open on a page that has not
- * asked for one. It is keyed off the ws URL so an override — ?ws=, or a change
- * made on the debug page — moves it to the same backend as everything else.
+ * The backend half deliberately stays off the socket: asking for a build is
+ * plumbing and must not pull a WebSocket open. The endpoint derives from the
+ * ws URL, so an override — ?ws=, or a change on the debug page — moves the
+ * version fetch with everything else.
  */
 
 const REQUEST_TIMEOUT_MS = 5_000;
@@ -22,49 +22,13 @@ export const versionState = $state({
 	backend: null as BuildInfo | null
 });
 
-// The URL the version was last asked of. One value per backend actually
-// reached: the first mount asks once even though the open it causes fires the
-// footer's effect again, while a changed URL — an override on the debug page —
-// asks anew.
-let requestedUrl: string | null = null;
-
-// Bumped by every ask. An answer that lands after a newer ask superseded it is
-// discarded, so a slow /version from an old backend cannot paint over the new.
-let requestSequence = 0;
-
-/**
- * Drops the cached answer and the once-per-URL guard, so the next ask fetches
- * whether or not the backend's address changed. Nothing in the app needs this
- * today — it exists for tests, which have to retire one backend before asking
- * another — and as a hook for a future invalidation.
- */
-export function forgetBackendVersion(): void {
-	requestedUrl = null;
-	requestSequence++;
-	versionState.backend = null;
-	versionState.status = 'idle';
-}
-
-/** Asks the pointed-at backend for its build, once per URL. */
+/** Asks the pointed-at backend for its build. Each ask is a fresh fetch. */
 export async function loadBackendVersion(): Promise<void> {
-	const url = versionHttpUrl(resolveWsUrl());
-	if (requestedUrl === url) {
-		return;
-	}
-	requestedUrl = url;
-	const sequence = ++requestSequence;
 	versionState.status = 'loading';
 	try {
-		const build = await fetchBuild(url);
-		if (sequence !== requestSequence) {
-			return;
-		}
-		versionState.backend = build;
+		versionState.backend = await fetchBuild(versionHttpUrl(resolveWsUrl()));
 		versionState.status = 'loaded';
 	} catch {
-		if (sequence !== requestSequence) {
-			return;
-		}
 		versionState.backend = null;
 		versionState.status = 'failed';
 	}
