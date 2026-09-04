@@ -6,7 +6,9 @@ using System.Threading.Tasks;
 using Backend.Database;
 using Backend.Database.Entities;
 using Backend.Dtos;
+using Microsoft.AspNetCore.Rewrite;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore.Metadata;
 
 namespace Backend.Services;
 
@@ -28,6 +30,47 @@ public sealed class ActivityDefinition(float time, Reward[] rewards, LevelRequir
     {
         rewards = rewards.Where(r => r.Weight is not null).ToArray();
         return rewards.Length == 0 ? null : new DropTable(rewards);
+    }
+}
+
+public sealed class RewardCollection
+{
+    private readonly Dictionary<ItemId, int> _itemRewards = new();
+    private readonly Dictionary<SkillId, int>  _skillRewards = new();
+
+    public int TotalActivities
+    {
+        get;
+        set;
+    }
+
+    public void AddReward(Reward reward)
+    {
+        switch (reward)
+        {
+            case ItemReward itemReward:
+                int items = itemReward.Count + (_itemRewards.TryGetValue(itemReward.ItemId, out int existing)
+                    ? existing
+                    : 0);
+                _itemRewards[itemReward.ItemId] = items;
+                break;
+            case XpReward xpReward:
+                int xp = xpReward.Count + (_skillRewards.TryGetValue(xpReward.SkillId, out existing) ? existing : 0);
+                _skillRewards[xpReward.SkillId] = xp;
+                break;
+            default:
+                throw new ArgumentOutOfRangeException(nameof(reward));
+        }
+    }
+
+    public IEnumerable<ItemReward> GetItems()
+    {
+        return _itemRewards.Select(kvp => new ItemReward(kvp.Value, 1, kvp.Key));
+    }
+
+    public IEnumerable<XpReward> GetSkills()
+    {
+        return _skillRewards.Select(kvp => new XpReward(kvp.Value, 1, kvp.Key));
     }
 }
 
@@ -88,20 +131,21 @@ public sealed class ActivityService
             return;
         }
 
-        List<Reward> rewards = [];
+        RewardCollection rewards = new RewardCollection();
         DateTime now = DateTime.UtcNow;
         TimeSpan duration = TimeSpan.FromSeconds(definition.Time);
-        while (startTime + duration <= now)
+        DateTime endTime = startTime + duration;
+        while (endTime <= now)
         {
-            rewards.AddRange(await ResolveActivityAsync(profileId, startTime + duration));
-            startTime += duration;
+            RollRewards(rewards, definition);
+            endTime += duration;
         }
 
-        if (rewards.Count > 0)
+        if (rewards.TotalActivities > 0)
         {
-            await SendEventAsync(rewards, profileId, activityId);
+            await ResolveRewardCollection(rewards, profileId, endTime, activityId);
         }
-        _activitySchedulerService.StartEvent(new ProfileActivityCompletion(this, profileId, activityId, duration), startTime);
+        _activitySchedulerService.StartEvent(new ProfileActivityCompletion(this, profileId, activityId, duration), endTime);
     }
 
     internal async Task<Profile> StartActivityAsync(ProfileId profileId, ActivityId activityId, DateTime? startTime = null)
@@ -130,11 +174,7 @@ public sealed class ActivityService
         DateTime startedAt = startTime ?? DateTime.UtcNow;
         TimeSpan duration = TimeSpan.FromSeconds(definition.Time);
 
-        await using GameDbContext dbContext = await _dbContextFactory.CreateDbContextAsync();
-        dbContext.Profiles.Attach(profile);
-        profile.ActivityId = activityId;
-        profile.ActivityStartTime = startedAt;
-        await dbContext.SaveChangesAsync();
+        await _profileService.SetActivityAsync(profileId, activityId, startedAt);
 
         _activitySchedulerService.StartEvent(
             new ProfileActivityCompletion(this, profileId, activityId, duration), startedAt);
@@ -142,7 +182,7 @@ public sealed class ActivityService
         return profile;
     }
 
-    internal async Task<List<Reward>> ResolveActivityAsync(ProfileId profileId, DateTime endTime)
+    internal async Task ResolveActivityAsync(ProfileId profileId, RewardCollection rewardCollection)
     {
         Profile profile = await _profileService.GetProfileAsync(profileId);
 
@@ -156,16 +196,17 @@ public sealed class ActivityService
             throw new BackendException($"Activity '{activityId}' does not have a valid definition.");
         }
 
+        RollRewards(rewardCollection, definition);
+    }
+
+    private void RollRewards(RewardCollection rewardCollection, ActivityDefinition definition)
+    {
         List<Reward> grantedRewards = [.. definition.Rewards];
         if (definition.DropTable is {})
         {
             grantedRewards.Add(_dropTableService.RollReward(definition.DropTable));
         }
 
-        List<Reward> resolvedRewards = [];
-        List<ItemReward> itemRewards = [];
-        List<XpReward> xpRewards = [];
-        await using GameDbContext dbContext = await _dbContextFactory.CreateDbContextAsync();
         foreach (Reward reward in grantedRewards)
         {
             Reward resolved = reward switch
@@ -176,40 +217,27 @@ public sealed class ActivityService
 
             switch (resolved)
             {
-                case ItemReward { Count: >= 0 } itemReward:
-                    itemRewards.Add(itemReward);
-                    resolvedRewards.Add(itemReward);
+                case ItemReward itemReward:
+                    rewardCollection.AddReward(itemReward);
                     break;
-                case XpReward { Count: >= 0 } xpReward:
-                    xpRewards.Add(xpReward);
-                    resolvedRewards.Add(xpReward);
+                case XpReward xpReward:
+                    rewardCollection.AddReward(xpReward);
                     break;
                 default:
                     throw new UnreachableException("Rewards should resolve to an item or xp reward, with a non negative count.");
             }
         }
 
-        if (itemRewards.Count > 0)
-        {
-            await _itemService.AddItemsAsync(dbContext, profileId, itemRewards);
-        }
-
-        if (xpRewards.Count > 0)
-        {
-            await _skillService.AddSkillsAsync(dbContext, profileId, xpRewards);
-        }
-
-        dbContext.Attach(profile);
-        profile.ActivityStartTime = endTime;
-
-        await dbContext.SaveChangesAsync();
-        return [.. resolvedRewards];
+        rewardCollection.TotalActivities++;
     }
 
-    internal async Task SendEventAsync(List<Reward> rewards, ProfileId profileId, ActivityId activityId)
+    internal async Task ResolveRewardCollection(RewardCollection rewards, ProfileId profileId, DateTime startTime, ActivityId activityId)
     {
-        Item[] items = await _itemService.GetItemsAsync(profileId, rewards.OfType<ItemReward>().Select(i => i.ItemId).Distinct());
-        Skill[] skills = await _skillService.GetSkillsAsync(profileId, rewards.OfType<XpReward>().Select(x => x.SkillId).Distinct());
+        await using GameDbContext dbContext = await _dbContextFactory.CreateDbContextAsync();
+        await _profileService.SetActivityAsync(dbContext, profileId, activityId, startTime);
+        Item[] items = await _itemService.AddItemsAsync(dbContext, profileId, rewards.GetItems());
+        Skill[] skills = await _skillService.AddSkillsAsync(dbContext, profileId, rewards.GetSkills());
+        await dbContext.SaveChangesAsync();
         await _socketRegistry.SendToProfileAsync(profileId, new ActivityEndedEvent
         {
             ActivityId = activityId,
@@ -225,7 +253,8 @@ internal sealed class ProfileActivityCompletion(
 {
     public override async Task Complete(DateTime endTime)
     {
-        List<Reward> rewards = await activityService.ResolveActivityAsync(ProfileId, endTime);
-        await activityService.SendEventAsync(rewards, ProfileId, activityId);
+        RewardCollection rewards = new();
+        await activityService.ResolveActivityAsync(ProfileId, rewards);
+        await activityService.ResolveRewardCollection(rewards, ProfileId, endTime, activityId);
     }
 }
