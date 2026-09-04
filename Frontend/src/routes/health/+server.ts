@@ -2,7 +2,7 @@ import { json } from '@sveltejs/kit';
 
 /**
  * Liveness signal for the container healthcheck and the post-deploy check in
- * .github/workflows/publish-images.yml, mirroring the backend's /healthz.
+ * .github/workflows/publish-images.yml, mirroring the backend's /health.
  *
  * Every other route either redirects or renders the app shell, so without this
  * a healthcheck would be asserting on a 307 or on a route name that is free to

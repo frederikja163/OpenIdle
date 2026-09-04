@@ -2,6 +2,7 @@
 	import './layout.css';
 	import favicon from '$lib/assets/favicon.svg';
 	import type { Snippet } from 'svelte';
+	import Column from '$lib/components/layout/Column.svelte';
 	import { wireSession } from '$lib/state/wiring';
 
 	interface Props {
@@ -19,4 +20,11 @@
 </script>
 
 <svelte:head><link rel="icon" href={favicon} /></svelte:head>
-{@render children?.()}
+<!--
+	A viewport-tall column, so a page can push its version footer to the bottom
+	(`grow` on the page, `mt-auto` on the footer) and still grow past the fold
+	when it is long.
+-->
+<Column class="min-h-dvh">
+	{@render children?.()}
+</Column>

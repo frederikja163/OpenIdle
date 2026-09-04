@@ -26,4 +26,13 @@
       <InternalsVisibleTo Include="OpenIdle.IntegrationTests" />
     </ItemGroup>
 
+    <!-- Build provenance for the version footer. Backend/Dockerfile passes the
+         published commit and its committer date (unix seconds) as
+         -p:GitCommit / -p:GitCommitTime from CI build-args; every other build
+         leaves them empty, which VersionService reports as a local build. -->
+    <ItemGroup>
+      <AssemblyMetadata Include="GitCommit" Value="$(GitCommit)" />
+      <AssemblyMetadata Include="GitCommitTime" Value="$(GitCommitTime)" />
+    </ItemGroup>
+
 </Project>

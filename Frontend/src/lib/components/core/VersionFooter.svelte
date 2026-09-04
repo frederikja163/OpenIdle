@@ -1,0 +1,59 @@
+<script lang="ts">
+	import { onMount } from 'svelte';
+	import { connectionState } from '$lib/state/session.svelte';
+	import { loadBackendVersion, versionState } from '$lib/state/version.svelte';
+	import { cn } from '$lib/utils/stylingUtils';
+	import { formatVersion } from '$lib/utils/version';
+
+	interface Props {
+		class?: string;
+	}
+
+	let { class: className }: Props = $props();
+
+	/*
+	 * Which builds are running, for bug reports: this bundle's and the connected
+	 * backend's. Rendered by the login, profiles and debug pages rather than by
+	 * a layout, so the game view stays clear of it.
+	 */
+
+	// Asks on mount and on every fresh connection, never on every status change:
+	// the store answers once per connection, and a dial that fails ends in
+	// 'closed' rather than 'open', so a backend that is down costs one attempt
+	// and cannot start a loop. On /login this is what opens the socket before
+	// anyone has signed in.
+	onMount(() => {
+		void loadBackendVersion();
+	});
+	$effect(() => {
+		if (connectionState.status === 'open') {
+			void loadBackendVersion();
+		}
+	});
+
+	const backend = $derived(
+		versionState.backend
+			? formatVersion(versionState.backend)
+			: connectionState.status === 'closed'
+				? 'unavailable'
+				: '…'
+	);
+</script>
+
+<!--
+	A <footer> rather than a Row, for the landmark. No role="status": the
+	connection banner in the (auth) chrome is the page's one live region, and a
+	build number is not worth announcing.
+-->
+<footer
+	data-testid="version-footer"
+	class={cn('flex flex-wrap items-baseline gap-(--sp-5) text-text-faint', className)}
+>
+	<span class="oi-label-sm">OpenIdle</span>
+	<span class="oi-body-sm">
+		frontend <span class="oi-num-sm">{formatVersion(versionState.frontend)}</span>
+	</span>
+	<span class="oi-body-sm">
+		backend <span class="oi-num-sm">{backend}</span>
+	</span>
+</footer>

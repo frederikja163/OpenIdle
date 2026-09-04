@@ -16,7 +16,12 @@ export default defineConfig({
 			PUBLIC_ALLOW_WS_OVERRIDE: 'true',
 			// Vite lets process.env win over .env* files, so a developer's
 			// .env.local cannot turn the button off under the suite.
-			PUBLIC_DEBUG: 'true'
+			PUBLIC_DEBUG: 'true',
+			// A known build for the version footer to show: the suite builds
+			// outside CI and would otherwise read `local`. The time is
+			// 2026-09-04 23:26:40 UTC.
+			GIT_COMMIT: '1e1c256a0b1c2d3e4f5061728394a5b6c7d8e9f0',
+			GIT_COMMIT_TIME: '1788564400'
 		}
 	},
 	testMatch: '**/*.e2e.{ts,js}'

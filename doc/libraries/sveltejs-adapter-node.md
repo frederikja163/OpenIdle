@@ -26,7 +26,7 @@ Why `adapter-static` lost, despite being the recommendation recorded in [@svelte
 - The publish workflow doubles: one build per image per environment, and prod's build is the one that has never been exercised.
 - Every future runtime knob inherits the same constraint, not just this one.
 
-Why serving the static tree from ASP.NET Core lost: it is genuinely the smallest architecture, and it is what the earlier document assumed. But it makes the frontend not a separately deployable thing, and the requirement here is explicitly four independently hosted, independently redeployable services. It also could not serve `src/routes/healthz/+server.ts`, which the container healthcheck and the post-deploy gate in `.github/workflows/publish-images.yml` both use.
+Why serving the static tree from ASP.NET Core lost: it is genuinely the smallest architecture, and it is what the earlier document assumed. But it makes the frontend not a separately deployable thing, and the requirement here is explicitly four independently hosted, independently redeployable services. It also could not serve `src/routes/health/+server.ts`, which the container healthcheck and the post-deploy gate in `.github/workflows/publish-images.yml` both use.
 
 ## 3. Decision & rationale
 
@@ -36,7 +36,7 @@ This is a deliberate, scoped exception to the constraint recorded in [SvelteKit]
 
 - serves the built client assets,
 - injects `PUBLIC_*` values into the page at request time,
-- answers `/healthz`.
+- answers `/health`.
 
 It holds no game state, reads no database, and does not talk to the C# backend at all — the browser still dials the socket directly. There are no `+page.server.ts` files, no form actions, and no remote functions, and there should continue to be none. The authoritative state still lives in exactly one place.
 
@@ -65,7 +65,7 @@ Buy — and there was never a real alternative. SvelteKit's adapter API is small
 
 ### Undo risk — low
 
-One import line in `vite.config.ts`, plus the runtime stage of `Frontend/Dockerfile` and the `PUBLIC_*` entries under `deploy/`. Moving to `adapter-static` later means accepting build-time configuration and splitting the frontend image per environment; the client code needs no change, since `resolveWsUrl()` in `Frontend/src/lib/ws/ws-url.ts` reads `$env/dynamic/public`, which degrades to build-time substitution rather than breaking. The one thing that would have to move is `src/routes/healthz/+server.ts`, which a static build cannot serve.
+One import line in `vite.config.ts`, plus the runtime stage of `Frontend/Dockerfile` and the `PUBLIC_*` entries under `deploy/`. Moving to `adapter-static` later means accepting build-time configuration and splitting the frontend image per environment; the client code needs no change, since `resolveWsUrl()` in `Frontend/src/lib/ws/ws-url.ts` reads `$env/dynamic/public`, which degrades to build-time substitution rather than breaking. The one thing that would have to move is `src/routes/health/+server.ts`, which a static build cannot serve.
 
 ### Security risk — low
 

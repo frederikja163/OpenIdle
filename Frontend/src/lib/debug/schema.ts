@@ -19,7 +19,16 @@
  */
 
 export type PropertyKind =
-	'string' | 'int' | 'float' | 'guid' | 'userId' | 'profileId' | 'enum' | 'dto';
+	| 'string'
+	| 'int'
+	| 'float'
+	| 'guid'
+	| 'userId'
+	| 'profileId'
+	/** Epoch milliseconds — a whole number on the wire, like `int`. */
+	| 'timestamp'
+	| 'enum'
+	| 'dto';
 
 export interface SchemaProperty {
 	/** The PascalCase name from types.xml, e.g. `ProfileId`. */

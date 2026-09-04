@@ -2,6 +2,8 @@
 	import { goto } from '$app/navigation';
 	import { resolve } from '$app/paths';
 	import { page } from '$app/state';
+	import VersionFooter from '$lib/components/core/VersionFooter.svelte';
+	import Column from '$lib/components/layout/Column.svelte';
 	import { Button } from '$lib/components/ui/button';
 	import { ensureLoggedIn, userState, type LoginStatus } from '$lib/state/user.svelte';
 
@@ -39,20 +41,27 @@
 	});
 </script>
 
-<h1>Login</h1>
-<p data-testid="login-status">{statusLabel[userState.status]}</p>
 <!--
-	Only 'loggingIn' disables the button: after an error it has to stay live,
-	since retrying is what clears the error.
+	A column that fills the viewport so the version footer sits at the bottom,
+	with the controls kept to their own width rather than stretched across it.
 -->
-<Button
-	variant="primary"
-	size="md"
-	disabled={userState.status === 'loggingIn'}
-	onclick={() => void ensureLoggedIn()}
->
-	Log in
-</Button>
-{#if userState.error}
-	<p>{userState.error}</p>
-{/if}
+<Column class="grow items-start gap-(--sp-5) p-(--gutter-app)">
+	<h1>Login</h1>
+	<p data-testid="login-status">{statusLabel[userState.status]}</p>
+	<!--
+		Only 'loggingIn' disables the button: after an error it has to stay live,
+		since retrying is what clears the error.
+	-->
+	<Button
+		variant="primary"
+		size="md"
+		disabled={userState.status === 'loggingIn'}
+		onclick={() => void ensureLoggedIn()}
+	>
+		Log in
+	</Button>
+	{#if userState.error}
+		<p>{userState.error}</p>
+	{/if}
+	<VersionFooter class="mt-auto" />
+</Column>

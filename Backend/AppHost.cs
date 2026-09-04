@@ -29,6 +29,7 @@ internal static class AppHost
         builder.Services.AddSingleton<ItemService>();
         builder.Services.AddSingleton<ActivityService>();
         builder.Services.AddSingleton<ToolService>();
+        builder.Services.AddSingleton(VersionService.FromAssembly());
         builder.Services.AddSingleton<ActivitySchedulerService>();
         builder.Services.AddHostedService<ActivitySchedulerHostedService>();
 

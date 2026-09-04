@@ -6,9 +6,10 @@ import { expect, test, type WebSocketRoute } from '@playwright/test';
 //
 // PUBLIC_WS_URL defaults to the address the backend binds in development, so a
 // test that needs the socket to behave a certain way stubs it with
-// routeWebSocket rather than assuming nothing is listening. Tests that never log
-// in need no stub: the client is constructed at import time but only connects
-// once a request is sent.
+// routeWebSocket rather than assuming nothing is listening. The version footer
+// on /login and /debug dials on load to ask the backend for its build, so a
+// test without a stub sees one failed attempt and a footer reading
+// "unavailable" — harmless to a test that never logs in.
 
 // Matches the URL itself rather than a glob, which Playwright would resolve
 // against baseURL and so never match a socket on another port.
@@ -20,9 +21,18 @@ const LOGIN_URL = /\/login(\?.*)?$/;
 
 const THORIN = { name: 'Thorin', profileId: 'p1' };
 
+// The build the stubbed backend claims: 2026-09-04 22:13:20 UTC. Distinct from
+// the frontend's own (playwright.config.ts) so the footer's two halves cannot
+// be confused for one another.
+const BACKEND_BUILD = {
+	commit: 'b2c3d4e5f60718293a4b5c6d7e8f9012a3b4c5d6',
+	commitTime: 1_788_560_000_000
+};
+
 /**
  * The whole backend, for tests that only need the socket to say yes: every
- * request gets the response named after it, and ListProfiles gets a list.
+ * request gets the response named after it, ListProfiles gets a list, and
+ * GetVersion gets a build.
  */
 function respondToRequests(
 	ws: WebSocketRoute,
@@ -32,6 +42,10 @@ function respondToRequests(
 		const { $type, requestId } = JSON.parse(String(frame));
 		if ($type === 'ListProfilesRequest') {
 			ws.send(JSON.stringify({ $type: 'ListProfilesResponse', requestId, profiles }));
+			return;
+		}
+		if ($type === 'GetVersionRequest') {
+			ws.send(JSON.stringify({ $type: 'GetVersionResponse', requestId, ...BACKEND_BUILD }));
 			return;
 		}
 		ws.send(JSON.stringify({ $type: `${$type.replace('Request', '')}Response`, requestId }));
@@ -77,14 +91,9 @@ test('logging in surfaces the failure when the socket will not open', async ({ p
 test('a successful login replaces /login rather than stacking /profiles on it', async ({
 	page
 }) => {
-	await page.routeWebSocket(WS_ROUTE, (ws) => {
-		// connectToServer() is never called, so these frames are the whole
-		// backend as far as this test is concerned.
-		ws.onMessage((frame) => {
-			const { requestId } = JSON.parse(String(frame));
-			ws.send(JSON.stringify({ $type: 'LoginAsTestUserResponse', requestId }));
-		});
-	});
+	// connectToServer() is never called, so these frames are the whole backend
+	// as far as this test is concerned.
+	await page.routeWebSocket(WS_ROUTE, (ws) => ws.onMessage(respondToRequests(ws, [])));
 
 	await page.goto('/login');
 	const entries = await page.evaluate(() => history.length);
@@ -138,10 +147,15 @@ test('a dropped socket reconnects and replays the session', async ({ page }) => 
 	await expect(page.getByText('Thorin')).toBeVisible();
 	expect(sentPerConnection).toHaveLength(2);
 	// Order is the point: the socket has to be logged in before it can be
-	// pointed at a profile, and the refetch rides behind both.
-	expect(sentPerConnection[1]).toEqual([
+	// pointed at a profile. The list refetch and the version footer's own
+	// refetch both ride behind that pair; which of the two goes first is not a
+	// contract.
+	expect(sentPerConnection[1].slice(0, 2)).toEqual([
 		'LoginAsTestUserRequest',
-		'SelectProfileRequest',
+		'SelectProfileRequest'
+	]);
+	expect(sentPerConnection[1].slice(2).sort()).toEqual([
+		'GetVersionRequest',
 		'ListProfilesRequest'
 	]);
 });
@@ -198,6 +212,34 @@ test('the Debug button opens the protocol console and Back returns to the app', 
 	// does not bounce to /login.
 	await page.getByRole('link', { name: 'Back to app' }).click();
 	await expect(page).toHaveURL(/\/profiles$/);
+});
+
+test('the version footer names this build and the connected backend build', async ({ page }) => {
+	await page.routeWebSocket(WS_ROUTE, (ws) => ws.onMessage(respondToRequests(ws, [THORIN])));
+
+	// Before anyone signs in: the footer is what opens the socket on /login.
+	await page.goto('/login');
+	const footer = page.getByTestId('version-footer');
+	await expect(footer).toContainText('OpenIdle');
+	await expect(footer).toContainText('frontend 2026-09-04 23:26:40 1e1c256');
+	await expect(footer).toContainText('backend 2026-09-04 22:13:20 b2c3d4e');
+
+	// The same socket carries the session, so the value survives the login.
+	await page.getByRole('button', { name: 'Log in' }).click();
+	await expect(page).toHaveURL(/\/profiles$/);
+	await expect(page.getByTestId('version-footer')).toContainText(
+		'backend 2026-09-04 22:13:20 b2c3d4e'
+	);
+});
+
+test('the version footer says so when no backend answers', async ({ page }) => {
+	await page.routeWebSocket(WS_ROUTE, (ws) => ws.close());
+
+	await page.goto('/login');
+
+	await expect(page.getByTestId('version-footer')).toContainText('backend unavailable');
+	// One failed dial, not a loop: signing in is still what re-arms the client.
+	await expect(page.getByTestId('login-status')).toHaveText('Signed out');
 });
 
 test('the traffic filter remembers which kinds are hidden across reloads', async ({ page }) => {

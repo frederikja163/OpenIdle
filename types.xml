@@ -103,6 +103,13 @@
     <Response />
   </Request>
 
+  <Request name="GetVersion">
+    <Response>
+      <Property name="Commit" type="String" optional="true" />
+      <Property name="CommitTime" type="Timestamp" optional="true" />
+    </Response>
+  </Request>
+
   <Request name="SelectProfile">
     <Property name="ProfileId" type="Guid" />
     <Response />

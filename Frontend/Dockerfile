@@ -44,9 +44,15 @@ COPY Frontend/ ./
 COPY --from=generate /out/dto.generated.ts ./src/lib/ws/dto.generated.ts
 COPY --from=generate /out/protocol.generated.ts ./src/lib/debug/protocol.generated.ts
 
+# Build provenance for the version footer: CI passes the published commit and
+# its committer date (unix seconds) as build-args, and vite.config.ts inlines
+# them into the bundle. Empty for a local `docker build`, shown as a local build.
+ARG GIT_COMMIT=
+ARG GIT_COMMIT_TIME=
+
 # Not `bun run build`: the local `build` script starts with `bun run generate`,
 # which would invoke dotnet. The generate stage above already did that work.
-RUN bunx vite build
+RUN GIT_COMMIT=$GIT_COMMIT GIT_COMMIT_TIME=$GIT_COMMIT_TIME bunx vite build
 
 FROM oven/bun:1.3.10-alpine AS runtime
 WORKDIR /app
@@ -71,6 +77,6 @@ EXPOSE 3000
 # GNU wget long options, and reading PORT here keeps the check correct if the
 # port is overridden.
 HEALTHCHECK --interval=30s --timeout=3s --start-period=10s --retries=3 \
-    CMD bun -e "fetch('http://127.0.0.1:' + (Bun.env.PORT || 3000) + '/healthz').then(r => process.exit(r.ok ? 0 : 1)).catch(() => process.exit(1))"
+    CMD bun -e "fetch('http://127.0.0.1:' + (Bun.env.PORT || 3000) + '/health').then(r => process.exit(r.ok ? 0 : 1)).catch(() => process.exit(1))"
 
 CMD ["bun", "./build/index.js"]

@@ -51,6 +51,30 @@ Production therefore only moves on a deliberate push to `release`, which is what
 
 GHCR packages are **private by default**. Either make the two packages public, or give each host a read-only PAT and `docker login ghcr.io` before the first pull — otherwise the redeploy webhook fires and the pull fails.
 
+### Build info
+
+The same commit is also stamped *into* both images, so a running deployment can say which build it is. The `publish` job passes two build-args to each `docker build`:
+
+| Build-arg | Value | Source |
+|---|---|---|
+| `GIT_COMMIT` | full SHA of the published commit | `github.sha` |
+| `GIT_COMMIT_TIME` | its committer date, unix seconds | `git log -1 --format=%ct` |
+
+The images cannot derive these themselves because `.dockerignore` drops `.git`. Each Dockerfile consumes them differently:
+
+- **Backend** — `dotnet publish` receives them as `-p:GitCommit` / `-p:GitCommitTime`, which `Backend.csproj` stamps into the assembly as `AssemblyMetadata`. `VersionService` reads them back at startup and the `GetVersion` socket request reports them.
+- **Frontend** — `vite build` receives them in its environment and `vite.config.ts` inlines them into the bundle as `__OPENIDLE_BUILD__`. Deliberately not a `PUBLIC_*` variable: those describe where an image is deployed and are read at run time, whereas this describes the image itself and must not change after the build.
+
+The version footer on the login, profiles and debug pages shows both — the bundle's own build, and the build of whichever backend the socket is connected to — as `YYYY-MM-DD HH:MM:SS <short sha>` in UTC. Builds outside CI (`bun run dev`, `dotnet run`, a plain `docker build`) carry no values and read `local`. To reproduce the CI values by hand:
+
+```sh
+docker build -f Backend/Dockerfile -t openidle-backend \
+  --build-arg GIT_COMMIT=$(git rev-parse HEAD) \
+  --build-arg GIT_COMMIT_TIME=$(git log -1 --format=%ct) .
+```
+
+One consequence worth knowing: the footer asks the backend over the socket, so `/login` now opens the socket on page load rather than on the first sign-in.
+
 ## Pipeline
 
 ```
@@ -77,8 +101,8 @@ Configure these under **Settings → Environments**, in an environment named `de
 | Secret | `BACKEND_REDEPLOY_URL` | POSTed to redeploy the backend |
 | Secret | `FRONTEND_REDEPLOY_URL` | POSTed to redeploy the frontend |
 | Secret | `REDEPLOY_TOKEN` | Optional; sent as `Authorization: Bearer` |
-| Variable | `BACKEND_HEALTH_URL` | Polled after deploy, e.g. `https://api.openidle.example/healthz` |
-| Variable | `FRONTEND_HEALTH_URL` | Polled after deploy, e.g. `https://openidle.example/healthz` |
+| Variable | `BACKEND_HEALTH_URL` | Polled after deploy, e.g. `https://api.openidle.example/health` |
+| Variable | `FRONTEND_HEALTH_URL` | Polled after deploy, e.g. `https://openidle.example/health` |
 
 Anything unset is skipped with a notice rather than failing the run, so the pipeline is usable before the hosts exist. Give the `prod` environment a required reviewer to gate every push to `release` behind an approval, and restrict its deployment branches to `release` so nothing else can deploy to it.
 
@@ -155,4 +179,4 @@ curl -i -H "Origin: https://evil.example" \
 
 ## Health endpoints
 
-Both images expose `/healthz` returning `{"status":"ok"}`, used by their `HEALTHCHECK` and by the post-deploy poll. Both are liveness only: the frontend's says nothing about whether the backend it points at is reachable, because the frontend is serving correctly either way and conflating them would restart the wrong container.
+Both images expose `/health` returning `{"status":"ok"}`, used by their `HEALTHCHECK` and by the post-deploy poll. Both are liveness only: the frontend's says nothing about whether the backend it points at is reachable, because the frontend is serving correctly either way and conflating them would restart the wrong container.

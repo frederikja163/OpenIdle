@@ -10,7 +10,9 @@ name: Publish Images
 # Prod therefore only ever moves on a deliberate push to release, which is what
 # keeps the prod frontend and prod backend on versions that were released
 # together. A branch push carries no version number, so :sha-<commit> is the
-# only tag that says which commit a prod image was built from.
+# only tag that says which commit a prod image was built from. The same commit
+# and its committer date go into both images as build-args, which is what the
+# version footer in the frontend shows.
 on:
   push:
     branches: [main, release]
@@ -84,6 +86,16 @@ jobs:
             type=raw,value=latest,enable=${{ github.ref == 'refs/heads/release' }}
             type=sha
 
+      # The images cannot read git themselves (.dockerignore drops .git), so the
+      # version footer's numbers are handed in here. %ct is the committer date
+      # in unix seconds — stable per commit, unlike a build timestamp — and the
+      # shallow checkout still holds HEAD's own commit object.
+      - name: Resolve build info
+        id: build
+        run: |
+          echo "commit=${{ github.sha }}" >> "$GITHUB_OUTPUT"
+          echo "commit_time=$(git log -1 --format=%ct)" >> "$GITHUB_OUTPUT"
+
       - name: Build and push
         uses: docker/build-push-action@v6
         with:
@@ -92,6 +104,9 @@ jobs:
           push: true
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
+          build-args: |
+            GIT_COMMIT=${{ steps.build.outputs.commit }}
+            GIT_COMMIT_TIME=${{ steps.build.outputs.commit_time }}
           # Scoped per image so the two do not evict each other's layers.
           cache-from: type=gha,scope=${{ matrix.name }}
           cache-to: type=gha,mode=max,scope=${{ matrix.name }}

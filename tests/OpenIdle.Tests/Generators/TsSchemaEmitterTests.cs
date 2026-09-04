@@ -36,6 +36,7 @@ public sealed class TsSchemaEmitterTests
           </Dto>
           <Request name="GetSkills">
             <Property name="SkillIds" type="SkillId" multiple="true" optional="true"/>
+            <Property name="Since" type="Timestamp" optional="true"/>
             <Response>
               <Property name="Profiles" type="Profile" multiple="true"/>
             </Response>
@@ -92,6 +93,10 @@ public sealed class TsSchemaEmitterTests
             // Not folded into 'guid': the console offers a profile picker for one and a plain
             // text box for the other, so the distinction has to survive the emit.
             Assert.That(output, Does.Contain("wireName: 'profileId', kind: 'guid'"));
+            // Its own kind rather than 'int': the console shows the token from types.xml
+            // as the field's label, and a bare number box labelled Timestamp is the hint
+            // that it wants epoch milliseconds.
+            Assert.That(output, Does.Contain("wireName: 'since', kind: 'timestamp'"));
         });
     }
 

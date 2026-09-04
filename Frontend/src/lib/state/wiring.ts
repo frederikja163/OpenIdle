@@ -2,6 +2,7 @@ import { getWsClient } from '$lib/ws/client';
 import { loadProfiles, profilesState, replayProfileSelection } from './profiles.svelte';
 import { connectionState, resetSessionState } from './session.svelte';
 import { replayLogin } from './user.svelte';
+import { forgetBackendVersion } from './version.svelte';
 
 // The client is a singleton and its handler registries only ever grow, so a
 // second call would leave two of everything below on one socket.
@@ -27,6 +28,9 @@ export function wireSession(): void {
 	// The session ends with the connection; a reconnect replays it from
 	// sessionIntent rather than from whatever the stores were left holding.
 	client.onClose(resetSessionState);
+	// A build belongs to the connection that reported it; the next one may
+	// reach a different backend.
+	client.onClose(forgetBackendVersion);
 	client.onStatus((status) => {
 		connectionState.status = status;
 	});

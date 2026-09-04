@@ -87,9 +87,10 @@ function entryValue(property: SchemaProperty, entry: EntryNode | undefined): unk
 	}
 	switch (property.kind) {
 		case 'int':
-		case 'float': {
+		case 'float':
+		case 'timestamp': {
 			// An empty number field means zero rather than an error: it is the value
-			// the backend's int/float would have defaulted to anyway.
+			// the backend's int/float/long would have defaulted to anyway.
 			if (entry.value.trim() === '') {
 				return 0;
 			}
@@ -97,7 +98,7 @@ function entryValue(property: SchemaProperty, entry: EntryNode | undefined): unk
 			if (!Number.isFinite(parsed)) {
 				throw new PayloadError(`${property.name} is not a number: '${entry.value}'`);
 			}
-			if (property.kind === 'int' && !Number.isInteger(parsed)) {
+			if (property.kind !== 'float' && !Number.isInteger(parsed)) {
 				throw new PayloadError(`${property.name} must be a whole number, got ${parsed}.`);
 			}
 			return parsed;

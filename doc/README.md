@@ -22,7 +22,7 @@ This is the entry point for all project documentation. It is written for **both*
 
 | Document | What it answers | Read before |
 |---|---|---|
-| [`deployment.md`](./deployment.md) | The four hosted environments, the two GHCR images and their tags, the GitHub Actions pipeline and its secrets, how the frontend picks a backend (`PUBLIC_WS_URL` and the `?ws=` override), and the WebSocket origin allowlist | any change to Dockerfiles, `.github/workflows/`, `deploy/`, or how a client reaches a backend |
+| [`deployment.md`](./deployment.md) | The four hosted environments, the two GHCR images and their tags, the build info stamped into them (what the version footer shows), the GitHub Actions pipeline and its secrets, how the frontend picks a backend (`PUBLIC_WS_URL` and the `?ws=` override), and the WebSocket origin allowlist | any change to Dockerfiles, `.github/workflows/`, `deploy/`, how a client reaches a backend, or the version footer |
 
 ### Proposals — planned / not-yet-implemented features
 

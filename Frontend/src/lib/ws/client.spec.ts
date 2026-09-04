@@ -511,6 +511,29 @@ describe('WsClient', () => {
 		expect(client.status).toBe('closed');
 	});
 
+	it('still reconnects a socket that was already open when reopen() was called', async () => {
+		vi.useFakeTimers();
+		const { client, sockets } = makeClient({ reconnectBaseMs: 100, reconnectMaxMs: 100 });
+
+		// The version footer dials before anyone signs in, so by the time the
+		// login calls reopen() there is a live socket — which a later drop must
+		// not mistake for a first attempt that failed.
+		capture(client.request('GetVersionRequest', {}));
+		await flush();
+		sockets[0].open();
+		await flush();
+
+		client.reopen();
+		capture(client.request('LoginAsTestUserRequest', {}));
+		await flush();
+		expect(sockets).toHaveLength(1);
+
+		sockets[0].finishClose();
+		expect(client.status).toBe('reconnecting');
+		await vi.advanceTimersByTimeAsync(200);
+		expect(sockets).toHaveLength(2);
+	});
+
 	it('holds ordinary requests behind the session replay after a reconnect', async () => {
 		vi.useFakeTimers();
 		const { client, sockets } = makeClient({ reconnectBaseMs: 100, reconnectMaxMs: 100 });
