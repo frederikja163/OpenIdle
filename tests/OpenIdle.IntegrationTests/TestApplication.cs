@@ -20,6 +20,8 @@ public sealed class TestApplication : IDisposable
 
     public Uri WsUri { get; }
 
+    public Uri HttpUri { get; }
+
     public TestApplication()
     {
         _dbPath = Path.Combine(Path.GetTempPath(), $"openidle-it-{Guid.NewGuid():N}.db");
@@ -39,6 +41,7 @@ public sealed class TestApplication : IDisposable
             string baseAddress = addresses.Addresses.First(a => a.StartsWith("http://127.0.0.1"));
 
             _app = app;
+            HttpUri = new Uri(baseAddress);
             WsUri = new Uri(baseAddress.Replace("http://", "ws://", StringComparison.Ordinal) + "/ws");
             app = null;
         }

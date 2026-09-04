@@ -20,10 +20,37 @@ internal static class WebApplicationBuilderExtensions
             collection.AddSingleton<SocketEndpointService>();
             collection.AddHostedService(sp => sp.GetRequiredService<SocketEndpointService>());
         }
+
+        /// <summary>
+        /// CORS for the plumbing HTTP endpoints (currently /version), served from
+        /// the same origin allowlist as the WebSocket handshake: one list governs
+        /// both. Like the WS handshake, an empty list means unrestricted, which is
+        /// what local development wants.
+        /// </summary>
+        internal void AddOpenIdleCors(IConfiguration configuration)
+        {
+            string[] allowedOrigins = ReadAllowedOrigins(configuration);
+            collection.AddCors(options => options.AddDefaultPolicy(policy =>
+            {
+                if (allowedOrigins.Length == 0)
+                {
+                    policy.AllowAnyOrigin();
+                }
+                else
+                {
+                    policy.WithOrigins(allowedOrigins);
+                }
+            }));
+            Log.Info(allowedOrigins.Length == 0
+                ? "CORS origins: unrestricted (AllowedWsOrigins is empty)"
+                : $"CORS origins restricted to: {string.Join(", ", allowedOrigins)}");
+        }
     }
 
     extension(WebApplication app)
     {
+        internal void UseOpenIdleCors() => app.UseCors();
+
         internal void MapSocketControllers()
         {
             app.UseWebSockets(BuildWebSocketOptions(app));
@@ -42,10 +69,15 @@ internal static class WebApplicationBuilderExtensions
         }
     }
 
+    private static string[] ReadAllowedOrigins(IConfiguration configuration)
+    {
+        return configuration.GetSection("AllowedWsOrigins").Get<string[]>() ?? [];
+    }
+
     private static WebSocketOptions BuildWebSocketOptions(WebApplication app)
     {
         WebSocketOptions options = new();
-        string[] allowedOrigins = app.Configuration.GetSection("AllowedWsOrigins").Get<string[]>() ?? [];
+        string[] allowedOrigins = ReadAllowedOrigins(app.Configuration);
 
         foreach (string origin in allowedOrigins)
         {

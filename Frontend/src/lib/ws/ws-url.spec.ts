@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { DEFAULT_WS_URL, selectWsUrl, type WsUrlInput } from './ws-url';
+import { DEFAULT_WS_URL, selectWsUrl, versionHttpUrl, type WsUrlInput } from './ws-url';
 
 const DEV_BACKEND = 'wss://api.dev.openidle.example/ws';
 const LOCAL_BACKEND = 'ws://localhost:5066/ws';
@@ -150,5 +150,23 @@ describe('selectWsUrl', () => {
 		const resolution = selectWsUrl(input({ requestedOverride: `  ${LOCAL_BACKEND}  ` }));
 
 		expect(resolution.url).toBe(LOCAL_BACKEND);
+	});
+});
+
+describe('versionHttpUrl', () => {
+	it('maps a ws URL to the http version endpoint on the same host', () => {
+		expect(versionHttpUrl('ws://localhost:5066/ws')).toBe('http://localhost:5066/version');
+	});
+
+	it('maps a wss URL to the https version endpoint', () => {
+		expect(versionHttpUrl('wss://api.openidle.example/ws')).toBe(
+			'https://api.openidle.example/version'
+		);
+	});
+
+	it('drops whatever path, query or hash the ws URL carried', () => {
+		expect(versionHttpUrl('ws://localhost:5066/some/path?x=1#frag')).toBe(
+			'http://localhost:5066/version'
+		);
 	});
 });

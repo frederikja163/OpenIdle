@@ -15,7 +15,7 @@ These are the constraints the whole design exists to satisfy:
 Two mechanisms enforce them, and they work in opposite directions:
 
 - **Outbound** — the frontend decides which backend to dial, in `Frontend/src/lib/ws/ws-url.ts`. Production ships without `PUBLIC_ALLOW_WS_OVERRIDE`, so a `?ws=` link is inert there.
-- **Inbound** — the backend decides which sites may open a socket, via `AllowedWsOrigins`. Production names the prod frontend and nothing else.
+- **Inbound** — the backend decides which sites may open a socket, via `AllowedWsOrigins`. Production names the prod frontend and nothing else. The same list also serves as the CORS allowlist for the HTTP `GET /version` fetch (see [Build info](#build-info)), so one origin list governs both ways a frontend reaches its backend.
 
 Neither alone is enough. The override switch stops a prod *user* being redirected at another backend; the origin allowlist stops another *site* driving the prod backend.
 
@@ -62,10 +62,10 @@ The same commit is also stamped *into* both images, so a running deployment can 
 
 The images cannot derive these themselves because `.dockerignore` drops `.git`. Each Dockerfile consumes them differently:
 
-- **Backend** — `dotnet publish` receives them as `-p:GitCommit` / `-p:GitCommitTime`, which `Backend.csproj` stamps into the assembly as `AssemblyMetadata`. `VersionService` reads them back at startup and the `GetVersion` socket request reports them.
+- **Backend** — `dotnet publish` receives them as `-p:GitCommit` / `-p:GitCommitTime`, which `Backend.csproj` stamps into the assembly as `AssemblyMetadata`. `VersionService` reads them back at startup and the `GET /version` endpoint ([`Backend/Controllers/Http/VersionController.cs`](../Backend/Controllers/Http/VersionController.cs)) reports them over HTTP.
 - **Frontend** — `vite build` receives them in its environment and `vite.config.ts` inlines them into the bundle as `__OPENIDLE_BUILD__`. Deliberately not a `PUBLIC_*` variable: those describe where an image is deployed and are read at run time, whereas this describes the image itself and must not change after the build.
 
-The version footer on the login, profiles and debug pages shows both — the bundle's own build, and the build of whichever backend the socket is connected to — as `YYYY-MM-DD HH:MM:SS <short sha>` in UTC. Builds outside CI (`bun run dev`, `dotnet run`, a plain `docker build`) carry no values and read `local`. To reproduce the CI values by hand:
+The version footer on the login, profiles and debug pages shows both — the bundle's own build, and the build of whichever backend the client points at — as `YYYY-MM-DD HH:MM:SS <short sha>` in UTC. The frontend derives the backend's version endpoint from the same resolved ws URL it dials (`PUBLIC_WS_URL`, a `?ws=` override, or the dev fallback), mapping `ws://`/`wss://` to `http://`/`https://` and `/ws` to `/version`, so an override moves the version fetch with everything else. Builds outside CI (`bun run dev`, `dotnet run`, a plain `docker build`) carry no values and read `local`. To reproduce the CI values by hand:
 
 ```sh
 docker build -f Backend/Dockerfile -t openidle-backend \
@@ -73,7 +73,7 @@ docker build -f Backend/Dockerfile -t openidle-backend \
   --build-arg GIT_COMMIT_TIME=$(git log -1 --format=%ct) .
 ```
 
-One consequence worth knowing: the footer asks the backend over the socket, so `/login` now opens the socket on page load rather than on the first sign-in.
+One consequence worth knowing: the footer asks the backend over HTTP, so `/login` no longer opens a socket on page load — the socket opens at the first sign-in (or when the debug console dials).
 
 ## Pipeline
 
@@ -164,8 +164,8 @@ This works because each developer's local backend has an empty `AllowedWsOrigins
 
 Three properties are worth knowing:
 
-- **Empty means unrestricted.** That is ASP.NET Core's behaviour with no options at all, and it is what local development wants, since the frontend's port varies. Every deployed environment must set it explicitly — the backend logs which mode it is in at startup.
-- **This is not CORS.** A WebSocket handshake is not subject to the browser's same-origin policy, so `AddCors` would do nothing here. Without the allowlist, any page anywhere could drive the backend on a visitor's behalf.
+- **Empty means unrestricted.** That is ASP.NET Core's behaviour with no options at all, and it is what local development wants, since the frontend's port varies. Every deployed environment must set it explicitly — the backend logs which mode it is in at startup. The same empty rule feeds the CORS policy for `GET /version`, so a bare `dotnet run` backend answers any origin's fetch, as local development needs.
+- **This is not (only) CORS.** A WebSocket handshake is not subject to the browser's same-origin policy, so the socket half of the allowlist works where `AddCors` would do nothing. The HTTP fetch in the version footer *is* subject to it, which is why the allowlist now doubles as the CORS policy: without the list, any page anywhere could drive the backend on a visitor's behalf, and without CORS, no page on another origin could read the version.
 - **Only requests carrying an `Origin` header are filtered.** Browsers always send one; other clients need not. It hardens the browser attack path rather than authenticating callers, and it is not a substitute for authentication.
 
 A rejected handshake gets **403**. To check a deployment:

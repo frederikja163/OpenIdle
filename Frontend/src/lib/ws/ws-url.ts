@@ -166,6 +166,22 @@ export function defaultWsUrl(): string {
 }
 
 /**
+ * Derives the backend's HTTP version endpoint from its WebSocket URL. Fetch is a
+ * different transport on a different protocol, and the footer has nothing else
+ * to name the backend by, so the origin has to come from the ws URL —
+ * PUBLIC_WS_URL, an override, or the dev fallback — or it would be asking an
+ * address that has nothing to do with the backend the client talks to.
+ */
+export function versionHttpUrl(wsUrl: string): string {
+	const parsed = new URL(wsUrl);
+	parsed.protocol = parsed.protocol === 'wss:' ? 'https:' : 'http:';
+	parsed.pathname = '/version';
+	parsed.search = '';
+	parsed.hash = '';
+	return parsed.href;
+}
+
+/**
  * Reading `window.localStorage` — not just using it — throws in a browser with
  * site data blocked, so even the handle has to be taken defensively.
  */

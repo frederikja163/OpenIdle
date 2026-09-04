@@ -1,6 +1,6 @@
 # HTTP controller endpoints
 
-The backend exposes exactly one HTTP route today — the WebSocket handshake at `GET /ws` ([`Backend/Controllers/Http/WsController.cs`](../../Backend/Controllers/Http/WsController.cs)). Everything else the client needs goes over that socket via [socket endpoints](./socket-endpoints.md). When you do need a plain HTTP endpoint, it is a standard ASP.NET Core MVC controller — this page records the house pattern.
+The backend exposes two plain HTTP routes today — `GET /health` ([`Backend/Controllers/Http/HealthController.cs`](../../Backend/Controllers/Http/HealthController.cs)) and `GET /version` ([`Backend/Controllers/Http/VersionController.cs`](../../Backend/Controllers/Http/VersionController.cs)) — plus the WebSocket handshake at `GET /ws`. Everything else the client needs goes over that socket via [socket endpoints](./socket-endpoints.md). When you do need a plain HTTP endpoint, it is a standard ASP.NET Core MVC controller — this page records the house pattern.
 
 ## Quick reference
 
@@ -91,6 +91,7 @@ The `http` launch profile serves `http://localhost:5066` ([`Backend/Properties/l
 4. Return `IActionResult` helpers (`Ok`, `NotFound`, `BadRequest`, ...).
 5. Never register the controller — only its services, in `Program.cs`.
 6. Everything tied to game state goes through the socket, not HTTP; use HTTP for plumbing (handshake, health, static-ish concerns).
+7. **A cross-origin fetch needs CORS.** The WebSocket handshake is exempt from the browser's same-origin policy, but `fetch` is not — so any HTTP endpoint a frontend on another origin calls must sit behind the CORS policy in `AddOpenIdleCors`. The policy reuses `AllowedWsOrigins`: the same origin allowlist that governs the socket governs HTTP plumbing, and an empty list (local development) allows any origin. See [`../deployment.md`](../deployment.md).
 
 ## 4. Related documents
 

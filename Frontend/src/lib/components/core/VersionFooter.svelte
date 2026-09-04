@@ -17,11 +17,10 @@
 	 * a layout, so the game view stays clear of it.
 	 */
 
-	// Asks on mount and on every fresh connection, never on every status change:
-	// the store answers once per connection, and a dial that fails ends in
-	// 'closed' rather than 'open', so a backend that is down costs one attempt
-	// and cannot start a loop. On /login this is what opens the socket before
-	// anyone has signed in.
+	// Asks on mount and whenever the pointed-at backend may have changed: the
+	// store answers once per URL, and a fetch that fails ends in 'failed' rather
+	// than retrying. A reconnect reaches the same URL, so the URL-keyed guard
+	// keeps the effect from turning into a second ask for one backend.
 	onMount(() => {
 		void loadBackendVersion();
 	});
@@ -32,9 +31,9 @@
 	});
 
 	const backend = $derived(
-		versionState.backend
+		versionState.status === 'loaded' && versionState.backend
 			? formatVersion(versionState.backend)
-			: connectionState.status === 'closed'
+			: versionState.status === 'failed' || versionState.status === 'idle'
 				? 'unavailable'
 				: '…'
 	);

@@ -515,10 +515,10 @@ describe('WsClient', () => {
 		vi.useFakeTimers();
 		const { client, sockets } = makeClient({ reconnectBaseMs: 100, reconnectMaxMs: 100 });
 
-		// The version footer dials before anyone signs in, so by the time the
+		// The debug console dials before a session exists, so by the time the
 		// login calls reopen() there is a live socket — which a later drop must
 		// not mistake for a first attempt that failed.
-		capture(client.request('GetVersionRequest', {}));
+		capture(client.request('ListProfilesRequest', {}));
 		await flush();
 		sockets[0].open();
 		await flush();

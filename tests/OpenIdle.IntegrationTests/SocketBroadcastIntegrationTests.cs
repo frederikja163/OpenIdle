@@ -32,20 +32,6 @@ public sealed class SocketBroadcastIntegrationTests : IDisposable
 
     [Test]
     [CancelAfter(30_000)]
-    public async Task GetVersion_AnswersWithoutLogin(CancellationToken ct)
-    {
-        using TestSocketClient socket = await _app.ConnectAsync(ct).ConfigureAwait(false);
-
-        await socket.SendAsync(new GetVersionRequest { RequestId = 11 }, ct).ConfigureAwait(false);
-
-        // A test build stamps no commit, so the payload is empty; what matters is
-        // that the request is answered on a socket nobody has signed in on.
-        GetVersionResponse response = await ReceiveUntilAsync<GetVersionResponse>(socket, ct);
-        Assert.That(response.RequestId, Is.EqualTo(11));
-    }
-
-    [Test]
-    [CancelAfter(30_000)]
     public async Task UnknownRequestType_ReturnsErrorResponse(CancellationToken ct)
     {
         using TestSocketClient socket = await _app.ConnectAsync(ct).ConfigureAwait(false);

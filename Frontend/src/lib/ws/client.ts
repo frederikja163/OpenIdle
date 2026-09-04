@@ -475,8 +475,8 @@ export class WsClient {
 	 * established — a first attempt that fails should surface to the login page,
 	 * not start a background retry loop.
 	 *
-	 * Forgotten only when nothing is connected. The version footer dials before
-	 * anyone signs in, so a login can find a socket already open: that is an
+	 * Forgotten only when nothing is connected. The debug console dials before a
+	 * session exists, so a login can find a socket already open: that is an
 	 * established connection, and a later drop of it is a fault to recover from
 	 * rather than a first attempt that failed.
 	 */
