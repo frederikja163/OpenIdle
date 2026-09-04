@@ -98,8 +98,8 @@ public sealed class TsEmitter : IDtoEmitter
             _textWriter.WriteLine("$type: string;");
         }
 
-        // requestId and eventId are optional because the backend genuinely omits
-        // them: both are `int?` on the C# bases and SocketJsonSerializer sets
+        // requestId is optional because the backend genuinely omits it: it is
+        // `int?` on the C# bases and SocketJsonSerializer sets
         // DefaultIgnoreCondition = WhenWritingNull, so an unset id is absent
         // from the frame rather than sent as 0. classifyMessage depends on it.
         foreach (string name in new[] { "RequestBase", "ResponseBase" })
@@ -111,14 +111,16 @@ public sealed class TsEmitter : IDtoEmitter
             }
         }
 
-        // Timestamp is `long?` on the C# base and Socket.SendEventAsync stamps it
-        // with epoch milliseconds on the way out, so it is optional here for the
-        // same reason the ids are: WhenWritingNull omits an unset one.
+        // Both stamps are nullable on the C# base as well, but unlike requestId
+        // they are never absent on the wire: every event leaves through
+        // Socket.SendEventAsync, which assigns the per-socket eventId (first is
+        // 0) and the Unix-ms timestamp before serializing. Required here so a
+        // typed ServerEventOf agrees with protocol.ts's ServerEvent.
         Separate();
         using (Scope _ = _textWriter.Scope("export interface EventBase extends DtoBase"))
         {
-            _textWriter.WriteLine("eventId?: number;");
-            _textWriter.WriteLine("timestamp?: number;");
+            _textWriter.WriteLine("eventId: number;");
+            _textWriter.WriteLine("timestamp: number;");
         }
     }
 

@@ -8,9 +8,10 @@
 // property is camelCase: the generator stamps an explicit [JsonPropertyName] on
 // each one, and SocketJsonSerializer sets PropertyNamingPolicy = CamelCase on
 // top of that. Requests carry a client-chosen `requestId` that the matching
-// response echoes back. Server-push events carry a server-assigned `eventId`
-// and `timestamp` instead, and never a `requestId` — that absence is what
-// classifyMessage uses to tell an event from a response.
+// response echoes back. Server-push events never carry a `requestId` — that
+// absence is what classifyMessage uses to tell an event from a response — and
+// the backend stamps each with a per-socket `eventId` (first is 0) and a
+// Unix-ms `timestamp` at send.
 
 import {
 	RESPONSE_TYPES,
@@ -29,6 +30,10 @@ export * from './dto.generated';
  */
 export interface ServerEvent {
 	$type: string;
+	/** The backend's per-socket sequence, stamped at send; the first event is 0. */
+	eventId: number;
+	/** Unix epoch milliseconds, stamped by the backend at send. */
+	timestamp: number;
 	[key: string]: unknown;
 }
 

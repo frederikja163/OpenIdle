@@ -83,3 +83,41 @@ describe('frame kinds', () => {
 		expect(trafficState.frames[0].kind).toBe('unknown');
 	});
 });
+
+describe('event timing', () => {
+	beforeEach(() => {
+		vi.useFakeTimers();
+		vi.setSystemTime(1_760_000_000_025);
+	});
+
+	afterEach(() => {
+		vi.useRealTimers();
+	});
+
+	it('sets travelMs from the send stamp and keeps eventId 0 as the first event', () => {
+		deliver(
+			'in',
+			'{"$type":"ProfilesChangedEvent","eventId":0,"timestamp":1760000000000,"profiles":[]}'
+		);
+
+		const frame = trafficState.frames[0];
+		expect(frame.travelMs).toBe(25);
+		expect(frame.eventId).toBe(0);
+	});
+
+	it('leaves both null on an event without the stamps', () => {
+		deliver('in', '{"$type":"ProfilesChangedEvent","profiles":[]}');
+
+		const frame = trafficState.frames[0];
+		expect(frame.travelMs).toBeNull();
+		expect(frame.eventId).toBeNull();
+	});
+
+	it('does not read a timestamp property on a non-event frame as a send stamp', () => {
+		deliver('out', '{"$type":"LoginAsTestUserRequest","requestId":1,"timestamp":1760000000000}');
+
+		const frame = trafficState.frames[0];
+		expect(frame.travelMs).toBeNull();
+		expect(frame.eventId).toBeNull();
+	});
+});
