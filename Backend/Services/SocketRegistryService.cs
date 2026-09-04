@@ -12,6 +12,7 @@ namespace Backend.Services;
 
 public sealed class SocketRegistryService
 {
+    private readonly object _profileSync = new();
     private readonly ConcurrentDictionary<ProfileId, ConcurrentDictionary<Socket, byte>> _socketsByProfile = new();
     private readonly ConcurrentDictionary<Socket, ProfileId> _profileBySocket = new();
     private readonly ConcurrentDictionary<UserId, ConcurrentDictionary<Socket, byte>> _socketsByUser = new();
@@ -30,25 +31,37 @@ public sealed class SocketRegistryService
 
     internal async Task SetProfile(Socket socket, ProfileId profileId)
     {
-        if (_profileBySocket.TryGetValue(socket, out ProfileId currentProfileId) && currentProfileId == profileId)
-        {
-            return;
-        }
+        ProfileId? offlineProfileId = null;
+        ProfileId? onlineProfileId = null;
 
-        if (_profileBySocket.TryRemove(socket, out ProfileId previousProfileId) &&
-            RemoveSocketFromProfile(socket, previousProfileId))
+        lock (_profileSync)
         {
-            await NotifyProfileOffline(previousProfileId);
-        }
-
-        _profileBySocket[socket] = profileId;
-        if (AddSocketToProfile(socket, profileId))
-        {
-            Log.Debug($"Profile {profileId} came online.");
-            if (ProfileOnline is { } onlineHandlers)
+            if (_profileBySocket.TryGetValue(socket, out ProfileId currentProfileId) && currentProfileId == profileId)
             {
-                await onlineHandlers.InvokeAsync(this, new ProfileOnlineEventArgs(profileId));
+                return;
             }
+
+            if (_profileBySocket.TryRemove(socket, out ProfileId previousProfileId) &&
+                RemoveSocketFromProfile(socket, previousProfileId))
+            {
+                offlineProfileId = previousProfileId;
+            }
+
+            _profileBySocket[socket] = profileId;
+            if (AddSocketToProfile(socket, profileId))
+            {
+                onlineProfileId = profileId;
+            }
+        }
+
+        if (offlineProfileId is { } previousProfile)
+        {
+            await NotifyProfileOffline(previousProfile);
+        }
+
+        if (onlineProfileId is { } currentProfile)
+        {
+            await NotifyProfileOnline(currentProfile);
         }
     }
 
@@ -136,10 +149,19 @@ public sealed class SocketRegistryService
 
     private async Task RemoveSocket(Socket socket)
     {
-        if (_profileBySocket.TryRemove(socket, out ProfileId profileId) &&
-            RemoveSocketFromProfile(socket, profileId))
+        ProfileId? offlineProfileId = null;
+        lock (_profileSync)
         {
-            await NotifyProfileOffline(profileId);
+            if (_profileBySocket.TryRemove(socket, out ProfileId profileId) &&
+                RemoveSocketFromProfile(socket, profileId))
+            {
+                offlineProfileId = profileId;
+            }
+        }
+
+        if (offlineProfileId is { } offlineProfile)
+        {
+            await NotifyProfileOffline(offlineProfile);
         }
 
         if (_userBySocket.TryRemove(socket, out UserId userId) &&
@@ -179,6 +201,15 @@ public sealed class SocketRegistryService
         if (ProfileOffline is { } offlineHandlers)
         {
             await offlineHandlers.InvokeAsync(this, new ProfileOfflineEventArgs(profileId));
+        }
+    }
+
+    private async Task NotifyProfileOnline(ProfileId profileId)
+    {
+        Log.Debug($"Profile {profileId} came online.");
+        if (ProfileOnline is { } onlineHandlers)
+        {
+            await onlineHandlers.InvokeAsync(this, new ProfileOnlineEventArgs(profileId));
         }
     }
 }

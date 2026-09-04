@@ -128,6 +128,48 @@ public sealed class SocketRegistryServiceTests
     }
 
     [Test]
+    public async Task ClosingSocket_DuringProfileAssignment_DoesNotLeaveSocketInProfile()
+    {
+        SocketRegistryService registry = CreateRegistry();
+        TaskCompletionSource assignmentPaused = new(TaskCreationOptions.RunContinuationsAsynchronously);
+        TaskCompletionSource continueAssignment = new(TaskCreationOptions.RunContinuationsAsynchronously);
+        registry.ProfileOffline += async (_, e) =>
+        {
+            if (e.ProfileId == ProfileA)
+            {
+                assignmentPaused.SetResult();
+                await continueAssignment.Task;
+            }
+        };
+        TestSocket testSocket = CreateRegisteredSocket(registry);
+        await registry.SetProfile(testSocket.Socket, ProfileA);
+
+        Task assignment = registry.SetProfile(testSocket.Socket, ProfileB);
+        await assignmentPaused.Task.WaitAsync(TimeSpan.FromSeconds(5));
+        Task removal = testSocket.Socket.CloseAsync(WebSocketCloseStatus.NormalClosure, "bye");
+        bool removalCompletedWhileHandlerBlocked;
+        try
+        {
+            removalCompletedWhileHandlerBlocked =
+                await Task.WhenAny(removal, Task.Delay(TimeSpan.FromSeconds(5))) == removal;
+        }
+        finally
+        {
+            continueAssignment.SetResult();
+        }
+
+        await Task.WhenAll(assignment, removal);
+        await registry.SendToProfileAsync(ProfileB, CreateEvent());
+
+        Assert.Multiple(() =>
+        {
+            Assert.That(removalCompletedWhileHandlerBlocked, Is.True,
+                "Profile event handlers must run after releasing synchronization.");
+            AssertNoEventSent(testSocket);
+        });
+    }
+
+    [Test]
     public async Task SendToUserAsync_WithNoSockets_DoesNotThrow()
     {
         SocketRegistryService registry = CreateRegistry();
