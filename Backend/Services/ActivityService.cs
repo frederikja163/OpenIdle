@@ -231,12 +231,14 @@ public sealed class ActivityService
             throw new BackendException("Profile is already doing an activity.");
         }
 
-        foreach (LevelRequirement requirement in definition.Requirements)
+        foreach ((LevelRequirement requirement, Skill skill) in definition.Requirements.OrderBy(r => r.SkillId)
+                     .Zip(await _skillService.GetSkillsAsync(profileId,
+                         definition.Requirements.Select(s => s.SkillId).ToList())))
         {
-            Skill[] skills = await _skillService.GetSkillsAsync(profileId, [requirement.SkillId]);
-            if ((skills.FirstOrDefault()?.Level ?? 0) < requirement.Level)
+            if (skill.Level < requirement.Level)
             {
-                throw new BackendException($"Activity '{activityId}' requires {requirement.SkillId} level {requirement.Level}.");
+                throw new BackendException(
+                    $"Activity '{activityId}' requires {requirement.SkillId} level {requirement.Level}.");
             }
         }
 
