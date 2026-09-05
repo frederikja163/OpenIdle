@@ -114,6 +114,181 @@ public sealed class ActivityServiceTests : IDisposable
     }
 
     [Test]
+    public async Task StartActivityAsync_MissingCostItem_ThrowsBackendException()
+    {
+        Profile profile = await SeedProfileAsync();
+        await SeedSkillAsync(profile, SkillId.Mining, xp: 0, level: 1);
+        (ActivityService service, _) = CreateService();
+        service.AddActivity(ActivityId.Stone, new ActivityDefinition(
+            time: 1f,
+            rewards: [new ItemReward(4, null, ItemId.Stone)],
+            requirements: [new LevelRequirement(SkillId.Mining, 1)],
+            costs: [new ItemCost(1, ItemId.Food)]));
+
+        BackendException? exception = Assert.ThrowsAsync<BackendException>(
+            () => service.StartActivityAsync(profile.ProfileId, ActivityId.Stone));
+
+        Assert.Multiple(() =>
+        {
+            Assert.That(exception, Is.Not.Null);
+            Assert.That(exception?.Message, Does.Contain("requires 1 of Food"));
+        });
+        Assert.That(await GetItemsAsync(profile.ProfileId), Is.Empty);
+    }
+
+    [Test]
+    public async Task StartActivityAsync_InsufficientCostItem_ThrowsBackendException()
+    {
+        Profile profile = await SeedProfileAsync();
+        await SeedItemAsync(profile, ItemId.Food, 1);
+        await SeedSkillAsync(profile, SkillId.Mining, xp: 0, level: 1);
+        (ActivityService service, _) = CreateService();
+        service.AddActivity(ActivityId.Stone, new ActivityDefinition(
+            time: 1f,
+            rewards: [new ItemReward(4, null, ItemId.Stone)],
+            requirements: [new LevelRequirement(SkillId.Mining, 1)],
+            costs: [new ItemCost(2, ItemId.Food)]));
+
+        BackendException? exception = Assert.ThrowsAsync<BackendException>(
+            () => service.StartActivityAsync(profile.ProfileId, ActivityId.Stone));
+
+        Assert.Multiple(() =>
+        {
+            Assert.That(exception, Is.Not.Null);
+            Assert.That(exception?.Message, Does.Contain("requires 2 of Food"));
+        });
+        Item food = (await GetItemsAsync(profile.ProfileId)).Single();
+        Assert.That(food.Count, Is.EqualTo(1));
+    }
+
+    [Test]
+    public async Task StartActivityAsync_SatisfiesCostItem_DoesNotDeductAtStart()
+    {
+        Profile profile = await SeedProfileAsync();
+        await SeedItemAsync(profile, ItemId.Food, 3);
+        await SeedSkillAsync(profile, SkillId.Mining, xp: 0, level: 1);
+        (ActivityService service, _) = CreateService();
+        service.AddActivity(ActivityId.Stone, new ActivityDefinition(
+            time: 1f,
+            rewards: [new ItemReward(4, null, ItemId.Stone)],
+            requirements: [new LevelRequirement(SkillId.Mining, 1)],
+            costs: [new ItemCost(1, ItemId.Food)]));
+
+        await service.StartActivityAsync(profile.ProfileId, ActivityId.Stone);
+
+        Item food = (await GetItemsAsync(profile.ProfileId)).Single();
+        Assert.That(food.ItemId, Is.EqualTo(ItemId.Food));
+        Assert.That(food.Count, Is.EqualTo(3));
+    }
+
+    [Test]
+    public async Task ResolveRewardCollection_DeductsCostPerCompletedActivity()
+    {
+        Profile profile = await SeedProfileAsync();
+        await SeedItemAsync(profile, ItemId.Food, 10);
+        await SeedSkillAsync(profile, SkillId.Mining, xp: 0, level: 1);
+        (ActivityService service, _) = CreateService();
+        service.AddActivity(ActivityId.Stone, new ActivityDefinition(
+            time: 1f,
+            rewards: [new ItemReward(4, null, ItemId.Stone)],
+            requirements: [new LevelRequirement(SkillId.Mining, 1)],
+            costs: [new ItemCost(1, ItemId.Food)]));
+        await service.StartActivityAsync(profile.ProfileId, ActivityId.Stone);
+
+        RewardCollection rewards = new();
+        await service.ResolveActivityAsync(profile.ProfileId, rewards);
+        await service.ResolveActivityAsync(profile.ProfileId, rewards);
+        await service.ResolveRewardCollection(rewards, profile.ProfileId, DateTime.UtcNow, ActivityId.Stone);
+
+        await Assert.MultipleAsync(async () =>
+        {
+            Item stone = (await GetItemsAsync(profile.ProfileId)).Single(i => i.ItemId == ItemId.Stone);
+            Assert.That(stone.Count, Is.EqualTo(8));
+            Item food = (await GetItemsAsync(profile.ProfileId)).Single(i => i.ItemId == ItemId.Food);
+            Assert.That(food.Count, Is.EqualTo(8));
+        });
+    }
+
+    [Test]
+    public async Task Completion_WhenFoodRunsOut_StopsActivityWithoutRewards()
+    {
+        Profile profile = await SeedProfileAsync();
+        await SeedItemAsync(profile, ItemId.Food, 2);
+        await SeedSkillAsync(profile, SkillId.Mining, xp: 0, level: 1);
+        (ActivityService service, _, _, _) = CreateServiceWithInternals();
+        service.AddActivity(ActivityId.Stone, new ActivityDefinition(
+            time: 1f,
+            rewards: [new ItemReward(4, null, ItemId.Stone)],
+            requirements: [new LevelRequirement(SkillId.Mining, 1)],
+            costs: [new ItemCost(1, ItemId.Food)]));
+        await service.StartActivityAsync(profile.ProfileId, ActivityId.Stone);
+
+        ProfileActivityCompletion completion = new(service, profile.ProfileId, ActivityId.Stone, TimeSpan.FromSeconds(1));
+
+        await completion.Complete(DateTime.UtcNow);
+        await completion.Complete(DateTime.UtcNow);
+
+        Item[] afterTwo = await GetItemsAsync(profile.ProfileId);
+        await using GameDbContext dbContext = await _db.Factory.CreateDbContextAsync();
+        Profile afterTwoProfile = (await dbContext.Profiles.FindAsync(profile.ProfileId))!;
+        Assert.Multiple(() =>
+        {
+            Item stone = afterTwo.Single(i => i.ItemId == ItemId.Stone);
+            Assert.That(stone.Count, Is.EqualTo(8));
+            Assert.That(afterTwo.Any(i => i.ItemId == ItemId.Food), Is.False);
+            Assert.That(afterTwoProfile.ActivityId, Is.Not.Null);
+        });
+
+        await completion.Complete(DateTime.UtcNow);
+
+        Item[] afterThree = await GetItemsAsync(profile.ProfileId);
+        await using GameDbContext freshContext = await _db.Factory.CreateDbContextAsync();
+        Profile stopped = (await freshContext.Profiles.FindAsync(profile.ProfileId))!;
+        Assert.Multiple(() =>
+        {
+            Item stone = afterThree.Single(i => i.ItemId == ItemId.Stone);
+            Assert.That(stone.Count, Is.EqualTo(8));
+            Assert.That(stopped.ActivityId, Is.Null);
+        });
+    }
+
+    [Test]
+    public async Task StopActivityAsync_ClearsActivityAndRemovesScheduledEvent()
+    {
+        Profile profile = await SeedProfileAsync();
+        await SeedSkillAsync(profile, SkillId.Mining, xp: 0, level: 1);
+        (ActivityService service, _, ActivitySchedulerService scheduler, _) = CreateServiceWithInternals();
+        AddStoneActivity(service, time: 10f);
+
+        await service.StartActivityAsync(profile.ProfileId, ActivityId.Stone, DateTime.UtcNow.AddSeconds(-100));
+        await service.StopActivityAsync(profile.ProfileId);
+
+        await scheduler.NextEvent();
+
+        Item[] items = await GetItemsAsync(profile.ProfileId);
+        await using GameDbContext dbContext = await _db.Factory.CreateDbContextAsync();
+        Profile updated = (await dbContext.Profiles.FindAsync(profile.ProfileId))!;
+        Assert.Multiple(() =>
+        {
+            Assert.That(items, Is.Empty);
+            Assert.That(updated.ActivityId, Is.Null);
+            Assert.That(updated.ActivityStartTime, Is.Null);
+        });
+    }
+
+    [Test]
+    public async Task StopActivityAsync_NotDoingActivity_ThrowsBackendException()
+    {
+        Profile profile = await SeedProfileAsync();
+        (ActivityService service, _) = CreateService();
+
+        BackendException? exception = Assert.ThrowsAsync<BackendException>(
+            () => service.StopActivityAsync(profile.ProfileId));
+
+        Assert.That(exception?.Message, Does.Contain("not doing an activity"));
+    }
+
+    [Test]
     public async Task StartActivityAsync_ExplicitStartTime_IsUsedAsAnchor()
     {
         Profile profile = await SeedProfileAsync();
@@ -312,6 +487,116 @@ public sealed class ActivityServiceTests : IDisposable
         Item item = (await GetItemsAsync(profile.ProfileId)).Single();
         Assert.That(item.ItemId, Is.EqualTo(ItemId.Stone));
         Assert.That(item.Count, Is.EqualTo(40));
+    }
+
+    [Test]
+    public async Task Reschedule_WithRewardFunding_FarmsAllDueCompletions()
+    {
+        Profile profile = await SeedProfileAsync();
+        await SeedItemAsync(profile, ItemId.Food, 2);
+        await SeedSkillAsync(profile, SkillId.Mining, xp: 0, level: 1);
+        (ActivityService service, _, _, _) = CreateServiceWithInternals();
+        service.AddActivity(ActivityId.Stone, new ActivityDefinition(
+            time: 10f,
+            rewards: [new ItemReward(3, null, ItemId.Food), new XpReward(10, null, SkillId.Mining)],
+            requirements: [new LevelRequirement(SkillId.Mining, 1)],
+            costs: [new ItemCost(1, ItemId.Food)]));
+        await service.StartActivityAsync(profile.ProfileId, ActivityId.Stone, DateTime.UtcNow.AddSeconds(-100));
+
+        await service.OnProfileOffline(this, new ProfileOfflineEventArgs(profile.ProfileId));
+        await service.OnProfileOnline(this, new ProfileOnlineEventArgs(profile.ProfileId));
+
+        Item food = (await GetItemsAsync(profile.ProfileId)).Single(i => i.ItemId == ItemId.Food);
+        Assert.That(food.Count, Is.EqualTo(22));
+    }
+
+    [Test]
+    public async Task Reschedule_WhenFoodRunsOutOnlyResolvesAffordableCompletions()
+    {
+        Profile profile = await SeedProfileAsync();
+        await SeedItemAsync(profile, ItemId.Food, 2);
+        await SeedSkillAsync(profile, SkillId.Mining, xp: 0, level: 1);
+        (ActivityService service, _, _, _) = CreateServiceWithInternals();
+        service.AddActivity(ActivityId.Stone, new ActivityDefinition(
+            time: 10f,
+            rewards: [new XpReward(10, null, SkillId.Mining)],
+            requirements: [new LevelRequirement(SkillId.Mining, 1)],
+            costs: [new ItemCost(1, ItemId.Food)]));
+        await service.StartActivityAsync(profile.ProfileId, ActivityId.Stone, DateTime.UtcNow.AddSeconds(-100));
+
+        await service.OnProfileOffline(this, new ProfileOfflineEventArgs(profile.ProfileId));
+        await service.OnProfileOnline(this, new ProfileOnlineEventArgs(profile.ProfileId));
+
+        await Assert.MultipleAsync(async () =>
+        {
+            Assert.That(await GetItemsAsync(profile.ProfileId), Is.Empty);
+            await using GameDbContext dbContext = await _db.Factory.CreateDbContextAsync();
+            Profile cleared = (await dbContext.Profiles.FindAsync(profile.ProfileId))!;
+            Assert.That(cleared.ActivityId, Is.Null);
+        });
+    }
+
+    [Test]
+    public void ItemCost_NegativeCount_ThrowsArgumentOutOfRangeException()
+    {
+        Assert.That(() => new ItemCost(-1, ItemId.Food), Throws.TypeOf<ArgumentOutOfRangeException>());
+        Assert.That(() => new ItemCost(0, ItemId.Food), Throws.Nothing);
+    }
+
+    [Test]
+    public async Task ResolveRewardCollection_WhenActivityStopped_DoesNotGrantRewards()
+    {
+        Profile profile = await SeedProfileAsync();
+        await SeedItemAsync(profile, ItemId.Food, 5);
+        (ActivityService service, _, _, _) = CreateServiceWithInternals();
+        service.AddActivity(ActivityId.Stone, new ActivityDefinition(
+            time: 10f,
+            rewards: [new ItemReward(4, null, ItemId.Stone)],
+            requirements: [],
+            costs: [new ItemCost(1, ItemId.Food)]));
+        await service.StartActivityAsync(profile.ProfileId, ActivityId.Stone);
+
+        RewardCollection rewards = new();
+        await service.ResolveActivityAsync(profile.ProfileId, rewards);
+        await service.StopActivityAsync(profile.ProfileId);
+        await service.ResolveRewardCollection(rewards, profile.ProfileId, DateTime.UtcNow, ActivityId.Stone);
+
+        await Assert.MultipleAsync(async () =>
+        {
+            Item food = (await GetItemsAsync(profile.ProfileId)).Single(i => i.ItemId == ItemId.Food);
+            Assert.That(food.Count, Is.EqualTo(5));
+            Assert.That(await GetItemsAsync(profile.ProfileId), Has.None.Matches<Item>(i => i.ItemId == ItemId.Stone));
+            await using GameDbContext dbContext = await _db.Factory.CreateDbContextAsync();
+            Profile cleared = (await dbContext.Profiles.FindAsync(profile.ProfileId))!;
+            Assert.That(cleared.ActivityId, Is.Null);
+            Assert.That(cleared.ActivityStartTime, Is.Null);
+        });
+    }
+
+    [Test]
+    public async Task Completion_ConsumingLastItem_ReportsZeroInEvent()
+    {
+        Profile profile = await SeedProfileAsync();
+        await SeedItemAsync(profile, ItemId.Food, 1);
+        (ActivityService service, SocketRegistryService socketRegistry, ActivitySchedulerService scheduler, _) =
+            CreateServiceWithInternals();
+        service.AddActivity(ActivityId.Stone, new ActivityDefinition(
+            time: 10f,
+            rewards: [new ItemReward(4, null, ItemId.Stone)],
+            requirements: [],
+            costs: [new ItemCost(1, ItemId.Food)]));
+        FakeWebSocket webSocket = await RegisterSocket(socketRegistry, profile.ProfileId);
+        await service.StartActivityAsync(profile.ProfileId, ActivityId.Stone, DateTime.UtcNow.AddSeconds(-100));
+
+        await scheduler.NextEvent();
+
+        Assert.That(webSocket.FirstSentText, Does.Contain("ActivityEndedEvent"));
+        Assert.That(webSocket.FirstSentText, Does.Contain("\"itemId\":\"Food\",\"count\":0"));
+        Assert.That(webSocket.FirstSentText, Does.Contain("\"itemId\":\"Stone\",\"count\":4"));
+        Item[] items = await GetItemsAsync(profile.ProfileId);
+        Assert.That(items, Has.Length.EqualTo(1));
+        Assert.That(items.Single().ItemId, Is.EqualTo(ItemId.Stone));
+        Assert.That(items.Single().Count, Is.EqualTo(4));
     }
 
     [Test]

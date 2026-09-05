@@ -89,11 +89,18 @@ public sealed class LevelRequirement(string skill, int count)
     public int Count { get; } = count;
 }
 
+public sealed class ItemCost(string item, int count)
+{
+    public string Item { get; } = item;
+    public int Count { get; } = count;
+}
+
 public sealed class Activity(string name, float time) : NamedType(name)
 {
     public float Time { get; } = time;
     public List<Reward> Rewards { get; } = [];
     public List<LevelRequirement> Requirements { get; } = [];
+    public List<ItemCost> Costs { get; } = [];
 }
 
 /// <summary>The stat names a declared item may carry. Keep in sync with the emitted <c>ToolStat</c> enum.</summary>

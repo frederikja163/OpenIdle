@@ -146,6 +146,30 @@ public sealed class ItemServiceTests : IDisposable
     }
 
     [Test]
+    public async Task ApplyItemDeltaAsync_NetsRewardsAndCosts_SurvivesZeroInTheMiddle()
+    {
+        Profile profile = await SeedProfileAsync();
+        await SeedItemAsync(profile, ItemId.Food, 2);
+
+        ItemService service = new(_db.Factory);
+        await using GameDbContext dbContext = await _db.Factory.CreateDbContextAsync();
+        Item[] items = await service.ApplyItemDeltaAsync(
+            dbContext, profile.ProfileId,
+            rewards: new[] { new ItemReward(3, null, ItemId.Food) },
+            costs: new[] { new ItemCost(1, ItemId.Food) },
+            completions: 3);
+        await dbContext.SaveChangesAsync();
+
+        Assert.Multiple(() =>
+        {
+            Assert.That(items, Has.Length.EqualTo(1));
+            Assert.That(items.Single().ItemId, Is.EqualTo(ItemId.Food));
+        });
+        Item stored = dbContext.Items.Single(i => i.ProfileId == profile.ProfileId && i.ItemId == ItemId.Food);
+        Assert.That(stored.Count, Is.EqualTo(2));
+    }
+
+    [Test]
     public async Task GetItemsAsync_OrdersByItemId()
     {
         Profile profile = await SeedProfileAsync();

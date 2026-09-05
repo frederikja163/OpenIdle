@@ -82,8 +82,9 @@ public sealed class CsEmitter : IDtoEmitter
                 {
                     string rewards = string.Join(", ", activity.Rewards.Select(RewardExpression));
                     string requirements = string.Join(", ", activity.Requirements.Select(RequirementExpression));
+                    string costs = string.Join(", ", activity.Costs.Select(ItemCostExpression));
                     _textWriter.WriteLine(
-                        $"service.AddActivity(ActivityId.{activity.Name.UpperCamelCase}, new ActivityDefinition(time: {TimeLiteral(activity.Time)}, rewards: [{rewards}], requirements: [{requirements}]));");
+                        $"service.AddActivity(ActivityId.{activity.Name.UpperCamelCase}, new ActivityDefinition(time: {TimeLiteral(activity.Time)}, rewards: [{rewards}], requirements: [{requirements}], costs: [{costs}]));");
                 }
             }
         }
@@ -159,6 +160,11 @@ public sealed class CsEmitter : IDtoEmitter
     private static string RequirementExpression(LevelRequirement requirement)
     {
         return $"new LevelRequirement(SkillId.{new Casing(requirement.Skill).UpperCamelCase}, {requirement.Count})";
+    }
+
+    private static string ItemCostExpression(ItemCost cost)
+    {
+        return $"new ItemCost({cost.Count}, ItemId.{new Casing(cost.Item).UpperCamelCase})";
     }
 
     private static string WeightLiteral(float? weight)

@@ -18,13 +18,22 @@ public sealed class LevelRequirement(SkillId skillId, int level)
     public int Level { get; } = level;
 }
 
-public sealed class ActivityDefinition(float time, Reward[] rewards, LevelRequirement[] requirements)
+public sealed class ItemCost(int count, ItemId itemId)
+{
+    public int Count { get; } = count >= 0
+        ? count
+        : throw new ArgumentOutOfRangeException(nameof(count), "Item cost must be non-negative.");
+    public ItemId ItemId { get; } = itemId;
+}
+
+public sealed class ActivityDefinition(float time, Reward[] rewards, LevelRequirement[] requirements, ItemCost[]? costs = null)
 {
     public float Time { get; } = time;
     public Reward[] Rewards { get; } = rewards.Where(r => r.Weight is null).ToArray();
     public DropTable? DropTable { get; } = CreateDropTable(rewards);
     
     public LevelRequirement[] Requirements { get; } = requirements;
+    public ItemCost[] Costs { get; } = costs ?? [];
     
     private static DropTable? CreateDropTable(Reward[] rewards)
     {
@@ -131,13 +140,30 @@ public sealed class ActivityService
             return;
         }
 
+        Item[] ownedItems = await _itemService.GetItemsAsync(profileId);
+        Dictionary<ItemId, int> itemCache = ownedItems.ToDictionary(item => item.ItemId, item => item.Count);
+
         RewardCollection rewards = new RewardCollection();
         DateTime now = DateTime.UtcNow;
         TimeSpan duration = TimeSpan.FromSeconds(definition.Time);
         DateTime endTime = startTime + duration;
+        bool ranOutOfItems = false;
         while (endTime <= now)
         {
-            RollRewards(rewards, definition);
+            if (!CanAffordCost(itemCache, definition))
+            {
+                ranOutOfItems = true;
+                break;
+            }
+
+            foreach (ItemReward itemReward in RollRewards(rewards, definition))
+            {
+                itemCache[itemReward.ItemId] = itemCache.GetValueOrDefault(itemReward.ItemId) + itemReward.Count;
+            }
+            foreach (ItemCost cost in definition.Costs)
+            {
+                itemCache[cost.ItemId] = itemCache.GetValueOrDefault(cost.ItemId) - cost.Count;
+            }
             endTime += duration;
         }
 
@@ -145,7 +171,50 @@ public sealed class ActivityService
         {
             await ResolveRewardCollection(rewards, profileId, endTime, activityId);
         }
+
+        if (ranOutOfItems)
+        {
+            _activitySchedulerService.RemoveEvent(profileId);
+            await _profileService.ClearActivityAsync(profileId);
+            return;
+        }
+
         _activitySchedulerService.StartEvent(new ProfileActivityCompletion(this, profileId, activityId, duration), endTime);
+    }
+
+    private static bool CanAffordCost(Dictionary<ItemId, int> itemCache, ActivityDefinition definition)
+    {
+        foreach (ItemCost cost in definition.Costs)
+        {
+            if (itemCache.GetValueOrDefault(cost.ItemId) < cost.Count)
+            {
+                return false;
+            }
+        }
+
+        return true;
+    }
+
+    internal async Task<bool> CanAffordActivityAsync(ProfileId profileId, ActivityId activityId)
+    {
+        if (!_activities.TryGetValue(activityId, out ActivityDefinition? definition) || definition.Costs.Length == 0)
+        {
+            return true;
+        }
+
+        Item[] ownedItems = await _itemService.GetItemsAsync(
+            profileId, definition.Costs.Select(cost => cost.ItemId));
+
+        foreach (ItemCost cost in definition.Costs)
+        {
+            int owned = ownedItems.FirstOrDefault(item => item.ItemId == cost.ItemId)?.Count ?? 0;
+            if (owned < cost.Count)
+            {
+                return false;
+            }
+        }
+
+        return true;
     }
 
     internal async Task<Profile> StartActivityAsync(ProfileId profileId, ActivityId activityId, DateTime? startTime = null)
@@ -171,6 +240,12 @@ public sealed class ActivityService
             }
         }
 
+        if (!await CanAffordActivityAsync(profileId, activityId))
+        {
+            ItemCost cost = definition.Costs.First();
+            throw new BackendException($"Activity '{activityId}' requires {cost.Count} of {cost.ItemId}.");
+        }
+
         DateTime startedAt = startTime ?? DateTime.UtcNow;
         TimeSpan duration = TimeSpan.FromSeconds(definition.Time);
 
@@ -182,6 +257,20 @@ public sealed class ActivityService
             new ProfileActivityCompletion(this, profileId, activityId, duration), startedAt);
 
         return profile;
+    }
+
+    internal async Task StopActivityAsync(ProfileId profileId)
+    {
+        Profile profile = await _profileService.GetProfileAsync(profileId);
+
+        if (profile.ActivityId is null)
+        {
+            throw new BackendException("Profile is not doing an activity.");
+        }
+
+        _activitySchedulerService.RemoveEvent(profileId);
+
+        await _profileService.ClearActivityAsync(profileId);
     }
 
     internal async Task ResolveActivityAsync(ProfileId profileId, RewardCollection rewardCollection)
@@ -201,7 +290,7 @@ public sealed class ActivityService
         RollRewards(rewardCollection, definition);
     }
 
-    private void RollRewards(RewardCollection rewardCollection, ActivityDefinition definition)
+    private IEnumerable<ItemReward> RollRewards(RewardCollection rewardCollection, ActivityDefinition definition)
     {
         List<Reward> grantedRewards = [.. definition.Rewards];
         if (definition.DropTable is {})
@@ -209,6 +298,7 @@ public sealed class ActivityService
             grantedRewards.Add(_dropTableService.RollReward(definition.DropTable));
         }
 
+        List<ItemReward> itemRewards = [];
         foreach (Reward reward in grantedRewards)
         {
             Reward resolved = reward switch
@@ -221,6 +311,7 @@ public sealed class ActivityService
             {
                 case ItemReward itemReward:
                     rewardCollection.AddReward(itemReward);
+                    itemRewards.Add(itemReward);
                     break;
                 case XpReward xpReward:
                     rewardCollection.AddReward(xpReward);
@@ -231,13 +322,21 @@ public sealed class ActivityService
         }
 
         rewardCollection.TotalActivities++;
+        return itemRewards;
     }
 
     internal async Task ResolveRewardCollection(RewardCollection rewards, ProfileId profileId, DateTime startTime, ActivityId activityId)
     {
         await using GameDbContext dbContext = await _dbContextFactory.CreateDbContextAsync();
-        await _profileService.SetActivityAsync(dbContext, profileId, activityId, startTime);
-        Item[] items = await _itemService.AddItemsAsync(dbContext, profileId, rewards.GetItems());
+        Profile? profile = await dbContext.Profiles.FirstOrDefaultAsync(p => p.ProfileId == profileId);
+        if (profile is null || profile.ActivityId is not { } currentActivityId || currentActivityId != activityId)
+        {
+            return;
+        }
+
+        await _profileService.SetActivityAsync(dbContext, profile.ProfileId, activityId, startTime);
+        ItemCost[] costs = _activities.TryGetValue(activityId, out ActivityDefinition? definition) ? definition.Costs : [];
+        Item[] items = await _itemService.ApplyItemDeltaAsync(dbContext, profileId, rewards.GetItems(), costs, rewards.TotalActivities);
         Skill[] skills = await _skillService.AddSkillsAsync(dbContext, profileId, rewards.GetSkills());
         await dbContext.SaveChangesAsync();
         await _socketRegistry.SendToProfileAsync(profileId, new ActivityEndedEvent
@@ -255,6 +354,12 @@ internal sealed class ProfileActivityCompletion(
 {
     public override async Task Complete(DateTime endTime)
     {
+        if (!await activityService.CanAffordActivityAsync(ProfileId, activityId))
+        {
+            await activityService.StopActivityAsync(ProfileId);
+            return;
+        }
+
         RewardCollection rewards = new();
         await activityService.ResolveActivityAsync(ProfileId, rewards);
         await activityService.ResolveRewardCollection(rewards, ProfileId, endTime, activityId);
