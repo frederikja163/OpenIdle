@@ -89,6 +89,8 @@ public sealed class ActivityServiceTests : IDisposable
         {
             Name = "Ghost",
             ProfileId = Guid.NewGuid(),
+            CreationTime = DateTime.UtcNow,
+            LastActiveTime = DateTime.UtcNow
         };
 
         Assert.ThrowsAsync<BackendException>(() => service.StartActivityAsync(profile.ProfileId, ActivityId.Stone));
@@ -730,6 +732,8 @@ public sealed class ActivityServiceTests : IDisposable
         {
             Name = $"P{Guid.NewGuid():N}"[..8],
             ProfileId = Guid.NewGuid(),
+            CreationTime = DateTime.UtcNow,
+            LastActiveTime = DateTime.UtcNow
         };
         dbContext.Profiles.Add(profile);
         await dbContext.SaveChangesAsync();
