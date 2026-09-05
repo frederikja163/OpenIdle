@@ -15,20 +15,28 @@ public sealed class SkillService(IDbContextFactory<GameDbContext> dbContextFacto
     {
         await using GameDbContext dbContext = await dbContextFactory.CreateDbContextAsync();
 
-        return await dbContext.Skills
+        Dictionary<SkillId, Skill> skills = await dbContext.Skills
             .Where(s => s.ProfileId == profileId)
+            .ToDictionaryAsync(s => s.SkillId);
+        return Enum.GetValues<SkillId>()
+            .Except([SkillId.None])
+            .Select(s =>
+                skills.TryGetValue(s, out Skill? skill) ? skill : new Skill { ProfileId = profileId, SkillId = s })
             .OrderBy(s => s.SkillId)
-            .ToArrayAsync();
+            .ToArray();
     }
 
-    internal async Task<Skill[]> GetSkillsAsync(ProfileId profileId, IEnumerable<SkillId> skillIds)
+    internal async Task<Skill[]> GetSkillsAsync(ProfileId profileId, ICollection<SkillId> skillIds)
     {
         await using GameDbContext dbContext = await dbContextFactory.CreateDbContextAsync();
 
-        return await dbContext.Skills
+        Dictionary<SkillId, Skill> skills = await dbContext.Skills
             .Where(s => s.ProfileId == profileId && skillIds.Contains(s.SkillId))
+            .ToDictionaryAsync(s => s.SkillId);
+        return skillIds.Select(s =>
+                skills.TryGetValue(s, out Skill? skill) ? skill : new Skill { ProfileId = profileId, SkillId = s })
             .OrderBy(s => s.SkillId)
-            .ToArrayAsync();
+            .ToArray();
     }
 
     internal async Task<Skill[]> AddSkillsAsync(ProfileId profileId, IEnumerable<XpReward> rewards)

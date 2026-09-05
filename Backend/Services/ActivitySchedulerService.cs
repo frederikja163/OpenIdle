@@ -117,6 +117,14 @@ public sealed class ActivitySchedulerService
 
         using CancellationTokenSource timeout = new(waitDuration.Value);
         using CancellationTokenSource linked = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken, timeout.Token);
-        await _signal.Task.WaitAsync(linked.Token);
+        try
+        {
+            await _signal.Task.WaitAsync(linked.Token);
+        }
+        catch (OperationCanceledException) when (!cancellationToken.IsCancellationRequested)
+        {
+            // The internal wait duration elapsed rather than a shutdown request: wake the
+            // caller so it can poll the scheduler. Do not surface the timeout as a cancellation.
+        }
     }
 }

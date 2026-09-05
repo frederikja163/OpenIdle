@@ -20,7 +20,7 @@ public sealed class SkillServiceTests : IDisposable
     }
 
     [Test]
-    public async Task GetSkillsAsync_ReturnsOnlySkillsOfProfile()
+    public async Task GetSkillsAsync_ReturnsAllSkills()
     {
         Profile profile = await SeedProfileAsync();
         await SeedSkillAsync(profile, SkillId.Mining, xp: 100, level: 2);
@@ -31,7 +31,7 @@ public sealed class SkillServiceTests : IDisposable
         SkillService service = new(_db.Factory);
         Skill[] skills = await service.GetSkillsAsync(profile.ProfileId);
 
-        Assert.That(skills.Select(s => s.SkillId), Is.EquivalentTo(new[] { SkillId.Mining, SkillId.Crafting }));
+        Assert.That(skills.Select(s => s.SkillId), Is.EquivalentTo(new[] { SkillId.Mining, SkillId.LumberJacking, SkillId.Crafting }));
     }
 
     [Test]
@@ -49,14 +49,16 @@ public sealed class SkillServiceTests : IDisposable
     }
 
     [Test]
-    public async Task GetSkillsAsync_WithNoSkills_ReturnsEmpty()
+    public async Task GetSkillsAsync_WithNoSkills_ReturnsAllSkillsExceptNone()
     {
         Profile profile = await SeedProfileAsync();
 
         SkillService service = new(_db.Factory);
         Skill[] skills = await service.GetSkillsAsync(profile.ProfileId);
 
-        Assert.That(skills, Is.Empty);
+        Assert.That(skills.Select(s => s.SkillId), Is.EqualTo(Enum.GetValues<SkillId>().Except([SkillId.None])));
+        Assert.That(skills.All(s => s.Level == 1));
+        Assert.That(skills.All(s => s.Xp == 0));
     }
 
     [Test]
@@ -141,7 +143,7 @@ public sealed class SkillServiceTests : IDisposable
         SkillService service = new(_db.Factory);
         Skill[] skills = await service.GetSkillsAsync(profile.ProfileId);
 
-        Assert.That(skills.Select(s => s.SkillId), Is.EqualTo(new[] { SkillId.Crafting, SkillId.LumberJacking, SkillId.Mining }));
+        Assert.That(skills.Select(s => s.SkillId), Is.EqualTo(new[] { SkillId.Mining, SkillId.LumberJacking, SkillId.Crafting }));
     }
 
     private async Task<Profile> SeedProfileAsync()

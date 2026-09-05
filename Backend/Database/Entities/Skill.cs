@@ -8,8 +8,8 @@ public sealed class Skill
     public required ProfileId ProfileId { get; init; }
     public Profile? Profile { get; init; }
     public required SkillId SkillId { get; init; }
-    public int Xp { get; set; }
-    public int Level { get; set; }
+    public int Xp { get; set; } = 0;
+    public int Level { get; set; } = 1;
 
     public SkillDto ToDto()
     {

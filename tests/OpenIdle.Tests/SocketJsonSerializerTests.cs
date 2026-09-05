@@ -13,10 +13,10 @@ public sealed class SocketJsonSerializerTests
     {
         string json = Serialize(new GetItemsResponse()
         {
-            Items = [new ItemDto() { ProfileId = Guid.NewGuid(), ItemId = ItemId.Stone, Count = 1 }],
+            Items = [new ItemDto() { ProfileId = Guid.NewGuid(), ItemId = ItemId.Tin, Count = 1 }],
         });
 
-        Assert.That(json, Does.Contain("\"itemId\":\"Stone\""));
+        Assert.That(json, Does.Contain("\"itemId\":\"Tin\""));
     }
 
     [Test]
@@ -78,7 +78,7 @@ public sealed class SocketJsonSerializerTests
     {
         byte[] bytes = SocketJsonSerializer.Serialize(new GetItemsResponse()
         {
-            Items = [new ItemDto() { ProfileId = Guid.NewGuid(), ItemId = ItemId.Wood, Count = 2 }],
+            Items = [new ItemDto() { ProfileId = Guid.NewGuid(), ItemId = ItemId.Balsa, Count = 2 }],
         });
 
         DtoBase deserialized = SocketJsonSerializer.Deserialize(bytes, bytes.Length);
@@ -87,7 +87,7 @@ public sealed class SocketJsonSerializerTests
         ItemDto item = ((GetItemsResponse)deserialized).Items.Single();
         Assert.Multiple(() =>
         {
-            Assert.That(item.ItemId, Is.EqualTo(ItemId.Wood));
+            Assert.That(item.ItemId, Is.EqualTo(ItemId.Balsa));
             Assert.That(item.Count, Is.EqualTo(2));
         });
     }

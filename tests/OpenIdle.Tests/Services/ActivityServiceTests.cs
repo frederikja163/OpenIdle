@@ -29,20 +29,20 @@ public sealed class ActivityServiceTests : IDisposable
         Profile profile = await SeedProfileAsync();
         await SeedSkillAsync(profile, SkillId.Mining, xp: 0, level: 1);
         (ActivityService service, _) = CreateService();
-        AddStoneActivity(service);
+        AddMineTinActivity(service);
 
         DateTime before = DateTime.UtcNow.AddSeconds(-1);
-        Profile returned = await service.StartActivityAsync(profile.ProfileId, ActivityId.Stone);
+        Profile returned = await service.StartActivityAsync(profile.ProfileId, ActivityId.MineTin);
         DateTime after = DateTime.UtcNow.AddSeconds(1);
 
         await using GameDbContext dbContext = await _db.Factory.CreateDbContextAsync();
         Profile updated = (await dbContext.Profiles.FindAsync(profile.ProfileId))!;
         Assert.Multiple(() =>
         {
-            Assert.That(updated.ActivityId, Is.EqualTo(ActivityId.Stone));
+            Assert.That(updated.ActivityId, Is.EqualTo(ActivityId.MineTin));
             Assert.That(updated.ActivityStartTime, Is.Not.Null);
             Assert.That(updated.ActivityStartTime, Is.GreaterThanOrEqualTo(before).And.LessThanOrEqualTo(after));
-            Assert.That(returned.ActivityId, Is.EqualTo(ActivityId.Stone));
+            Assert.That(returned.ActivityId, Is.EqualTo(ActivityId.MineTin));
             Assert.That(returned.ActivityStartTime, Is.EqualTo(updated.ActivityStartTime));
         });
     }
@@ -54,7 +54,7 @@ public sealed class ActivityServiceTests : IDisposable
         (ActivityService service, _) = CreateService();
 
         BackendException? exception = Assert.ThrowsAsync<BackendException>(
-            () => service.StartActivityAsync(profile.ProfileId, ActivityId.Stone));
+            () => service.StartActivityAsync(profile.ProfileId, ActivityId.MineTin));
 
         Assert.Multiple(() =>
         {
@@ -64,34 +64,17 @@ public sealed class ActivityServiceTests : IDisposable
     }
 
     [Test]
-    public async Task StartActivityAsync_DoesNotMeetRequirement_ThrowsBackendException()
-    {
-        Profile profile = await SeedProfileAsync();
-        (ActivityService service, _) = CreateService();
-        AddStoneActivity(service);
-
-        BackendException? exception = Assert.ThrowsAsync<BackendException>(
-            () => service.StartActivityAsync(profile.ProfileId, ActivityId.Stone));
-
-        Assert.Multiple(() =>
-        {
-            Assert.That(exception, Is.Not.Null);
-            Assert.That(exception?.Message, Does.Contain("requires Mining level 1"));
-        });
-    }
-
-    [Test]
     public async Task StartActivityAsync_NonexistentProfile_ThrowsBackendException()
     {
         (ActivityService service, _) = CreateService();
-        AddStoneActivity(service);
+        AddMineTinActivity(service);
         Profile profile = new()
         {
             Name = "Ghost",
             ProfileId = Guid.NewGuid(),
         };
 
-        Assert.ThrowsAsync<BackendException>(() => service.StartActivityAsync(profile.ProfileId, ActivityId.Stone));
+        Assert.ThrowsAsync<BackendException>(() => service.StartActivityAsync(profile.ProfileId, ActivityId.MineTin));
     }
 
     [Test]
@@ -100,11 +83,11 @@ public sealed class ActivityServiceTests : IDisposable
         Profile profile = await SeedProfileAsync();
         await SeedSkillAsync(profile, SkillId.Mining, xp: 0, level: 1);
         (ActivityService service, _) = CreateService();
-        AddStoneActivity(service);
-        await service.StartActivityAsync(profile.ProfileId, ActivityId.Stone);
+        AddMineTinActivity(service);
+        await service.StartActivityAsync(profile.ProfileId, ActivityId.MineTin);
 
         BackendException? exception = Assert.ThrowsAsync<BackendException>(
-            () => service.StartActivityAsync(profile.ProfileId, ActivityId.Stone));
+            () => service.StartActivityAsync(profile.ProfileId, ActivityId.MineTin));
 
         Assert.Multiple(() =>
         {
@@ -119,19 +102,19 @@ public sealed class ActivityServiceTests : IDisposable
         Profile profile = await SeedProfileAsync();
         await SeedSkillAsync(profile, SkillId.Mining, xp: 0, level: 1);
         (ActivityService service, _) = CreateService();
-        service.AddActivity(ActivityId.Stone, new ActivityDefinition(
+        service.AddActivity(ActivityId.MineTin, new ActivityDefinition(
             time: 1f,
-            rewards: [new ItemReward(4, null, ItemId.Stone)],
+            rewards: [new ItemReward(4, null, ItemId.Tin)],
             requirements: [new LevelRequirement(SkillId.Mining, 1)],
-            costs: [new ItemCost(1, ItemId.Food)]));
+            costs: [new ItemCost(1, ItemId.Cedar)]));
 
         BackendException? exception = Assert.ThrowsAsync<BackendException>(
-            () => service.StartActivityAsync(profile.ProfileId, ActivityId.Stone));
+            () => service.StartActivityAsync(profile.ProfileId, ActivityId.MineTin));
 
         Assert.Multiple(() =>
         {
             Assert.That(exception, Is.Not.Null);
-            Assert.That(exception?.Message, Does.Contain("requires 1 of Food"));
+            Assert.That(exception?.Message, Does.Contain("requires 1 of Cedar"));
         });
         Assert.That(await GetItemsAsync(profile.ProfileId), Is.Empty);
     }
@@ -140,22 +123,22 @@ public sealed class ActivityServiceTests : IDisposable
     public async Task StartActivityAsync_InsufficientCostItem_ThrowsBackendException()
     {
         Profile profile = await SeedProfileAsync();
-        await SeedItemAsync(profile, ItemId.Food, 1);
+        await SeedItemAsync(profile, ItemId.Cedar, 1);
         await SeedSkillAsync(profile, SkillId.Mining, xp: 0, level: 1);
         (ActivityService service, _) = CreateService();
-        service.AddActivity(ActivityId.Stone, new ActivityDefinition(
+        service.AddActivity(ActivityId.MineTin, new ActivityDefinition(
             time: 1f,
-            rewards: [new ItemReward(4, null, ItemId.Stone)],
+            rewards: [new ItemReward(4, null, ItemId.Tin)],
             requirements: [new LevelRequirement(SkillId.Mining, 1)],
-            costs: [new ItemCost(2, ItemId.Food)]));
+            costs: [new ItemCost(2, ItemId.Cedar)]));
 
         BackendException? exception = Assert.ThrowsAsync<BackendException>(
-            () => service.StartActivityAsync(profile.ProfileId, ActivityId.Stone));
+            () => service.StartActivityAsync(profile.ProfileId, ActivityId.MineTin));
 
         Assert.Multiple(() =>
         {
             Assert.That(exception, Is.Not.Null);
-            Assert.That(exception?.Message, Does.Contain("requires 2 of Food"));
+            Assert.That(exception?.Message, Does.Contain("requires 2 of Cedar"));
         });
         Item food = (await GetItemsAsync(profile.ProfileId)).Single();
         Assert.That(food.Count, Is.EqualTo(1));
@@ -165,19 +148,19 @@ public sealed class ActivityServiceTests : IDisposable
     public async Task StartActivityAsync_SatisfiesCostItem_DoesNotDeductAtStart()
     {
         Profile profile = await SeedProfileAsync();
-        await SeedItemAsync(profile, ItemId.Food, 3);
+        await SeedItemAsync(profile, ItemId.Cedar, 3);
         await SeedSkillAsync(profile, SkillId.Mining, xp: 0, level: 1);
         (ActivityService service, _) = CreateService();
-        service.AddActivity(ActivityId.Stone, new ActivityDefinition(
+        service.AddActivity(ActivityId.MineTin, new ActivityDefinition(
             time: 1f,
-            rewards: [new ItemReward(4, null, ItemId.Stone)],
+            rewards: [new ItemReward(4, null, ItemId.Tin)],
             requirements: [new LevelRequirement(SkillId.Mining, 1)],
-            costs: [new ItemCost(1, ItemId.Food)]));
+            costs: [new ItemCost(1, ItemId.Cedar)]));
 
-        await service.StartActivityAsync(profile.ProfileId, ActivityId.Stone);
+        await service.StartActivityAsync(profile.ProfileId, ActivityId.MineTin);
 
         Item food = (await GetItemsAsync(profile.ProfileId)).Single();
-        Assert.That(food.ItemId, Is.EqualTo(ItemId.Food));
+        Assert.That(food.ItemId, Is.EqualTo(ItemId.Cedar));
         Assert.That(food.Count, Is.EqualTo(3));
     }
 
@@ -185,26 +168,26 @@ public sealed class ActivityServiceTests : IDisposable
     public async Task ResolveRewardCollection_DeductsCostPerCompletedActivity()
     {
         Profile profile = await SeedProfileAsync();
-        await SeedItemAsync(profile, ItemId.Food, 10);
+        await SeedItemAsync(profile, ItemId.Cedar, 10);
         await SeedSkillAsync(profile, SkillId.Mining, xp: 0, level: 1);
         (ActivityService service, _) = CreateService();
-        service.AddActivity(ActivityId.Stone, new ActivityDefinition(
+        service.AddActivity(ActivityId.MineTin, new ActivityDefinition(
             time: 1f,
-            rewards: [new ItemReward(4, null, ItemId.Stone)],
+            rewards: [new ItemReward(4, null, ItemId.Tin)],
             requirements: [new LevelRequirement(SkillId.Mining, 1)],
-            costs: [new ItemCost(1, ItemId.Food)]));
-        await service.StartActivityAsync(profile.ProfileId, ActivityId.Stone);
+            costs: [new ItemCost(1, ItemId.Cedar)]));
+        await service.StartActivityAsync(profile.ProfileId, ActivityId.MineTin);
 
         RewardCollection rewards = new();
         await service.ResolveActivityAsync(profile.ProfileId, rewards);
         await service.ResolveActivityAsync(profile.ProfileId, rewards);
-        await service.ResolveRewardCollection(rewards, profile.ProfileId, DateTime.UtcNow, ActivityId.Stone);
+        await service.ResolveRewardCollection(rewards, profile.ProfileId, DateTime.UtcNow, ActivityId.MineTin);
 
         await Assert.MultipleAsync(async () =>
         {
-            Item stone = (await GetItemsAsync(profile.ProfileId)).Single(i => i.ItemId == ItemId.Stone);
+            Item stone = (await GetItemsAsync(profile.ProfileId)).Single(i => i.ItemId == ItemId.Tin);
             Assert.That(stone.Count, Is.EqualTo(8));
-            Item food = (await GetItemsAsync(profile.ProfileId)).Single(i => i.ItemId == ItemId.Food);
+            Item food = (await GetItemsAsync(profile.ProfileId)).Single(i => i.ItemId == ItemId.Cedar);
             Assert.That(food.Count, Is.EqualTo(8));
         });
     }
@@ -213,17 +196,17 @@ public sealed class ActivityServiceTests : IDisposable
     public async Task Completion_WhenFoodRunsOut_StopsActivityWithoutRewards()
     {
         Profile profile = await SeedProfileAsync();
-        await SeedItemAsync(profile, ItemId.Food, 2);
+        await SeedItemAsync(profile, ItemId.Cedar, 2);
         await SeedSkillAsync(profile, SkillId.Mining, xp: 0, level: 1);
         (ActivityService service, _, _, _) = CreateServiceWithInternals();
-        service.AddActivity(ActivityId.Stone, new ActivityDefinition(
+        service.AddActivity(ActivityId.MineTin, new ActivityDefinition(
             time: 1f,
-            rewards: [new ItemReward(4, null, ItemId.Stone)],
+            rewards: [new ItemReward(4, null, ItemId.Tin)],
             requirements: [new LevelRequirement(SkillId.Mining, 1)],
-            costs: [new ItemCost(1, ItemId.Food)]));
-        await service.StartActivityAsync(profile.ProfileId, ActivityId.Stone);
+            costs: [new ItemCost(1, ItemId.Cedar)]));
+        await service.StartActivityAsync(profile.ProfileId, ActivityId.MineTin);
 
-        ProfileActivityCompletion completion = new(service, profile.ProfileId, ActivityId.Stone, TimeSpan.FromSeconds(1));
+        ProfileActivityCompletion completion = new(service, profile.ProfileId, ActivityId.MineTin, TimeSpan.FromSeconds(1));
 
         await completion.Complete(DateTime.UtcNow);
         await completion.Complete(DateTime.UtcNow);
@@ -233,9 +216,9 @@ public sealed class ActivityServiceTests : IDisposable
         Profile afterTwoProfile = (await dbContext.Profiles.FindAsync(profile.ProfileId))!;
         Assert.Multiple(() =>
         {
-            Item stone = afterTwo.Single(i => i.ItemId == ItemId.Stone);
+            Item stone = afterTwo.Single(i => i.ItemId == ItemId.Tin);
             Assert.That(stone.Count, Is.EqualTo(8));
-            Assert.That(afterTwo.Any(i => i.ItemId == ItemId.Food), Is.False);
+            Assert.That(afterTwo.Any(i => i.ItemId == ItemId.Cedar), Is.False);
             Assert.That(afterTwoProfile.ActivityId, Is.Not.Null);
         });
 
@@ -246,7 +229,7 @@ public sealed class ActivityServiceTests : IDisposable
         Profile stopped = (await freshContext.Profiles.FindAsync(profile.ProfileId))!;
         Assert.Multiple(() =>
         {
-            Item stone = afterThree.Single(i => i.ItemId == ItemId.Stone);
+            Item stone = afterThree.Single(i => i.ItemId == ItemId.Tin);
             Assert.That(stone.Count, Is.EqualTo(8));
             Assert.That(stopped.ActivityId, Is.Null);
         });
@@ -258,9 +241,9 @@ public sealed class ActivityServiceTests : IDisposable
         Profile profile = await SeedProfileAsync();
         await SeedSkillAsync(profile, SkillId.Mining, xp: 0, level: 1);
         (ActivityService service, _, ActivitySchedulerService scheduler, _) = CreateServiceWithInternals();
-        AddStoneActivity(service, time: 10f);
+        AddMineTinActivity(service, time: 10f);
 
-        await service.StartActivityAsync(profile.ProfileId, ActivityId.Stone, DateTime.UtcNow.AddSeconds(-100));
+        await service.StartActivityAsync(profile.ProfileId, ActivityId.MineTin, DateTime.UtcNow.AddSeconds(-100));
         await service.StopActivityAsync(profile.ProfileId);
 
         await scheduler.NextEvent();
@@ -294,10 +277,10 @@ public sealed class ActivityServiceTests : IDisposable
         Profile profile = await SeedProfileAsync();
         await SeedSkillAsync(profile, SkillId.Mining, xp: 0, level: 1);
         (ActivityService service, _) = CreateService();
-        AddStoneActivity(service);
+        AddMineTinActivity(service);
 
         DateTime anchor = DateTime.UtcNow.AddSeconds(-30);
-        await service.StartActivityAsync(profile.ProfileId, ActivityId.Stone, anchor);
+        await service.StartActivityAsync(profile.ProfileId, ActivityId.MineTin, anchor);
 
         await using GameDbContext dbContext = await _db.Factory.CreateDbContextAsync();
         Profile updated = (await dbContext.Profiles.FindAsync(profile.ProfileId))!;
@@ -309,7 +292,7 @@ public sealed class ActivityServiceTests : IDisposable
     {
         Profile profile = await SeedProfileAsync();
         (ActivityService service, _) = CreateService();
-        AddStoneActivity(service);
+        AddMineTinActivity(service);
 
         RewardCollection rewards = new();
         BackendException? exception = Assert.ThrowsAsync<BackendException>(
@@ -326,19 +309,19 @@ public sealed class ActivityServiceTests : IDisposable
     public async Task ResolveActivityAsync_ExistingItemAndXpAreIncremented()
     {
         Profile profile = await SeedProfileAsync();
-        await SeedItemAsync(profile, ItemId.Stone, 1);
+        await SeedItemAsync(profile, ItemId.Tin, 1);
         await SeedSkillAsync(profile, SkillId.Mining, xp: 5, level: 1);
         (ActivityService service, _) = CreateService();
-        service.AddActivity(ActivityId.Stone, new ActivityDefinition(
+        service.AddActivity(ActivityId.MineTin, new ActivityDefinition(
             time: 1f,
-            rewards: [new ItemReward(4, null, ItemId.Stone), new XpReward(10, null, SkillId.Mining)],
+            rewards: [new ItemReward(4, null, ItemId.Tin), new XpReward(10, null, SkillId.Mining)],
             requirements: []));
-        await service.StartActivityAsync(profile.ProfileId, ActivityId.Stone);
+        await service.StartActivityAsync(profile.ProfileId, ActivityId.MineTin);
 
         RewardCollection rewards = new();
         await service.ResolveActivityAsync(profile.ProfileId, rewards);
         await service.ResolveActivityAsync(profile.ProfileId, rewards);
-        await service.ResolveRewardCollection(rewards, profile.ProfileId, DateTime.UtcNow, ActivityId.Stone);
+        await service.ResolveRewardCollection(rewards, profile.ProfileId, DateTime.UtcNow, ActivityId.MineTin);
 
         await Assert.MultipleAsync(async () =>
         {
@@ -354,25 +337,25 @@ public sealed class ActivityServiceTests : IDisposable
     {
         Profile profile = await SeedProfileAsync();
         DropTableService dropTableService = new();
-        dropTableService.AddDropTable(DropTableId.StoneTable, new DropTable(new ItemReward(1, 1, ItemId.Stone)));
+        dropTableService.AddDropTable(DropTableId.TinBonusTable, new DropTable(new ItemReward(1, 1, ItemId.Tin)));
         SocketRegistryService socketRegistry = new();
         ActivityService service = new(_db.Factory, dropTableService, new ProfileService(_db.Factory, socketRegistry), new ItemService(_db.Factory), new SkillService(_db.Factory), socketRegistry, new ActivitySchedulerService());
-        service.AddActivity(ActivityId.Stone, new ActivityDefinition(
+        service.AddActivity(ActivityId.MineTin, new ActivityDefinition(
             time: 1f,
-            rewards: [new TableReward(1, null, DropTableId.StoneTable)],
+            rewards: [new TableReward(1, null, DropTableId.TinBonusTable)],
             requirements: []));
-        await service.StartActivityAsync(profile.ProfileId, ActivityId.Stone);
+        await service.StartActivityAsync(profile.ProfileId, ActivityId.MineTin);
 
         RewardCollection rewards = new();
         await service.ResolveActivityAsync(profile.ProfileId, rewards);
-        await service.ResolveRewardCollection(rewards, profile.ProfileId, DateTime.UtcNow, ActivityId.Stone);
+        await service.ResolveRewardCollection(rewards, profile.ProfileId, DateTime.UtcNow, ActivityId.MineTin);
 
         await Assert.MultipleAsync(async () =>
         {
             Assert.That(rewards.GetItems().Count(), Is.EqualTo(1));
             Assert.That(rewards.GetSkills(), Is.Empty);
             Item item = (await GetItemsAsync(profile.ProfileId)).Single();
-            Assert.That(item.ItemId, Is.EqualTo(ItemId.Stone));
+            Assert.That(item.ItemId, Is.EqualTo(ItemId.Tin));
             Assert.That(item.Count, Is.EqualTo(1));
         });
     }
@@ -382,11 +365,11 @@ public sealed class ActivityServiceTests : IDisposable
     {
         Profile profile = await SeedProfileAsync();
         (ActivityService service, _) = CreateService();
-        service.AddActivity(ActivityId.Stone, new ActivityDefinition(
+        service.AddActivity(ActivityId.MineTin, new ActivityDefinition(
             time: 1f,
-            rewards: [new ItemReward(2, 5, ItemId.Stone), new XpReward(10, 5, SkillId.Mining)],
+            rewards: [new ItemReward(2, 5, ItemId.Tin), new XpReward(10, 5, SkillId.Mining)],
             requirements: []));
-        await service.StartActivityAsync(profile.ProfileId, ActivityId.Stone);
+        await service.StartActivityAsync(profile.ProfileId, ActivityId.MineTin);
 
         RewardCollection rewards = new();
         await service.ResolveActivityAsync(profile.ProfileId, rewards);
@@ -399,22 +382,22 @@ public sealed class ActivityServiceTests : IDisposable
     {
         Profile profile = await SeedProfileAsync();
         (ActivityService service, _) = CreateService();
-        service.AddActivity(ActivityId.Stone, new ActivityDefinition(
+        service.AddActivity(ActivityId.MineTin, new ActivityDefinition(
             time: 1f,
-            rewards: [new ItemReward(4, null, ItemId.Stone), new ItemReward(2, 5, ItemId.Wood), new XpReward(10, 5, SkillId.Mining)],
+            rewards: [new ItemReward(4, null, ItemId.Tin), new ItemReward(2, 5, ItemId.Balsa), new XpReward(10, 5, SkillId.Mining)],
             requirements: []));
-        await service.StartActivityAsync(profile.ProfileId, ActivityId.Stone);
+        await service.StartActivityAsync(profile.ProfileId, ActivityId.MineTin);
 
         RewardCollection rewards = new();
         await service.ResolveActivityAsync(profile.ProfileId, rewards);
-        await service.ResolveRewardCollection(rewards, profile.ProfileId, DateTime.UtcNow, ActivityId.Stone);
+        await service.ResolveRewardCollection(rewards, profile.ProfileId, DateTime.UtcNow, ActivityId.MineTin);
 
         await Assert.MultipleAsync(async () =>
         {
             Assert.That(rewards.GetItems().Count() + rewards.GetSkills().Count(), Is.EqualTo(2));
-            ItemReward stoneReward = rewards.GetItems().Single(r => r.ItemId == ItemId.Stone);
+            ItemReward stoneReward = rewards.GetItems().Single(r => r.ItemId == ItemId.Tin);
             Assert.That(stoneReward.Count, Is.EqualTo(4));
-            Item stone = (await GetItemsAsync(profile.ProfileId)).Single(i => i.ItemId == ItemId.Stone);
+            Item stone = (await GetItemsAsync(profile.ProfileId)).Single(i => i.ItemId == ItemId.Tin);
             Assert.That(stone.Count, Is.EqualTo(4));
         });
     }
@@ -424,15 +407,15 @@ public sealed class ActivityServiceTests : IDisposable
     {
         Profile profile = await SeedProfileAsync();
         (ActivityService service, _) = CreateService();
-        service.AddActivity(ActivityId.Stone, new ActivityDefinition(
+        service.AddActivity(ActivityId.MineTin, new ActivityDefinition(
             time: 1f,
             rewards: [new ItemReward(0, null, ItemId.None)],
             requirements: []));
-        await service.StartActivityAsync(profile.ProfileId, ActivityId.Stone);
+        await service.StartActivityAsync(profile.ProfileId, ActivityId.MineTin);
 
         RewardCollection rewards = new();
         await service.ResolveActivityAsync(profile.ProfileId, rewards);
-        await service.ResolveRewardCollection(rewards, profile.ProfileId, DateTime.UtcNow, ActivityId.Stone);
+        await service.ResolveRewardCollection(rewards, profile.ProfileId, DateTime.UtcNow, ActivityId.MineTin);
 
         await Assert.MultipleAsync(async () =>
         {
@@ -445,17 +428,17 @@ public sealed class ActivityServiceTests : IDisposable
     public void AddActivity_DuplicateKey_ThrowsArgumentException()
     {
         (ActivityService service, _) = CreateService();
-        service.AddActivity(ActivityId.Stone, new ActivityDefinition(time: 1f, rewards: [], requirements: []));
+        service.AddActivity(ActivityId.MineTin, new ActivityDefinition(time: 1f, rewards: [], requirements: []));
 
         Assert.Throws<ArgumentException>(() =>
-            service.AddActivity(ActivityId.Stone, new ActivityDefinition(time: 1f, rewards: [], requirements: [])));
+            service.AddActivity(ActivityId.MineTin, new ActivityDefinition(time: 1f, rewards: [], requirements: [])));
     }
 
-    private static void AddStoneActivity(ActivityService service, float time = 1f)
+    private static void AddMineTinActivity(ActivityService service, float time = 1f)
     {
-        service.AddActivity(ActivityId.Stone, new ActivityDefinition(
+        service.AddActivity(ActivityId.MineTin, new ActivityDefinition(
             time: time,
-            rewards: [new ItemReward(4, null, ItemId.Stone), new XpReward(10, null, SkillId.Mining)],
+            rewards: [new ItemReward(4, null, ItemId.Tin), new XpReward(10, null, SkillId.Mining)],
             requirements: [new LevelRequirement(SkillId.Mining, 1)]));
     }
 
@@ -473,9 +456,9 @@ public sealed class ActivityServiceTests : IDisposable
     {
         Profile profile = await SeedProfileAsync();
         (ActivityService service, _, ActivitySchedulerService scheduler, _) = CreateServiceWithInternals();
-        AddStoneActivity(service, time: 10f);
+        AddMineTinActivity(service, time: 10f);
         await SeedSkillAsync(profile, SkillId.Mining, xp: 0, level: 1);
-        await service.StartActivityAsync(profile.ProfileId, ActivityId.Stone, DateTime.UtcNow.AddSeconds(-100));
+        await service.StartActivityAsync(profile.ProfileId, ActivityId.MineTin, DateTime.UtcNow.AddSeconds(-100));
 
         await service.OnProfileOffline(this, new ProfileOfflineEventArgs(profile.ProfileId));
         await scheduler.NextEvent();
@@ -485,7 +468,7 @@ public sealed class ActivityServiceTests : IDisposable
         await service.OnProfileOnline(this, new ProfileOnlineEventArgs(profile.ProfileId));
 
         Item item = (await GetItemsAsync(profile.ProfileId)).Single();
-        Assert.That(item.ItemId, Is.EqualTo(ItemId.Stone));
+        Assert.That(item.ItemId, Is.EqualTo(ItemId.Tin));
         Assert.That(item.Count, Is.EqualTo(40));
     }
 
@@ -493,20 +476,20 @@ public sealed class ActivityServiceTests : IDisposable
     public async Task Reschedule_WithRewardFunding_FarmsAllDueCompletions()
     {
         Profile profile = await SeedProfileAsync();
-        await SeedItemAsync(profile, ItemId.Food, 2);
+        await SeedItemAsync(profile, ItemId.Cedar, 2);
         await SeedSkillAsync(profile, SkillId.Mining, xp: 0, level: 1);
         (ActivityService service, _, _, _) = CreateServiceWithInternals();
-        service.AddActivity(ActivityId.Stone, new ActivityDefinition(
+        service.AddActivity(ActivityId.MineTin, new ActivityDefinition(
             time: 10f,
-            rewards: [new ItemReward(3, null, ItemId.Food), new XpReward(10, null, SkillId.Mining)],
+            rewards: [new ItemReward(3, null, ItemId.Cedar), new XpReward(10, null, SkillId.Mining)],
             requirements: [new LevelRequirement(SkillId.Mining, 1)],
-            costs: [new ItemCost(1, ItemId.Food)]));
-        await service.StartActivityAsync(profile.ProfileId, ActivityId.Stone, DateTime.UtcNow.AddSeconds(-100));
+            costs: [new ItemCost(1, ItemId.Cedar)]));
+        await service.StartActivityAsync(profile.ProfileId, ActivityId.MineTin, DateTime.UtcNow.AddSeconds(-100));
 
         await service.OnProfileOffline(this, new ProfileOfflineEventArgs(profile.ProfileId));
         await service.OnProfileOnline(this, new ProfileOnlineEventArgs(profile.ProfileId));
 
-        Item food = (await GetItemsAsync(profile.ProfileId)).Single(i => i.ItemId == ItemId.Food);
+        Item food = (await GetItemsAsync(profile.ProfileId)).Single(i => i.ItemId == ItemId.Cedar);
         Assert.That(food.Count, Is.EqualTo(22));
     }
 
@@ -514,15 +497,15 @@ public sealed class ActivityServiceTests : IDisposable
     public async Task Reschedule_WhenFoodRunsOutOnlyResolvesAffordableCompletions()
     {
         Profile profile = await SeedProfileAsync();
-        await SeedItemAsync(profile, ItemId.Food, 2);
+        await SeedItemAsync(profile, ItemId.Cedar, 2);
         await SeedSkillAsync(profile, SkillId.Mining, xp: 0, level: 1);
         (ActivityService service, _, _, _) = CreateServiceWithInternals();
-        service.AddActivity(ActivityId.Stone, new ActivityDefinition(
+        service.AddActivity(ActivityId.MineTin, new ActivityDefinition(
             time: 10f,
             rewards: [new XpReward(10, null, SkillId.Mining)],
             requirements: [new LevelRequirement(SkillId.Mining, 1)],
-            costs: [new ItemCost(1, ItemId.Food)]));
-        await service.StartActivityAsync(profile.ProfileId, ActivityId.Stone, DateTime.UtcNow.AddSeconds(-100));
+            costs: [new ItemCost(1, ItemId.Cedar)]));
+        await service.StartActivityAsync(profile.ProfileId, ActivityId.MineTin, DateTime.UtcNow.AddSeconds(-100));
 
         await service.OnProfileOffline(this, new ProfileOfflineEventArgs(profile.ProfileId));
         await service.OnProfileOnline(this, new ProfileOnlineEventArgs(profile.ProfileId));
@@ -539,33 +522,33 @@ public sealed class ActivityServiceTests : IDisposable
     [Test]
     public void ItemCost_NegativeCount_ThrowsArgumentOutOfRangeException()
     {
-        Assert.That(() => new ItemCost(-1, ItemId.Food), Throws.TypeOf<ArgumentOutOfRangeException>());
-        Assert.That(() => new ItemCost(0, ItemId.Food), Throws.Nothing);
+        Assert.That(() => new ItemCost(-1, ItemId.Cedar), Throws.TypeOf<ArgumentOutOfRangeException>());
+        Assert.That(() => new ItemCost(0, ItemId.Cedar), Throws.Nothing);
     }
 
     [Test]
     public async Task ResolveRewardCollection_WhenActivityStopped_DoesNotGrantRewards()
     {
         Profile profile = await SeedProfileAsync();
-        await SeedItemAsync(profile, ItemId.Food, 5);
+        await SeedItemAsync(profile, ItemId.Cedar, 5);
         (ActivityService service, _, _, _) = CreateServiceWithInternals();
-        service.AddActivity(ActivityId.Stone, new ActivityDefinition(
+        service.AddActivity(ActivityId.MineTin, new ActivityDefinition(
             time: 10f,
-            rewards: [new ItemReward(4, null, ItemId.Stone)],
+            rewards: [new ItemReward(4, null, ItemId.Tin)],
             requirements: [],
-            costs: [new ItemCost(1, ItemId.Food)]));
-        await service.StartActivityAsync(profile.ProfileId, ActivityId.Stone);
+            costs: [new ItemCost(1, ItemId.Cedar)]));
+        await service.StartActivityAsync(profile.ProfileId, ActivityId.MineTin);
 
         RewardCollection rewards = new();
         await service.ResolveActivityAsync(profile.ProfileId, rewards);
         await service.StopActivityAsync(profile.ProfileId);
-        await service.ResolveRewardCollection(rewards, profile.ProfileId, DateTime.UtcNow, ActivityId.Stone);
+        await service.ResolveRewardCollection(rewards, profile.ProfileId, DateTime.UtcNow, ActivityId.MineTin);
 
         await Assert.MultipleAsync(async () =>
         {
-            Item food = (await GetItemsAsync(profile.ProfileId)).Single(i => i.ItemId == ItemId.Food);
+            Item food = (await GetItemsAsync(profile.ProfileId)).Single(i => i.ItemId == ItemId.Cedar);
             Assert.That(food.Count, Is.EqualTo(5));
-            Assert.That(await GetItemsAsync(profile.ProfileId), Has.None.Matches<Item>(i => i.ItemId == ItemId.Stone));
+            Assert.That(await GetItemsAsync(profile.ProfileId), Has.None.Matches<Item>(i => i.ItemId == ItemId.Tin));
             await using GameDbContext dbContext = await _db.Factory.CreateDbContextAsync();
             Profile cleared = (await dbContext.Profiles.FindAsync(profile.ProfileId))!;
             Assert.That(cleared.ActivityId, Is.Null);
@@ -577,25 +560,25 @@ public sealed class ActivityServiceTests : IDisposable
     public async Task Completion_ConsumingLastItem_ReportsZeroInEvent()
     {
         Profile profile = await SeedProfileAsync();
-        await SeedItemAsync(profile, ItemId.Food, 1);
+        await SeedItemAsync(profile, ItemId.Cedar, 1);
         (ActivityService service, SocketRegistryService socketRegistry, ActivitySchedulerService scheduler, _) =
             CreateServiceWithInternals();
-        service.AddActivity(ActivityId.Stone, new ActivityDefinition(
+        service.AddActivity(ActivityId.MineTin, new ActivityDefinition(
             time: 10f,
-            rewards: [new ItemReward(4, null, ItemId.Stone)],
+            rewards: [new ItemReward(4, null, ItemId.Tin)],
             requirements: [],
-            costs: [new ItemCost(1, ItemId.Food)]));
+            costs: [new ItemCost(1, ItemId.Cedar)]));
         FakeWebSocket webSocket = await RegisterSocket(socketRegistry, profile.ProfileId);
-        await service.StartActivityAsync(profile.ProfileId, ActivityId.Stone, DateTime.UtcNow.AddSeconds(-100));
+        await service.StartActivityAsync(profile.ProfileId, ActivityId.MineTin, DateTime.UtcNow.AddSeconds(-100));
 
         await scheduler.NextEvent();
 
         Assert.That(webSocket.FirstSentText, Does.Contain("ActivityEndedEvent"));
-        Assert.That(webSocket.FirstSentText, Does.Contain("\"itemId\":\"Food\",\"count\":0"));
-        Assert.That(webSocket.FirstSentText, Does.Contain("\"itemId\":\"Stone\",\"count\":4"));
+        Assert.That(webSocket.FirstSentText, Does.Contain("\"itemId\":\"Cedar\",\"count\":0"));
+        Assert.That(webSocket.FirstSentText, Does.Contain("\"itemId\":\"Tin\",\"count\":4"));
         Item[] items = await GetItemsAsync(profile.ProfileId);
         Assert.That(items, Has.Length.EqualTo(1));
-        Assert.That(items.Single().ItemId, Is.EqualTo(ItemId.Stone));
+        Assert.That(items.Single().ItemId, Is.EqualTo(ItemId.Tin));
         Assert.That(items.Single().Count, Is.EqualTo(4));
     }
 
@@ -604,9 +587,9 @@ public sealed class ActivityServiceTests : IDisposable
     {
         Profile profile = await SeedProfileAsync();
         (ActivityService service, _, ActivitySchedulerService scheduler, _) = CreateServiceWithInternals();
-        AddStoneActivity(service);
+        AddMineTinActivity(service);
         await SeedSkillAsync(profile, SkillId.Mining, xp: 0, level: 1);
-        await service.StartActivityAsync(profile.ProfileId, ActivityId.Stone, DateTime.UtcNow.AddSeconds(60));
+        await service.StartActivityAsync(profile.ProfileId, ActivityId.MineTin, DateTime.UtcNow.AddSeconds(60));
 
         await service.OnProfileOffline(this, new ProfileOfflineEventArgs(profile.ProfileId));
         await service.OnProfileOnline(this, new ProfileOnlineEventArgs(profile.ProfileId));
@@ -622,9 +605,9 @@ public sealed class ActivityServiceTests : IDisposable
         Profile profile = await SeedProfileAsync();
         (ActivityService service, SocketRegistryService socketRegistry, _, _) =
             CreateServiceWithInternals();
-        AddStoneActivity(service);
+        AddMineTinActivity(service);
         await SeedSkillAsync(profile, SkillId.Mining, xp: 0, level: 1);
-        await service.StartActivityAsync(profile.ProfileId, ActivityId.Stone, DateTime.UtcNow.AddSeconds(60));
+        await service.StartActivityAsync(profile.ProfileId, ActivityId.MineTin, DateTime.UtcNow.AddSeconds(60));
 
         FakeWebSocket webSocket = await RegisterSocket(socketRegistry, profile.ProfileId);
 
@@ -637,8 +620,8 @@ public sealed class ActivityServiceTests : IDisposable
         Profile profile = await SeedProfileAsync();
         (ActivityService service, SocketRegistryService socketRegistry, _, _) =
             CreateServiceWithInternals();
-        service.AddActivity(ActivityId.Stone, new ActivityDefinition(time: 10f, rewards: [], requirements: []));
-        await service.StartActivityAsync(profile.ProfileId, ActivityId.Stone, DateTime.UtcNow.AddSeconds(-100));
+        service.AddActivity(ActivityId.MineTin, new ActivityDefinition(time: 10f, rewards: [], requirements: []));
+        await service.StartActivityAsync(profile.ProfileId, ActivityId.MineTin, DateTime.UtcNow.AddSeconds(-100));
 
         FakeWebSocket webSocket = await RegisterSocket(socketRegistry, profile.ProfileId);
 
@@ -651,10 +634,10 @@ public sealed class ActivityServiceTests : IDisposable
         Profile profile = await SeedProfileAsync();
         (ActivityService service, SocketRegistryService socketRegistry, _, _) =
             CreateServiceWithInternals();
-        AddStoneActivity(service, time: 10f);
+        AddMineTinActivity(service, time: 10f);
         await SeedSkillAsync(profile, SkillId.Mining, xp: 0, level: 1);
         FakeWebSocket webSocket = await RegisterSocket(socketRegistry, profile.ProfileId);
-        await service.StartActivityAsync(profile.ProfileId, ActivityId.Stone, DateTime.UtcNow.AddSeconds(-100));
+        await service.StartActivityAsync(profile.ProfileId, ActivityId.MineTin, DateTime.UtcNow.AddSeconds(-100));
 
         await service.OnProfileOffline(this, new ProfileOfflineEventArgs(profile.ProfileId));
         await service.OnProfileOnline(this, new ProfileOnlineEventArgs(profile.ProfileId));
@@ -671,10 +654,10 @@ public sealed class ActivityServiceTests : IDisposable
         Profile profile = await SeedProfileAsync();
         await SeedSkillAsync(profile, SkillId.Mining, xp: 0, level: 1);
         (ActivityService service, _, _, _) = CreateServiceWithInternals();
-        AddStoneActivity(service);
+        AddMineTinActivity(service);
 
         const int actions = 1_000_000;
-        await service.StartActivityAsync(profile.ProfileId, ActivityId.Stone, DateTime.UtcNow.AddSeconds(-actions));
+        await service.StartActivityAsync(profile.ProfileId, ActivityId.MineTin, DateTime.UtcNow.AddSeconds(-actions));
         await service.OnProfileOffline(this, new ProfileOfflineEventArgs(profile.ProfileId));
 
         Stopwatch stopwatch = Stopwatch.StartNew();
@@ -696,12 +679,12 @@ public sealed class ActivityServiceTests : IDisposable
     private (ActivityService, SocketRegistryService, ActivitySchedulerService, DropTableService) CreateServiceWithInternals()
     {
         DropTableService dropTableService = new();
-        dropTableService.AddDropTable(DropTableId.StoneTable, new DropTable(
-            new ItemReward(2, 5, ItemId.Stone),
-            new TableReward(1, 1, DropTableId.BrokenRockTable)));
-        dropTableService.AddDropTable(DropTableId.BrokenRockTable, new DropTable(
+        dropTableService.AddDropTable(DropTableId.TinBonusTable, new DropTable(
+            new ItemReward(2, 5, ItemId.Tin),
+            new TableReward(1, 1, DropTableId.CopperBonusTable)));
+        dropTableService.AddDropTable(DropTableId.CopperBonusTable, new DropTable(
             new ItemReward(0, 10, ItemId.None),
-            new ItemReward(1, 1, ItemId.BrokenRock)));
+            new ItemReward(1, 1, ItemId.Copper)));
         SocketRegistryService socketRegistry = new();
         ActivitySchedulerService scheduler = new();
         ActivityService service = new(_db.Factory, dropTableService, new ProfileService(_db.Factory, socketRegistry),
@@ -712,12 +695,12 @@ public sealed class ActivityServiceTests : IDisposable
     private (ActivityService, DropTableService) CreateService()
     {
         DropTableService dropTableService = new();
-        dropTableService.AddDropTable(DropTableId.StoneTable, new DropTable(
-            new ItemReward(2, 5, ItemId.Stone),
-            new TableReward(1, 1, DropTableId.BrokenRockTable)));
-        dropTableService.AddDropTable(DropTableId.BrokenRockTable, new DropTable(
+        dropTableService.AddDropTable(DropTableId.TinBonusTable, new DropTable(
+            new ItemReward(2, 5, ItemId.Tin),
+            new TableReward(1, 1, DropTableId.CopperBonusTable)));
+        dropTableService.AddDropTable(DropTableId.CopperBonusTable, new DropTable(
             new ItemReward(0, 10, ItemId.None),
-            new ItemReward(1, 1, ItemId.BrokenRock)));
+            new ItemReward(1, 1, ItemId.Copper)));
         SocketRegistryService socketRegistry = new();
         ActivityService service = new(_db.Factory, dropTableService, new ProfileService(_db.Factory, socketRegistry), new ItemService(_db.Factory), new SkillService(_db.Factory), socketRegistry, new ActivitySchedulerService());
         return (service, dropTableService);
