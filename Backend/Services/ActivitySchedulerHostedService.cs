@@ -7,22 +7,23 @@ namespace Backend.Services;
 
 internal sealed class ActivitySchedulerHostedService(ActivitySchedulerService scheduler) : BackgroundService
 {
-    protected override Task ExecuteAsync(CancellationToken stoppingToken)
+    protected override async Task ExecuteAsync(CancellationToken stoppingToken)
     {
-        return Task.Run(async () =>
+        while (!stoppingToken.IsCancellationRequested)
         {
-            while (!stoppingToken.IsCancellationRequested)
+            try
             {
-                try
-                {
-                    scheduler.WaitForNextEvent();
-                    await scheduler.NextEvent();
-                }
-                catch (Exception exception)
-                {
-                    Log.Error(exception);
-                }
+                await scheduler.WaitForNextEvent(stoppingToken);
+                await scheduler.NextEvent();
             }
-        }, CancellationToken.None);
+            catch (OperationCanceledException)
+            {
+                break;
+            }
+            catch (Exception exception)
+            {
+                Log.Error(exception);
+            }
+        }
     }
 }
