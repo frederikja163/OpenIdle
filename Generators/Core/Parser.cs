@@ -197,7 +197,17 @@ public sealed class Parser
                     activity.Requirements.Add(LevelRequirement(rewardElement));
                     break;
                 case "ItemCost":
-                    activity.Costs.Add(ItemCost(rewardElement));
+                    ItemCost parsedCost = ItemCost(rewardElement);
+                    ItemCost? existingCost = activity.Costs.FirstOrDefault(cost => cost.Item == parsedCost.Item);
+                    if (existingCost is null)
+                    {
+                        activity.Costs.Add(parsedCost);
+                    }
+                    else
+                    {
+                        activity.Costs.Remove(existingCost);
+                        activity.Costs.Add(new ItemCost(parsedCost.Item, existingCost.Count + parsedCost.Count));
+                    }
                     break;
                 default:
                     throw new ParserException($"Element name is not recognized '{rewardElement.Name}'");
@@ -213,7 +223,13 @@ public sealed class Parser
 
     private ItemCost ItemCost(XmlElement element)
     {
-        return new ItemCost(element.RequireAttribute("item"), element.RequireAttribute<int>("cost"));
+        int cost = element.RequireAttribute<int>("cost");
+        if (cost < 0)
+        {
+            throw new ParserException($"Activity cost must be a non-negative integer, but was '{cost}'.");
+        }
+
+        return new ItemCost(element.RequireAttribute("item"), cost);
     }
 
     private Item Item(XmlElement element)

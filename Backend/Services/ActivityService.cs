@@ -20,7 +20,9 @@ public sealed class LevelRequirement(SkillId skillId, int level)
 
 public sealed class ItemCost(int count, ItemId itemId)
 {
-    public int Count { get; } = count;
+    public int Count { get; } = count >= 0
+        ? count
+        : throw new ArgumentOutOfRangeException(nameof(count), "Item cost must be non-negative.");
     public ItemId ItemId { get; } = itemId;
 }
 
@@ -182,9 +184,9 @@ public sealed class ActivityService
 
     private static bool CanAffordCost(Dictionary<ItemId, int> itemCache, ActivityDefinition definition)
     {
-        foreach (ItemCost cost in definition.Costs)
+        foreach (ItemCost aggregatedCost in AggregateCosts(definition))
         {
-            if (itemCache.GetValueOrDefault(cost.ItemId) < cost.Count)
+            if (itemCache.GetValueOrDefault(aggregatedCost.ItemId) < aggregatedCost.Count)
             {
                 return false;
             }
@@ -200,10 +202,11 @@ public sealed class ActivityService
             return true;
         }
 
+        ItemCost[] aggregatedCosts = AggregateCosts(definition);
         Item[] ownedItems = await _itemService.GetItemsAsync(
-            profileId, definition.Costs.Select(cost => cost.ItemId));
+            profileId, aggregatedCosts.Select(cost => cost.ItemId));
 
-        foreach (ItemCost cost in definition.Costs)
+        foreach (ItemCost cost in aggregatedCosts)
         {
             int owned = ownedItems.FirstOrDefault(item => item.ItemId == cost.ItemId)?.Count ?? 0;
             if (owned < cost.Count)
@@ -213,6 +216,14 @@ public sealed class ActivityService
         }
 
         return true;
+    }
+
+    private static ItemCost[] AggregateCosts(ActivityDefinition definition)
+    {
+        return definition.Costs
+            .GroupBy(cost => cost.ItemId)
+            .Select(group => new ItemCost(group.Sum(cost => cost.Count), group.Key))
+            .ToArray();
     }
 
     internal async Task<Profile> StartActivityAsync(ProfileId profileId, ActivityId activityId, DateTime? startTime = null)
@@ -326,7 +337,13 @@ public sealed class ActivityService
     internal async Task ResolveRewardCollection(RewardCollection rewards, ProfileId profileId, DateTime startTime, ActivityId activityId)
     {
         await using GameDbContext dbContext = await _dbContextFactory.CreateDbContextAsync();
-        await _profileService.SetActivityAsync(dbContext, profileId, activityId, startTime);
+        Profile? profile = await dbContext.Profiles.FirstOrDefaultAsync(p => p.ProfileId == profileId);
+        if (profile is null || profile.ActivityId is not { } currentActivityId || currentActivityId != activityId)
+        {
+            return;
+        }
+
+        await _profileService.SetActivityAsync(dbContext, profile.ProfileId, activityId, startTime);
         ItemCost[] costs = _activities.TryGetValue(activityId, out ActivityDefinition? definition) ? definition.Costs : [];
         Item[] items = await _itemService.ApplyItemDeltaAsync(dbContext, profileId, rewards.GetItems(), costs, rewards.TotalActivities);
         Skill[] skills = await _skillService.AddSkillsAsync(dbContext, profileId, rewards.GetSkills());

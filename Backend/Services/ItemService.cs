@@ -73,6 +73,12 @@ public sealed class ItemService(IDbContextFactory<GameDbContext> dbContextFactor
                 if (item is not null)
                 {
                     dbContext.Items.Remove(item);
+                    items.Add(new Item()
+                    {
+                        ProfileId = profileId,
+                        ItemId = itemId,
+                        Count = 0,
+                    });
                 }
                 continue;
             }
