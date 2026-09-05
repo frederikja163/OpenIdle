@@ -94,7 +94,7 @@ public sealed class TsSchemaEmitterTests
             // text box for the other, so the distinction has to survive the emit.
             Assert.That(output, Does.Contain("wireName: 'profileId', kind: 'guid'"));
             // A Timestamp is a plain number to the console; the XML token survives as the label.
-            Assert.That(output, Does.Contain("wireName: 'startedAt', kind: 'int', typeName: 'Timestamp'"));
+            Assert.That(output, Does.Contain("wireName: 'startedAt', kind: 'long', typeName: 'Timestamp'"));
         });
     }
 
