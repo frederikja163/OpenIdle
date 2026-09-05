@@ -164,9 +164,16 @@ describe('versionHttpUrl', () => {
 		);
 	});
 
-	it('drops whatever path, query or hash the ws URL carried', () => {
-		expect(versionHttpUrl('ws://localhost:5066/some/path?x=1#frag')).toBe(
-			'http://localhost:5066/version'
+	it('keeps a path prefix the backend is mounted under', () => {
+		expect(versionHttpUrl('wss://openidle.example/api/ws')).toBe(
+			'https://openidle.example/api/version'
 		);
+		expect(versionHttpUrl('wss://openidle.example/api/ws/')).toBe(
+			'https://openidle.example/api/version'
+		);
+	});
+
+	it('drops the query and hash the ws URL carried', () => {
+		expect(versionHttpUrl('ws://localhost:5066/ws?x=1#frag')).toBe('http://localhost:5066/version');
 	});
 });

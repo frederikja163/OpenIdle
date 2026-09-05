@@ -7,10 +7,10 @@ import { expect, test, type WebSocketRoute } from '@playwright/test';
 // PUBLIC_WS_URL defaults to the address the backend binds in development, so a
 // test that needs the socket to behave a certain way stubs it with
 // routeWebSocket rather than assuming nothing is listening. The version footer
-// on /login and /debug fetches the backend's build over HTTP (GET /version,
-// derived from the same PUBLIC_WS_URL), so a test without a stub sees one
-// failed fetch and a footer reading "unavailable" — harmless to a test that
-// never looks at it.
+// on /login, /profiles and /debug fetches the backend's build over HTTP
+// (GET /version next to the /ws the client is pointed at), so a test without
+// a stub sees a failed fetch and a footer reading "unavailable" — harmless to
+// a test that never looks at it.
 
 // Matches the URL itself rather than a glob, which Playwright would resolve
 // against baseURL and so never match a socket on another port.
@@ -150,14 +150,12 @@ test('a dropped socket reconnects and replays the session', async ({ page }) => 
 	await expect(page.getByText('Thorin')).toBeVisible();
 	expect(sentPerConnection).toHaveLength(2);
 	// Order is the point: the socket has to be logged in before it can be
-	// pointed at a profile. The list refetch rides behind that pair. The
-	// version footer no longer travels the socket — it fetches /version over
-	// HTTP — so nothing else rides the replay.
-	expect(sentPerConnection[1].slice(0, 2)).toEqual([
+	// pointed at a profile, and the refetch rides behind both.
+	expect(sentPerConnection[1]).toEqual([
 		'LoginAsTestUserRequest',
-		'SelectProfileRequest'
+		'SelectProfileRequest',
+		'ListProfilesRequest'
 	]);
-	expect(sentPerConnection[1].slice(2)).toEqual(['ListProfilesRequest']);
 });
 
 test('deleting a profile asks first, and confirming does nothing yet', async ({ page }) => {
@@ -244,6 +242,18 @@ test('the version footer says so when no backend answers', async ({ page }) => {
 	await expect(page.getByTestId('login-status')).toHaveText('Signed out');
 });
 
+test('the frontend reports its own build at /version, like the backend', async ({ request }) => {
+	const response = await request.get('/version');
+
+	expect(response.ok()).toBe(true);
+	// The build playwright.config.ts hands to `vite build`, in the backend's
+	// wire shape, so one curl per image answers "which commit is this?".
+	expect(await response.json()).toEqual({
+		commit: '1e1c256a0b1c2d3e4f5061728394a5b6c7d8e9f0',
+		commitTime: 1_788_564_400_000
+	});
+});
+
 test('the traffic filter remembers which kinds are hidden across reloads', async ({ page }) => {
 	await page.goto('/debug');
 
@@ -292,6 +302,24 @@ test('a ?ws= override points the socket at another backend', async ({ page }) =>
 	await expect(page).toHaveURL(/\/profiles$/);
 
 	expect(dialled).toEqual([OTHER_BACKEND]);
+});
+
+test('a ?ws= override moves the version fetch to the same backend', async ({ page }) => {
+	const asked: string[] = [];
+	await page.route('**/version', (route) => {
+		asked.push(route.request().url());
+		return route.fulfill({ contentType: 'application/json', body: JSON.stringify(BACKEND_BUILD) });
+	});
+	await captureDialledUrl(page);
+
+	await page.goto(`/login?ws=${encodeURIComponent(OTHER_BACKEND)}`);
+	await expect(page.getByTestId('version-footer')).toContainText(
+		'backend 2026-09-04 22:13:20 b2c3d4e'
+	);
+
+	// The socket's port, not the configured backend's: the two are derived from
+	// one resolved URL, so an override cannot move one without the other.
+	expect(asked).toEqual(['http://127.0.0.1:9999/version']);
 });
 
 test('an override survives a reload, so it need only be typed once', async ({ page }) => {

@@ -1,12 +1,12 @@
 # HTTP controller endpoints
 
-The backend exposes two plain HTTP routes today — `GET /health` ([`Backend/Controllers/Http/HealthController.cs`](../../Backend/Controllers/Http/HealthController.cs)) and `GET /version` ([`Backend/Controllers/Http/VersionController.cs`](../../Backend/Controllers/Http/VersionController.cs)) — plus the WebSocket handshake at `GET /ws`. Everything else the client needs goes over that socket via [socket endpoints](./socket-endpoints.md). When you do need a plain HTTP endpoint, it is a standard ASP.NET Core MVC controller — this page records the house pattern.
+The backend exposes two plain HTTP routes today — `GET /health` ([`Backend/Controllers/Http/HealthController.cs`](../../Backend/Controllers/Http/HealthController.cs)) and `GET /version` ([`Backend/Controllers/Http/VersionController.cs`](../../Backend/Controllers/Http/VersionController.cs)) — plus the WebSocket handshake at `GET /ws`. The frontend image mirrors both as SvelteKit server routes (`Frontend/src/routes/health/+server.ts`, `Frontend/src/routes/version/+server.ts`). Everything else the client needs goes over that socket via [socket endpoints](./socket-endpoints.md). When you do need a plain HTTP endpoint, it is a standard ASP.NET Core MVC controller — this page records the house pattern.
 
 ## Quick reference
 
 - **Where:** `Backend/Controllers/Http/`.
 - **Pattern:** `[ApiController]` + `ControllerBase`, attribute route on each action.
-- **Wiring already exists** — [`Program.cs`](../../Backend/Program.cs) (line 13) calls `AddControllers()` and `app.MapControllers()`. You only register *services*, never controllers.
+- **Wiring already exists** — [`AppHost.cs`](../../Backend/AppHost.cs) calls `AddControllers()`, `AddOpenIdleCors()` and `app.UseOpenIdleCors()` / `app.MapControllers()` in `CreateApp`. You only register *services*, never controllers.
 - **To add an endpoint:** write the controller class; register any new service; build.
 
 ## 1. The existing example
@@ -60,7 +60,7 @@ public sealed class HealthController : ControllerBase
 
 ### Step 2 — inject services if needed
 
-A controller that needs services takes them in its primary constructor, e.g. `HealthController(ProfileService profileService)`. Register anything not already registered in [`Program.cs`](../../Backend/Program.cs) (lines 12-16):
+A controller that needs services takes them in its primary constructor, e.g. `HealthController(ProfileService profileService)`. Register anything not already registered in [`AppHost.cs`](../../Backend/AppHost.cs) (`CreateApp`, the `AddSingleton` block):
 
 ```csharp
 builder.Services.AddSingleton<ProfileService>();
@@ -89,9 +89,9 @@ The `http` launch profile serves `http://localhost:5066` ([`Backend/Properties/l
 2. Decorate with `[ApiController]` and derive `ControllerBase`.
 3. Put a route attribute on each action (`[HttpGet("...")]`, `[HttpPost("...")]`, ...). Prefer the literal `/path` form.
 4. Return `IActionResult` helpers (`Ok`, `NotFound`, `BadRequest`, ...).
-5. Never register the controller — only its services, in `Program.cs`.
+5. Never register the controller — only its services, in `AppHost.cs`.
 6. Everything tied to game state goes through the socket, not HTTP; use HTTP for plumbing (handshake, health, static-ish concerns).
-7. **A cross-origin fetch needs CORS.** The WebSocket handshake is exempt from the browser's same-origin policy, but `fetch` is not — so any HTTP endpoint a frontend on another origin calls must sit behind the CORS policy in `AddOpenIdleCors`. The policy reuses `AllowedWsOrigins`: the same origin allowlist that governs the socket governs HTTP plumbing, and an empty list (local development) allows any origin. See [`../deployment.md`](../deployment.md).
+7. **HTTP endpoints are public.** The default CORS policy in `AddOpenIdleCors` answers any origin, because the HTTP side is meant to be a publicly reachable API and a frontend on another origin could not read a cross-origin `fetch` without it. `AllowedWsOrigins` gates the socket handshake only. So never put anything origin- or session-sensitive on HTTP; rule 6 already keeps the session on the socket. See [`../deployment.md`](../deployment.md).
 
 ## 4. Related documents
 

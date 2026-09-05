@@ -93,9 +93,9 @@ public sealed class TsSchemaEmitterTests
             // Not folded into 'guid': the console offers a profile picker for one and a plain
             // text box for the other, so the distinction has to survive the emit.
             Assert.That(output, Does.Contain("wireName: 'profileId', kind: 'guid'"));
-            // Its own kind rather than 'int': the console shows the token from types.xml
-            // as the field's label, and a bare number box labelled Timestamp is the hint
-            // that it wants epoch milliseconds.
+            // Kind() throws on any PropertyType it does not name, so this pins that a
+            // Timestamp property in types.xml cannot break generation. The console
+            // treats the kind like 'int' and labels the field from typeName.
             Assert.That(output, Does.Contain("wireName: 'since', kind: 'timestamp'"));
         });
     }

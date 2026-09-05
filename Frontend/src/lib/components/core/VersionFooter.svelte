@@ -1,7 +1,6 @@
 <script lang="ts">
 	import { onMount } from 'svelte';
-	import { connectionState } from '$lib/state/session.svelte';
-	import { loadBackendVersion, versionState } from '$lib/state/version.svelte';
+	import { ensureBackendVersion, versionState } from '$lib/state/version.svelte';
 	import { cn } from '$lib/utils/stylingUtils';
 	import { formatVersion } from '$lib/utils/version';
 
@@ -17,22 +16,17 @@
 	 * a layout, so the game view stays clear of it.
 	 */
 
-	// Asks on mount and whenever the pointed-at backend may have changed, i.e.
-	// when the socket (re)opens. Each ask is a fresh fetch; a failure ends in
-	// 'failed' rather than retrying, so this stays quiet once answered or failed.
+	// Only the first footer to mount for a given backend actually asks; the
+	// re-ask on every socket open lives in wireSession(), so it fires once per
+	// connection rather than once per mounted footer.
 	onMount(() => {
-		void loadBackendVersion();
-	});
-	$effect(() => {
-		if (connectionState.status === 'open') {
-			void loadBackendVersion();
-		}
+		void ensureBackendVersion();
 	});
 
 	const backend = $derived(
-		versionState.status === 'loaded' && versionState.backend
+		versionState.backend
 			? formatVersion(versionState.backend)
-			: versionState.status === 'failed' || versionState.status === 'idle'
+			: versionState.status === 'failed'
 				? 'unavailable'
 				: '…'
 	);

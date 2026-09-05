@@ -22,28 +22,18 @@ internal static class WebApplicationBuilderExtensions
         }
 
         /// <summary>
-        /// CORS for the plumbing HTTP endpoints (currently /version), served from
-        /// the same origin allowlist as the WebSocket handshake: one list governs
-        /// both. Like the WS handshake, an empty list means unrestricted, which is
-        /// what local development wants.
+        /// The HTTP side of the backend is public: it serves read-only plumbing
+        /// (/health, /version) that any origin may read, and it is meant to be
+        /// reachable as a public API. So every HTTP endpoint answers any origin.
+        /// Only the WebSocket handshake is origin-gated, via AllowedWsOrigins in
+        /// BuildWebSocketOptions, because the socket is where the session lives.
+        /// Browsers still need the Access-Control-Allow-Origin header to let a
+        /// page read a cross-origin response, which is why this cannot simply be
+        /// left out.
         /// </summary>
-        internal void AddOpenIdleCors(IConfiguration configuration)
+        internal void AddOpenIdleCors()
         {
-            string[] allowedOrigins = ReadAllowedOrigins(configuration);
-            collection.AddCors(options => options.AddDefaultPolicy(policy =>
-            {
-                if (allowedOrigins.Length == 0)
-                {
-                    policy.AllowAnyOrigin();
-                }
-                else
-                {
-                    policy.WithOrigins(allowedOrigins);
-                }
-            }));
-            Log.Info(allowedOrigins.Length == 0
-                ? "CORS origins: unrestricted (AllowedWsOrigins is empty)"
-                : $"CORS origins restricted to: {string.Join(", ", allowedOrigins)}");
+            collection.AddCors(options => options.AddDefaultPolicy(policy => policy.AllowAnyOrigin()));
         }
     }
 

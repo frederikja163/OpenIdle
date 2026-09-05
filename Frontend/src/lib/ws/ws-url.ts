@@ -169,11 +169,14 @@ export function defaultWsUrl(): string {
  * The backend's HTTP version endpoint, derived from its WebSocket URL: the ws
  * URL is the only address the client knows the backend by, and fetch speaks
  * http(s), so the derivation is what makes an override move the fetch too.
+ *
+ * /version is a sibling of /ws, so only the final path segment is replaced:
+ * a backend mounted under a prefix (wss://host/api/ws) keeps that prefix.
  */
 export function versionHttpUrl(wsUrl: string): string {
 	const parsed = new URL(wsUrl);
 	parsed.protocol = parsed.protocol === 'wss:' ? 'https:' : 'http:';
-	parsed.pathname = '/version';
+	parsed.pathname = parsed.pathname.replace(/\/[^/]*\/?$/, '/version');
 	parsed.search = '';
 	parsed.hash = '';
 	return parsed.href;

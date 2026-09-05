@@ -5,6 +5,7 @@
 	import { Input } from '$lib/components/ui/input';
 	import { connectionState } from '$lib/state/session.svelte';
 	import { logout } from '$lib/state/user.svelte';
+	import { ensureBackendVersion } from '$lib/state/version.svelte';
 	import {
 		clearWsUrl,
 		getDefaultWsUrl,
@@ -44,6 +45,9 @@
 		logout();
 		setWsUrl(url);
 		overridden = true;
+		// The footer would otherwise keep the old backend's build until a socket
+		// opens; the new address can be asked over HTTP right away.
+		void ensureBackendVersion();
 	}
 
 	function reset(): void {
@@ -52,6 +56,7 @@
 		clearWsUrl();
 		url = getWsUrl();
 		overridden = false;
+		void ensureBackendVersion();
 	}
 </script>
 

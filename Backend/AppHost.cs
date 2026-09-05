@@ -22,7 +22,7 @@ internal static class AppHost
             options.UseSqlite(connectionString ?? builder.Configuration.GetConnectionString("Default")));
         builder.Services.AddControllers().AddApplicationPart(typeof(Backend.Controllers.Http.WsController).Assembly);
         builder.Services.AddSocketControllers();
-        builder.Services.AddOpenIdleCors(builder.Configuration);
+        builder.Services.AddOpenIdleCors();
         builder.Services.AddSingleton<UserService>();
         builder.Services.AddSingleton<ProfileService>();
         builder.Services.AddSingleton<DropTableService>();

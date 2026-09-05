@@ -1,3 +1,4 @@
+using System.Reflection;
 using Backend.Services;
 
 namespace OpenIdle.Tests.Services;
@@ -72,10 +73,21 @@ public sealed class VersionServiceTests
     [Test]
     public void FromAssembly_ReadsTheStampedMetadata()
     {
-        // The test build passes no properties, so the stamped values are empty;
-        // what this pins is that the attributes are found and parsed at all.
+        // The test build passes no properties, so the stamped values are empty.
+        // What this pins is that Backend.csproj stamps both keys at all: without
+        // the AssemblyMetadata items a CI image would silently report `local`.
+        string[] stampedKeys = typeof(VersionService).Assembly
+            .GetCustomAttributes<AssemblyMetadataAttribute>()
+            .Select(attribute => attribute.Key)
+            .ToArray();
         VersionService service = VersionService.FromAssembly();
 
-        Assert.That(service, Is.Not.Null);
+        Assert.Multiple(() =>
+        {
+            Assert.That(stampedKeys, Does.Contain(VersionService.CommitKey));
+            Assert.That(stampedKeys, Does.Contain(VersionService.CommitTimeKey));
+            Assert.That(service.Commit, Is.Null);
+            Assert.That(service.CommitTimeMs, Is.Null);
+        });
     }
 }

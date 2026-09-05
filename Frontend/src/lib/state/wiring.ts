@@ -2,6 +2,7 @@ import { getWsClient } from '$lib/ws/client';
 import { loadProfiles, profilesState, replayProfileSelection } from './profiles.svelte';
 import { connectionState, resetSessionState } from './session.svelte';
 import { replayLogin } from './user.svelte';
+import { loadBackendVersion } from './version.svelte';
 
 // The client is a singleton and its handler registries only ever grow, so a
 // second call would leave two of everything below on one socket.
@@ -29,6 +30,11 @@ export function wireSession(): void {
 	client.onClose(resetSessionState);
 	client.onStatus((status) => {
 		connectionState.status = status;
+		// A newly opened socket may have reached a redeployed backend, so the
+		// footer's value is re-asked once per connection.
+		if (status === 'open') {
+			void loadBackendVersion();
+		}
 	});
 
 	client.setResume(async (send) => {
