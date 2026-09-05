@@ -1,9 +1,12 @@
 name: Frontend Build
 
-# Mirrors backend-build.yml: pull requests run it directly, and
-# publish-images.yml calls it before pushing the frontend image.
 on:
   pull_request:
+    paths:
+      - "Frontend/**"
+      - "Generators/**"
+      - "types.xml"
+      - ".github/workflows/frontend-build.yml"
   workflow_call:
 
 permissions:

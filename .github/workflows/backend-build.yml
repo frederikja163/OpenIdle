@@ -2,6 +2,13 @@ name: Backend Build
 
 on:
   pull_request:
+    paths:
+      - "Backend/**"
+      - "tests/**"
+      - "Generators/**"
+      - "types.xml"
+      - "OpenIdle.slnx"
+      - ".github/workflows/backend-build.yml"
   workflow_call:
 
 permissions:
