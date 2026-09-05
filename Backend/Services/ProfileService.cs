@@ -110,4 +110,16 @@ public sealed class ProfileService(IDbContextFactory<GameDbContext> dbContextFac
         profile.ActivityId = activityId;
         profile.ActivityStartTime = startTime;
     }
+
+    public async Task ClearActivityAsync(ProfileId profileId)
+    {
+        await using GameDbContext dbContext = await dbContextFactory.CreateDbContextAsync();
+
+        Profile profile = await dbContext.Profiles.FirstOrDefaultAsync(p => p.ProfileId == profileId)
+                          ?? throw new BackendException("Profile does not exist.");
+        profile.ActivityId = null;
+        profile.ActivityStartTime = null;
+
+        await dbContext.SaveChangesAsync();
+    }
 }
