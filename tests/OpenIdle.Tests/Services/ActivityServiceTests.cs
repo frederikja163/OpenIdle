@@ -648,6 +648,31 @@ public sealed class ActivityServiceTests : IDisposable
     }
 
     [Test]
+    public async Task ProfileOnline_CatchUp_AnchorsToCurrentCycleStart()
+    {
+        Profile profile = await SeedProfileAsync();
+        (ActivityService service, _, ActivitySchedulerService scheduler, _) = CreateServiceWithInternals();
+        AddMineTinActivity(service, time: 10f);
+        await SeedSkillAsync(profile, SkillId.Mining, xp: 0, level: 1);
+        // Two full cycles elapsed, five seconds into the third.
+        DateTime before = DateTime.UtcNow;
+        await service.StartActivityAsync(profile.ProfileId, ActivityId.MineTin, before.AddSeconds(-25));
+
+        await service.OnProfileOffline(this, new ProfileOfflineEventArgs(profile.ProfileId));
+        await service.OnProfileOnline(this, new ProfileOnlineEventArgs(profile.ProfileId));
+        await scheduler.NextEvent();
+
+        await Assert.MultipleAsync(async () =>
+        {
+            Item item = (await GetItemsAsync(profile.ProfileId)).Single();
+            Assert.That(item.Count, Is.EqualTo(8));
+            await using GameDbContext dbContext = await _db.Factory.CreateDbContextAsync();
+            Profile updated = (await dbContext.Profiles.FindAsync(profile.ProfileId))!;
+            Assert.That(updated.ActivityStartTime, Is.EqualTo(before.AddSeconds(-5)).Within(TimeSpan.FromSeconds(1)));
+        });
+    }
+
+    [Test]
     [Category("Perf")]
     public async Task RescheduleActivityAsync_ElapsedLongOffline_Benchmark()
     {

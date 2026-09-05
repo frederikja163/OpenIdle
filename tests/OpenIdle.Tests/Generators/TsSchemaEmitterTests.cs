@@ -33,6 +33,7 @@ public sealed class TsSchemaEmitterTests
           <Dto name="Profile">
             <Property name="Name" type="String"/>
             <Property name="ProfileId" type="Guid"/>
+            <Property name="StartedAt" type="Timestamp"/>
           </Dto>
           <Request name="GetSkills">
             <Property name="SkillIds" type="SkillId" multiple="true" optional="true"/>
@@ -92,6 +93,8 @@ public sealed class TsSchemaEmitterTests
             // Not folded into 'guid': the console offers a profile picker for one and a plain
             // text box for the other, so the distinction has to survive the emit.
             Assert.That(output, Does.Contain("wireName: 'profileId', kind: 'guid'"));
+            // A Timestamp is a plain number to the console; the XML token survives as the label.
+            Assert.That(output, Does.Contain("wireName: 'startedAt', kind: 'long', typeName: 'Timestamp'"));
         });
     }
 

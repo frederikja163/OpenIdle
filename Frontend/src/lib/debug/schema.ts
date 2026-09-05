@@ -19,7 +19,7 @@
  */
 
 export type PropertyKind =
-	'string' | 'int' | 'float' | 'guid' | 'userId' | 'profileId' | 'enum' | 'dto';
+	'string' | 'int' | 'long' | 'float' | 'guid' | 'userId' | 'profileId' | 'enum' | 'dto';
 
 export interface SchemaProperty {
 	/** The PascalCase name from types.xml, e.g. `ProfileId`. */
