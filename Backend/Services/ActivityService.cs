@@ -167,9 +167,13 @@ public sealed class ActivityService
             endTime += duration;
         }
 
+        // endTime is the deadline of the cycle that is now in progress; the scheduler and the
+        // persisted anchor both take the start of that cycle.
+        DateTime currentCycleStart = endTime - duration;
+
         if (rewards.TotalActivities > 0)
         {
-            await ResolveRewardCollection(rewards, profileId, endTime, activityId);
+            await ResolveRewardCollection(rewards, profileId, currentCycleStart, activityId);
         }
 
         if (ranOutOfItems)
@@ -179,7 +183,7 @@ public sealed class ActivityService
             return;
         }
 
-        _activitySchedulerService.StartEvent(new ProfileActivityCompletion(this, profileId, activityId, duration), endTime);
+        _activitySchedulerService.StartEvent(new ProfileActivityCompletion(this, profileId, activityId, duration), currentCycleStart);
     }
 
     private static bool CanAffordCost(Dictionary<ItemId, int> itemCache, ActivityDefinition definition)
