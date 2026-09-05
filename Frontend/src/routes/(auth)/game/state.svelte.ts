@@ -30,7 +30,7 @@ export class BoardState {
 		ms: 5000,
 		xp: 1
 	});
-	progress = $state(20);
+	progress = $state(0);
 	reward = $state<{ action: string; key: number } | null>(null);
 	rate = $state(12.4);
 
@@ -54,29 +54,28 @@ export class BoardState {
 	 * Runs the loop until the returned teardown is called. The page drives this
 	 * from an `$effect` keyed on `running`, so switching actions restarts it.
 	 */
-	start(): () => void {
+	run(): () => void {
 		const active = this.running;
 		if (!active) return () => {};
 
 		const step = 100 / (active.ms / TICK_MS);
 		const timer = setInterval(() => {
-			if (this.progress + step < 100) {
-				this.progress += step;
+			if (this.progress >= 100) {
+				this.#complete(active);
+				this.progress = 0;
 				return;
 			}
-			this.#complete(active);
-			this.progress = 0;
+			// The last tick clamps at exactly a full bar, so the meter spends a
+			// drawn 100% before the completion payout snaps it straight back to 0.
+			this.progress = Math.min(100, this.progress + step);
 		}, TICK_MS);
 
 		return () => clearInterval(timer);
 	}
 
-	/** Starts an action, or stops it if it is the one already running. */
-	toggle(action: GameAction): void {
-		if (this.running?.action === action.id) {
-			this.running = null;
-			return;
-		}
+	/** Starts an action. Pressing an already-running action is a no-op. */
+	start(action: GameAction): void {
+		if (this.running?.action === action.id) return;
 		// An action whose inputs are not covered cannot start. The card already
 		// refuses the click, but the model stays authoritative on its own.
 		const short = (action.inputs ?? []).some((input) => (this.held[input.id] ?? 0) < input.qty);
@@ -88,6 +87,12 @@ export class BoardState {
 			ms: action.ms,
 			xp: action.xp
 		};
+	}
+
+	/** Stops the running action, if any, and restarts its meter at zero. */
+	stop(): void {
+		this.running = null;
+		this.progress = 0;
 	}
 
 	#complete(active: RunningAction): void {

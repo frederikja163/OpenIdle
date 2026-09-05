@@ -10,6 +10,9 @@
 	 * running carries the board's only --glow-accent, and locked drops to 45%
 	 * and refuses the click — whether the lock is a skill level or missing
 	 * materials, with `lockedBy: 'items'` reporting the shortfall in its tooltip.
+	 *
+	 * The running card carries no persistent glyph — the border, the glow and the
+	 * striped meter are the state. Its `onStop` button only surfaces on hover.
 	 */
 	export type ActionLock = 'level' | 'items';
 
@@ -29,12 +32,13 @@
 	import Lock from '@lucide/svelte/icons/lock';
 	import Package from '@lucide/svelte/icons/package';
 	import PackageX from '@lucide/svelte/icons/package-x';
-	import Pause from '@lucide/svelte/icons/pause';
+	import Square from '@lucide/svelte/icons/square';
 	import Timer from '@lucide/svelte/icons/timer';
 	import Meter from '$lib/components/core/Meter.svelte';
 	import Tooltip, { type TooltipRow } from '$lib/components/feedback/Tooltip.svelte';
 	import ItemArt from '$lib/components/game/ItemArt.svelte';
 	import Row from '$lib/components/layout/Row.svelte';
+	import { Button } from '$lib/components/ui/button';
 	import { cn } from '$lib/utils/stylingUtils';
 
 	interface Props {
@@ -53,6 +57,7 @@
 		lockedSkill?: string;
 		skillLevel?: number;
 		onclick?: () => void;
+		onStop?: () => void;
 	}
 
 	let {
@@ -70,7 +75,8 @@
 		lockedBy = 'level',
 		lockedSkill,
 		skillLevel,
-		onclick
+		onclick,
+		onStop
 	}: Props = $props();
 
 	const missing = $derived((inputs ?? []).filter((input) => (input.have ?? 0) < input.qty));
@@ -113,13 +119,7 @@
 	>
 		<div class="relative grid place-items-center p-(--pad-card)">
 			<ItemArt {glyph} {rarity} size={92} width="100%" />
-			{#if running}
-				<span
-					class="absolute top-2 right-2 inline-flex size-5 items-center justify-center rounded-(--radius-full) bg-verdant-500 text-action-primary-text shadow-(--glow-accent)"
-				>
-					<Pause size={11} />
-				</span>
-			{:else if locked}
+			{#if locked}
 				<span class="absolute top-2 right-2 text-text-faint">
 					{#if lockedBy === 'items'}
 						<PackageX size={13} />
@@ -171,6 +171,7 @@
 						size="sm"
 						striped={running}
 						label="{name} progress"
+						transition="sweep"
 					/>
 				{/if}
 			</Row>
@@ -213,14 +214,40 @@
 	</button>
 {/snippet}
 
-{#if locked}
-	<Tooltip
-		title="Recipe locked"
-		meta={lockedBy === 'items' ? 'Missing materials' : 'Required skill levels'}
-		rows={lockRows}
-	>
+<!--
+	The stop control cannot live inside the card: the card is itself a <button>,
+	and a nested one is invalid markup that would also fold "Stop …" into the
+	card's own accessible name. It sits beside the card instead, revealed on hover
+	of the group — plus on focus, so a keyboard visitor can reach it, and on
+	coarse pointers, which never hover and would face an invisible target.
+
+	`group/action` and not `group/card`: Card.Root already carries `group/card`
+	and is an ancestor of every card here, so hovering anywhere in the panel
+	would reveal all of them at once.
+-->
+<Row class="group/action relative w-fit">
+	{#if locked}
+		<Tooltip
+			title="Recipe locked"
+			meta={lockedBy === 'items' ? 'Missing materials' : 'Required skill levels'}
+			rows={lockRows}
+		>
+			{@render card()}
+		</Tooltip>
+	{:else}
 		{@render card()}
-	</Tooltip>
-{:else}
-	{@render card()}
-{/if}
+	{/if}
+
+	{#if running && onStop}
+		<Button
+			variant="danger"
+			size="sm"
+			aria-label="Stop {name}"
+			title="Stop {name}"
+			onclick={onStop}
+			class="absolute top-2 right-2 size-6 rounded-(--radius-full) p-0 opacity-0 transition-[opacity,background-color] duration-(--dur-fast) ease-out group-hover/action:opacity-100 focus-visible:opacity-100 pointer-coarse:opacity-100"
+		>
+			<Square fill="currentColor" />
+		</Button>
+	{/if}
+</Row>

@@ -18,7 +18,7 @@
 
 	// Re-running whenever `running` changes is the point: switching or stopping an
 	// action tears the old interval down before the next one is armed.
-	$effect(() => board.start());
+	$effect(() => board.run());
 </script>
 
 <!--
@@ -51,6 +51,7 @@
 		reward={board.reward}
 		held={board.held}
 		onSelectSkill={(id) => (board.activeSkill = id)}
-		onToggleAction={(action) => board.toggle(action)}
+		onStartAction={(action) => board.start(action)}
+		onStopAction={() => board.stop()}
 	/>
 </div>

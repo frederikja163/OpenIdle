@@ -8,9 +8,11 @@
 	import Panel from '$lib/components/layout/Panel.svelte';
 	import Row from '$lib/components/layout/Row.svelte';
 	import { Badge } from '$lib/components/ui/badge';
+	import { Button } from '$lib/components/ui/button';
 	import Lock from '@lucide/svelte/icons/lock';
 	import PanelLeftClose from '@lucide/svelte/icons/panel-left-close';
 	import PanelLeftOpen from '@lucide/svelte/icons/panel-left-open';
+	import Square from '@lucide/svelte/icons/square';
 	import type { GameAction, Skill } from '../data';
 	import type { RunningAction } from '../state.svelte';
 
@@ -28,7 +30,8 @@
 		reward: { action: string; key: number } | null;
 		held: Record<string, number>;
 		onSelectSkill: (id: string) => void;
-		onToggleAction: (action: GameAction) => void;
+		onStartAction: (action: GameAction) => void;
+		onStopAction: () => void;
 	}
 
 	let {
@@ -40,13 +43,21 @@
 		reward,
 		held,
 		onSelectSkill,
-		onToggleAction
+		onStartAction,
+		onStopAction
 	}: Props = $props();
 
 	let collapsed = $state(false);
 
 	const skill = $derived(skills.find((s) => s.id === activeSkill) ?? skills[0]);
 	const list = $derived(actions[activeSkill] ?? []);
+	const runningAction = $derived(
+		running
+			? Object.values(actions)
+					.flat()
+					.find((action) => action.id === running.action)
+			: undefined
+	);
 
 	function hasMaterials(action: GameAction): boolean {
 		return (action.inputs ?? []).every((input) => (held[input.id] ?? 0) >= input.qty);
@@ -69,6 +80,21 @@
 			size="sm"
 			onclick={() => (collapsed = !collapsed)}
 		/>
+	{/snippet}
+
+	<!--
+		The header stop names the action outright rather than pairing a status badge
+		with a bare verb, so one control is the whole answer to "what is running".
+		The name is capped and truncated because it is what varies: the header must
+		not resize as the board moves from Talc Ore to Calcite Pickaxe Head.
+	-->
+	{#snippet actions()}
+		{#if runningAction}
+			<Button variant="danger" size="sm" title="Stop {runningAction.name}" onclick={onStopAction}>
+				<Square fill="currentColor" />
+				<span class="max-w-45 truncate">Stop {runningAction.name}</span>
+			</Button>
+		{/if}
 	{/snippet}
 
 	<div
@@ -154,16 +180,24 @@
 									{lockedBy}
 									lockedSkill={skill.name}
 									skillLevel={skill.level}
-									onclick={() => onToggleAction(action)}
+									onclick={() => onStartAction(action)}
+									onStop={onStopAction}
 								/>
 								{#if reward?.action === action.id}
 									<!--
 										FloatingReward is a one-shot animation with no exit state, so
 										the same action paying out again has to remount it to replay.
 										The key counter on the board changes every completion.
+
+										Left corner and pointer-events-none, both because the running
+										card's stop button owns the right one: an overlay that takes
+										the pointer there steals the hover the button is revealed by,
+										so it would vanish under the cursor on every payout.
 									-->
 									{#key reward.key}
-										<span class="absolute top-1 right-2.5 flex flex-col items-end gap-1">
+										<span
+											class="pointer-events-none absolute top-1 left-2.5 flex flex-col items-start gap-1"
+										>
 											<FloatingReward amount="+{action.xp} XP" tone="xp" />
 											<FloatingReward icon={action.glyph} amount="+{action.qty}" tone="loot" />
 										</span>

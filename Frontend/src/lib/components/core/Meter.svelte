@@ -18,6 +18,15 @@
 		striped?: boolean;
 		label?: string;
 		class?: string;
+		/**
+		 * How a rise in value draws its fill. 'tick' eases over the design-system
+		 * tick and suits sparse updates (the XP meter, which moves once per game
+		 * tick); 'sweep' eases over the board loop's interval, so a meter that
+		 * steps every loop tick reads as one constant fill instead of jumping.
+		 * Either way a drop to a lower value snaps instantly rather than
+		 * rewinding.
+		 */
+		transition?: 'tick' | 'sweep';
 	}
 
 	let {
@@ -27,12 +36,52 @@
 		size = 'md',
 		striped = false,
 		label,
-		class: className
+		class: className,
+		transition = 'tick'
 	}: Props = $props();
 
-	// A zero max is "nothing to fill", not a division: 0/0 is NaN, which reaches
-	// the style attribute as `width: NaN%` and is dropped, leaving a full-width bar.
-	const pct = $derived(max <= 0 ? 0 : Math.max(0, Math.min(100, (value / max) * 100)));
+	/*
+	 * The drawn width trails `value`: a rise eases toward it over the transition
+	 * duration, a drop skips the easing and lands on the new value at once. The
+	 * two are told apart from the last value drawn, and the transition is
+	 * re-armed on the next frame after a snap so the following rise can animate.
+	 */
+	let shown = $state(0);
+	let drawing = $state(false);
+	let seeded = false;
+
+	const pct = $derived(max <= 0 ? 0 : Math.max(0, Math.min(100, (shown / max) * 100)));
+
+	$effect(() => {
+		// First run: appear at the value we mount at, without animating up from
+		// an empty bar. `drawing` is only armed afterwards.
+		if (!seeded) {
+			seeded = true;
+			shown = value;
+			requestAnimationFrame(() => {
+				drawing = true;
+			});
+			return;
+		}
+		if (value === shown) return;
+		if (value < shown) {
+			drawing = false;
+			shown = value;
+			requestAnimationFrame(() => {
+				drawing = true;
+			});
+		} else {
+			drawing = true;
+			shown = value;
+		}
+	});
+
+	const fillMotion = $derived(
+		drawing &&
+			(transition === 'sweep'
+				? 'transition-[width] duration-(--dur-sweep) ease-linear'
+				: 'transition-[width] duration-(--dur-tick) ease-linear')
+	);
 
 	const heights: Record<MeterSize, string> = {
 		sm: 'h-1',
@@ -69,7 +118,8 @@
 >
 	<div
 		class={cn(
-			'h-full rounded-(--radius-full) shadow-[inset_0_1px_0_rgba(255,255,255,.28)] transition-[width] duration-(--dur-tick) ease-linear',
+			'h-full rounded-(--radius-full) shadow-[inset_0_1px_0_rgba(255,255,255,.28)]',
+			fillMotion,
 			tones[tone],
 			striped && stripes
 		)}

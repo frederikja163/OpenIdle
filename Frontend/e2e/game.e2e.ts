@@ -14,8 +14,8 @@ const WS_ROUTE = /\/ws$/;
 async function openBoard(page: import('@playwright/test').Page) {
 	await page.routeWebSocket(WS_ROUTE, (ws) => {
 		ws.onMessage((frame) => {
-			const { Id } = JSON.parse(String(frame));
-			ws.send(JSON.stringify({ $type: 'LoginAsTestUserResponse', Id }));
+			const { requestId } = JSON.parse(String(frame));
+			ws.send(JSON.stringify({ $type: 'LoginAsTestUserResponse', requestId }));
 		});
 	});
 	await page.goto('/login');
@@ -39,26 +39,65 @@ test('the board fills the viewport without scrolling the document', async ({ pag
 	expect(overflow).toBeLessThanOrEqual(0);
 });
 
+// Both stop controls carry the same name, so each is scoped to what owns it:
+// the panel header for one, the running card's own wrapper for the other.
+function headerStop(page: import('@playwright/test').Page) {
+	return page
+		.getByRole('heading', { name: 'Skills' })
+		.locator('..')
+		.getByRole('button', { name: 'Stop Mine Talc Ore' });
+}
+
+function cardStop(page: import('@playwright/test').Page) {
+	return page
+		.getByRole('button', { name: /^×1 Mine Talc Ore/ })
+		.locator('..')
+		.getByRole('button', { name: 'Stop Mine Talc Ore' });
+}
+
 test('the running action pays out into the skill and the inventory', async ({ page }) => {
 	await openBoard(page);
 
 	// Mining/Talc starts already running, and one completion takes 5s.
 	const talc = page.getByRole('button', { name: /^Talc Ore/ });
 	await expect(talc).toHaveAccessibleName('Talc Ore · 18');
-	await expect(page.getByText('1 running')).toBeVisible();
+	await expect(headerStop(page)).toBeVisible();
 
 	await expect(talc).toHaveAccessibleName('Talc Ore · 19', { timeout: 8000 });
 	await expect(page.getByText('65/100 XP')).toBeVisible();
 });
 
-test('clicking the running action stops the loop', async ({ page }) => {
+test('the card stop button appears on hover and stops the loop', async ({ page }) => {
 	await openBoard(page);
 
-	await page.getByRole('button', { name: /^×1 Mine Talc Ore/ }).click();
+	const card = page.getByRole('button', { name: /^×1 Mine Talc Ore/ });
+	const stop = cardStop(page);
 
-	// Exact, or it also matches the "OpenIdle" wordmark in the chrome.
-	await expect(page.getByText('Idle', { exact: true })).toBeVisible();
-	await expect(page.getByText('1 running')).toHaveCount(0);
+	// Playwright counts an opacity-0 element as visible, so the reveal itself is
+	// what has to be asserted rather than visibility.
+	await expect(stop).toHaveCSS('opacity', '0');
+	await card.hover();
+	await expect(stop).toHaveCSS('opacity', '1');
+
+	// The reward float shares this corner and outlives a whole tick, so if it
+	// ever takes the pointer it steals the hover the button hangs on: hold the
+	// cursor on the button across a payout and it has to stay revealed.
+	await stop.hover();
+	await expect(page.getByText('+1 XP')).toBeVisible({ timeout: 8000 });
+	await expect(stop).toHaveCSS('opacity', '1');
+
+	await stop.click();
+	await expect(stop).toHaveCount(0);
+	await expect(headerStop(page)).toHaveCount(0);
+});
+
+test('the header stop button stops the loop', async ({ page }) => {
+	await openBoard(page);
+
+	await headerStop(page).click();
+
+	await expect(headerStop(page)).toHaveCount(0);
+	await expect(cardStop(page)).toHaveCount(0);
 });
 
 test('a level-locked action refuses the click', async ({ page }) => {
