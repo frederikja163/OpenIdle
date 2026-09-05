@@ -147,6 +147,10 @@ export async function replayProfileSelection(send: PrivilegedSend): Promise<void
 		// the backend will never accept again (a deleted one) from failing the same
 		// way on every future reconnect and aborting the rest of the replay with it.
 		sessionIntent.profileId = null;
+		// The intent is not reactive, so this is the only trace of the refusal a
+		// page can react to — the game board reads it to stop waiting for a
+		// profile that is never coming back.
+		profilesState.selectError = error instanceof Error ? error.message : String(error);
 		throw error;
 	}
 	profilesState.selectedProfileId = profileId;

@@ -10,7 +10,7 @@
 	import ResourceSlot from '$lib/components/game/ResourceSlot.svelte';
 	import Panel from '$lib/components/layout/Panel.svelte';
 	import TabStrip, { type Tab } from '$lib/components/layout/TabStrip.svelte';
-	import { flavour, type InventoryItem } from '../data';
+	import type { InventoryItem } from '$lib/game/types';
 
 	/*
 	 * The board's inventory: a tabbed well of item slots. The well is clamped and
@@ -36,6 +36,14 @@
 			tab === 'all' ? true : tab === 'res' ? item.kind === 'res' : item.kind === 'tool'
 		)
 	);
+
+	const empty = $derived(
+		tab === 'tools'
+			? { title: 'No tools yet', hint: 'Craft handles and heads from ore and logs.' }
+			: tab === 'res'
+				? { title: 'No resources yet', hint: 'Mine ore or chop logs to fill this tab.' }
+				: { title: 'Your pack is empty', hint: 'Start an action to gather your first resources.' }
+	);
 </script>
 
 <Panel title="Inventory" padded={false} class="min-h-[218px] shrink-0">
@@ -53,12 +61,7 @@
 		class="oi-scroll m-(--gutter-panel) max-h-37 min-h-27 overflow-y-auto rounded-md bg-surface-inset p-(--sp-5) shadow-(--inset-well)"
 	>
 		{#if shown.length === 0}
-			<EmptyState
-				compact
-				icon={PackageOpen}
-				title="No tools yet"
-				hint="Level Crafting to 5 to forge your first axe."
-			/>
+			<EmptyState compact icon={PackageOpen} title={empty.title} hint={empty.hint} />
 		{:else}
 			<div
 				class="grid grid-cols-[repeat(auto-fill,var(--size-slot))] content-start gap-(--gap-grid)"
@@ -66,7 +69,6 @@
 				{#each shown as item (item.id)}
 					<Tooltip
 						title={item.name}
-						meta={flavour[item.id]}
 						rows={[
 							{ label: 'Held', value: item.count },
 							{ label: 'Rarity', value: item.rarity }

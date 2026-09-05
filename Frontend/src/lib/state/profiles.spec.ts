@@ -23,8 +23,14 @@ vi.mock('$lib/ws/client', () => {
 	return { getWsClient: () => client };
 });
 
-const { createProfile, loadProfiles, profilesState, selectProfile, validateProfileName } =
-	await import('$lib/state/profiles.svelte');
+const {
+	createProfile,
+	loadProfiles,
+	profilesState,
+	replayProfileSelection,
+	selectProfile,
+	validateProfileName
+} = await import('$lib/state/profiles.svelte');
 // wireSession() registers the reset against the socket in the real app; this
 // project never calls it, so the reset is driven directly here instead — which
 // is what makes a connection dropping testable at all.
@@ -215,6 +221,39 @@ describe('selectProfile', () => {
 		resetSessionState();
 		expect(profilesState.selectedProfileId).toBeNull();
 		expect(sessionIntent.profileId).toBe(THORIN.profileId);
+	});
+});
+
+describe('replayProfileSelection', () => {
+	it('puts the socket back on the remembered profile', async () => {
+		sessionIntent.profileId = THORIN.profileId;
+		const send = vi.fn().mockResolvedValue({ $type: 'SelectProfileResponse', requestId: 1 });
+
+		await replayProfileSelection(send);
+
+		expect(send).toHaveBeenCalledWith('SelectProfileRequest', { profileId: THORIN.profileId });
+		expect(profilesState.selectedProfileId).toBe(THORIN.profileId);
+	});
+
+	it('sends nothing when there is no profile to restore', async () => {
+		const send = vi.fn();
+
+		await replayProfileSelection(send);
+
+		expect(send).not.toHaveBeenCalled();
+	});
+
+	it('forgets a refused profile and leaves the refusal where a page can see it', async () => {
+		sessionIntent.profileId = THORIN.profileId;
+		const send = vi.fn().mockRejectedValue(new Error('Profile does not belong to user.'));
+
+		await expect(replayProfileSelection(send)).rejects.toThrow('Profile does not belong to user.');
+
+		expect(sessionIntent.profileId).toBeNull();
+		expect(profilesState.selectedProfileId).toBeNull();
+		// The intent is not reactive, so the error is the only reactive evidence
+		// that the wait for a profile is over.
+		expect(profilesState.selectError).toBe('Profile does not belong to user.');
 	});
 });
 

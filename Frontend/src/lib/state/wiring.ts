@@ -1,4 +1,5 @@
 import { getWsClient } from '$lib/ws/client';
+import { applyActivityEnded } from './game.svelte';
 import { loadProfiles, profilesState, replayProfileSelection } from './profiles.svelte';
 import { connectionState, resetSessionState } from './session.svelte';
 import { replayLogin } from './user.svelte';
@@ -48,4 +49,10 @@ export function wireSession(): void {
 		profilesState.profiles = event.profiles;
 		profilesState.status = 'loaded';
 	});
+
+	// Sent per completed cycle, and on SelectProfile ahead of its response when
+	// the profile earned anything offline. The game store has no resume step of
+	// its own: it resets with the session and the board reloads it once the
+	// profile replay above has landed.
+	client.onEvent('ActivityEndedEvent', applyActivityEnded);
 }

@@ -5,16 +5,24 @@
 	import FloatingReward from '$lib/components/feedback/FloatingReward.svelte';
 	import ActionCard from '$lib/components/game/ActionCard.svelte';
 	import SkillRailItem from '$lib/components/game/SkillRailItem.svelte';
+	import Column from '$lib/components/layout/Column.svelte';
 	import Panel from '$lib/components/layout/Panel.svelte';
 	import Row from '$lib/components/layout/Row.svelte';
 	import { Badge } from '$lib/components/ui/badge';
 	import { Button } from '$lib/components/ui/button';
+	import { itemMeta } from '$lib/game/catalog';
+	import type {
+		BoardReward,
+		GameAction,
+		PlayableSkillId,
+		RunningAction,
+		Skill
+	} from '$lib/game/types';
+	import type { ItemId } from '$lib/ws/protocol';
 	import Lock from '@lucide/svelte/icons/lock';
 	import PanelLeftClose from '@lucide/svelte/icons/panel-left-close';
 	import PanelLeftOpen from '@lucide/svelte/icons/panel-left-open';
 	import Square from '@lucide/svelte/icons/square';
-	import type { GameAction, Skill } from '../data';
-	import type { RunningAction } from '../state.svelte';
 
 	/*
 	 * The skill rail and the action grid for whichever skill is selected. The rail
@@ -23,13 +31,13 @@
 	 */
 	interface Props {
 		skills: Skill[];
-		actions: Record<string, GameAction[]>;
-		activeSkill: string;
+		actions: Record<PlayableSkillId, GameAction[]>;
+		activeSkill: PlayableSkillId;
 		running: RunningAction | null;
 		progress: number;
-		reward: { action: string; key: number } | null;
-		held: Record<string, number>;
-		onSelectSkill: (id: string) => void;
+		reward: BoardReward | null;
+		held: Partial<Record<ItemId, number>>;
+		onSelectSkill: (id: PlayableSkillId) => void;
 		onStartAction: (action: GameAction) => void;
 		onStopAction: () => void;
 	}
@@ -59,16 +67,18 @@
 			: undefined
 	);
 
+	// An input's id is an ItemId by construction (the catalog reads it off the
+	// contract); ActionInput types it as a string because the card is generic.
+	function have(input: { id: string }): number {
+		return held[input.id as ItemId] ?? 0;
+	}
+
 	function hasMaterials(action: GameAction): boolean {
-		return (action.inputs ?? []).every((input) => (held[input.id] ?? 0) >= input.qty);
+		return (action.inputs ?? []).every((input) => have(input) >= input.qty);
 	}
 
 	function isLocked(action: GameAction) {
-		return (
-			action.locked === true ||
-			(action.lockedAt != null && action.lockedAt > skill.level) ||
-			!hasMaterials(action)
-		);
+		return (action.lockedAt != null && action.lockedAt > skill.level) || !hasMaterials(action);
 	}
 </script>
 
@@ -152,15 +162,15 @@
 				{#if list.length === 0}
 					<EmptyState
 						icon={Lock}
-						title="Smithing is locked"
-						hint="Reach Mining level 15 and Crafting level 10 to open the forge."
+						title="{skill.name} has no actions"
+						hint="Nothing to run here yet."
 					/>
 				{:else}
 					<div class="grid grid-cols-[repeat(auto-fill,var(--size-action-card))] gap-(--gap-grid)">
 						{#each list as action (action.id)}
 							{@const isRunning = running?.action === action.id}
 							{@const locked = isLocked(action)}
-							{@const lockedBy = !hasMaterials(action) ? 'items' : (action.lockedBy ?? 'level')}
+							{@const lockedBy = hasMaterials(action) ? 'level' : 'items'}
 							<div class="relative">
 								<ActionCard
 									name={action.name}
@@ -171,10 +181,7 @@
 									xp={action.xp}
 									running={isRunning}
 									progress={isRunning ? progress : 0}
-									inputs={action.inputs?.map((input) => ({
-										...input,
-										have: held[input.id] ?? 0
-									}))}
+									inputs={action.inputs?.map((input) => ({ ...input, have: have(input) }))}
 									{locked}
 									lockedAt={action.lockedAt}
 									{lockedBy}
@@ -195,12 +202,23 @@
 										so it would vanish under the cursor on every payout.
 									-->
 									{#key reward.key}
-										<span
-											class="pointer-events-none absolute top-1 left-2.5 flex flex-col items-start gap-1"
-										>
-											<FloatingReward amount="+{action.xp} XP" tone="xp" />
-											<FloatingReward icon={action.glyph} amount="+{action.qty}" tone="loot" />
-										</span>
+										<!--
+											What the payout actually changed rather than what the card
+											promises: a bonus drop pays +3 on a card that says ×2, and
+											the costs it consumed are the card's own inputs, not loot.
+										-->
+										<Column class="pointer-events-none absolute top-1 left-2.5 items-start gap-1">
+											{#if reward.xp > 0}
+												<FloatingReward amount="+{reward.xp} XP" tone="xp" />
+											{/if}
+											{#each reward.items.filter((line) => line.delta > 0) as line (line.itemId)}
+												<FloatingReward
+													icon={itemMeta(line.itemId).glyph}
+													amount="+{line.delta}"
+													tone="loot"
+												/>
+											{/each}
+										</Column>
 									{/key}
 								{/if}
 							</div>

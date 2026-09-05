@@ -1,89 +1,107 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { actions } from './data';
-import { BoardState } from './state.svelte';
+
+vi.mock('$lib/ws/client', () => ({
+	getWsClient: () => ({ request: vi.fn(), generation: 0 })
+}));
+
+const { gameState } = await import('$lib/state/game.svelte');
+const { resetSessionState } = await import('$lib/state/session.svelte');
+const { BoardState } = await import('./state.svelte');
+
+const PROFILE = '11111111-1111-1111-1111-111111111111';
 
 /*
- * The board's loop runner drives a setInterval, so the model's methods are the
- * only piece tested here — start()/stop() decide *what* is running, run() only
- * advances it. None of these cases arm the interval.
+ * The board is a projection of the game store, so every case here sets the
+ * store directly and reads the projection — the store's own behaviour is
+ * covered in $lib/state/game.spec.ts.
  */
-const talc = actions.mining.find((action) => action.id === 'talc')!;
-const gypsum = actions.mining.find((action) => action.id === 'gypsum')!;
-const calcitepick = actions.crafting.find((action) => action.id === 'calcitepick')!;
-
 describe('BoardState', () => {
-	let board: BoardState;
-
 	beforeEach(() => {
-		board = new BoardState();
+		resetSessionState();
 	});
 
-	it('runs an action within the selected skill', () => {
-		board.start(gypsum);
+	it('dresses the skills with the level curve and the catalog', () => {
+		gameState.skills = { Mining: { profileId: PROFILE, skillId: 'Mining', xp: 895, level: 2 } };
+		const board = new BoardState();
 
-		expect(board.running).toMatchObject({ skill: 'mining', action: 'gypsum' });
-		expect(board.progress).toBe(0);
+		expect(board.skills[0]).toMatchObject({
+			id: 'Mining',
+			name: 'Mining',
+			level: 2,
+			xp: 0,
+			xpMax: 1011
+		});
+		// A skill the server has no row for yet starts at the bottom of level 1.
+		expect(board.skills[1]).toMatchObject({ id: 'LumberJacking', level: 1, xp: 0, xpMax: 895 });
+		expect(board.totalLevel).toBe(4);
 	});
 
-	it('does not stop the action already running when pressed again', () => {
-		const before = board.running;
-		board.start(talc);
+	it('lists only the items actually held, in catalog order', () => {
+		gameState.items = { Balsa: 4, Tin: 3, Copper: 0 };
+		const board = new BoardState();
 
-		expect(board.running).toBe(before);
-		expect(board.running?.action).toBe('talc');
+		expect(board.inventory.map((item) => item.id)).toEqual(['Tin', 'Balsa']);
+		expect(board.inventory[0]).toMatchObject({ name: 'Tin Ore', count: 3, kind: 'res' });
 	});
 
-	it('switches to a different action instead', () => {
-		board.start(gypsum);
+	it('follows the running skill until the rail is picked', () => {
+		const board = new BoardState();
+		expect(board.selectedSkill).toBe('Mining');
 
-		expect(board.running?.action).toBe('gypsum');
+		gameState.running = { activityId: 'ChopBalsa', startedAt: Date.now() };
+		expect(board.selectedSkill).toBe('LumberJacking');
+		expect(board.running).toMatchObject({ skill: 'LumberJacking', action: 'ChopBalsa', ms: 8000 });
+
+		board.activeSkill = 'Crafting';
+		expect(board.selectedSkill).toBe('Crafting');
 	});
 
-	it('refuses an action whose material inputs are short', () => {
-		// Calcite Pickaxe Head costs 6 calcite; the mock horde holds 4.
-		board.start(calcitepick);
-
-		expect(board.running?.action).toBe('talc');
-	});
-
-	it('stops the running action and resets its meter', () => {
-		board.stop();
+	it('shows nothing running for an activity it cannot draw', () => {
+		gameState.running = { activityId: 'None', startedAt: Date.now() };
+		const board = new BoardState();
 
 		expect(board.running).toBeNull();
 		expect(board.progress).toBe(0);
 	});
 });
 
-describe('BoardState run loop', () => {
-	let board: BoardState;
-	let teardown: () => void;
+describe('BoardState clock', () => {
+	let board: InstanceType<typeof BoardState>;
+	let teardown: () => void = () => {};
 
 	beforeEach(() => {
 		vi.useFakeTimers();
+		resetSessionState();
 		board = new BoardState();
 	});
 
 	afterEach(() => {
-		teardown?.();
+		teardown();
 		vi.useRealTimers();
 	});
 
-	it('holds a full bar, then completes and snaps back to zero', () => {
-		// Talc is a 5000ms action: 50 ticks of 2% at a 100ms TICK_MS.
-		board.start(talc);
+	it('does not tick while nothing runs', () => {
 		teardown = board.run();
 
-		vi.advanceTimersByTime(4900);
-		expect(board.progress).toBe(98);
+		vi.advanceTimersByTime(1000);
+		expect(board.progress).toBe(0);
+		expect(vi.getTimerCount()).toBe(0);
+	});
 
-		// The 50th tick clamps to exactly 100 instead of rolling over...
-		vi.advanceTimersByTime(100);
+	it('advances the meter with the clock and holds it full until the payout', () => {
+		// Mining tin takes 8000ms.
+		gameState.running = { activityId: 'MineTin', startedAt: Date.now() };
+		teardown = board.run();
+
+		vi.advanceTimersByTime(4000);
+		expect(board.progress).toBe(50);
+
+		// Well past the deadline the bar waits at exactly full...
+		vi.advanceTimersByTime(5000);
 		expect(board.progress).toBe(100);
 
-		// ...and the next tick pays out and snaps the meter straight to zero.
-		vi.advanceTimersByTime(100);
-		expect(board.reward).not.toBeNull();
-		expect(board.reward?.action).toBe('talc');
+		// ...and the payout moving the start is what snaps it back to zero.
+		gameState.running = { activityId: 'MineTin', startedAt: Date.now() };
 		expect(board.progress).toBe(0);
 	});
 });
