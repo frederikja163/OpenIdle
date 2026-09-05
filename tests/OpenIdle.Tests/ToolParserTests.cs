@@ -180,6 +180,26 @@ public sealed class ToolParserTests
     }
 
     [Test]
+    public void Parse_Activity_CollectsItemCosts()
+    {
+        Parser parser = Parse("""
+            <Types>
+              <Activity name="Stone" time="2.5">
+                <ItemCost item="Food" cost="1"/>
+                <ItemCost item="Wood" cost="3"/>
+              </Activity>
+            </Types>
+            """);
+
+        Activity activity = parser.Model.Activities["Stone"];
+        Assert.That(activity.Costs, Has.Count.EqualTo(2));
+        Assert.That(activity.Costs[0].Item, Is.EqualTo("Food"));
+        Assert.That(activity.Costs[0].Count, Is.EqualTo(1));
+        Assert.That(activity.Costs[1].Item, Is.EqualTo("Wood"));
+        Assert.That(activity.Costs[1].Count, Is.EqualTo(3));
+    }
+
+    [Test]
     public void Parse_ExplicitEnumIsStillSupported()
     {
         Parser parser = Parse("""

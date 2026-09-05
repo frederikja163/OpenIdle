@@ -196,6 +196,9 @@ public sealed class Parser
                 case "LevelRequirement":
                     activity.Requirements.Add(LevelRequirement(rewardElement));
                     break;
+                case "ItemCost":
+                    activity.Costs.Add(ItemCost(rewardElement));
+                    break;
                 default:
                     throw new ParserException($"Element name is not recognized '{rewardElement.Name}'");
             }
@@ -206,6 +209,11 @@ public sealed class Parser
     private LevelRequirement LevelRequirement(XmlElement element)
     {
         return new LevelRequirement(element.RequireAttribute("skill"), element.RequireAttribute<int>("count"));
+    }
+
+    private ItemCost ItemCost(XmlElement element)
+    {
+        return new ItemCost(element.RequireAttribute("item"), element.RequireAttribute<int>("cost"));
     }
 
     private Item Item(XmlElement element)

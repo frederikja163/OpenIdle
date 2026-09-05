@@ -50,10 +50,24 @@
   </DropTable>
 
   <Activity name="Stone" time="2.5">
+    <ItemCost item="Food" cost="1"/>
     <ItemReward item="Stone" count="4"/>
     <XpReward skill="Mining" count="10"/>
     <TableReward table="StoneTable" count="1"/>
     <LevelRequirement skill="Mining" count="0"/>
+  </Activity>
+
+  <Activity name="Forage" time="1">
+    <ItemReward item="Food" count="1"/>
+    <XpReward skill="LumberJacking" count="5"/>
+    <LevelRequirement skill="LumberJacking" count="0"/>
+  </Activity>
+
+  <Activity name="FoodFarm" time="1">
+    <ItemCost item="Food" cost="1"/>
+    <ItemReward item="Food" count="50"/>
+    <XpReward skill="LumberJacking" count="15"/>
+    <LevelRequirement skill="LumberJacking" count="0"/>
   </Activity>
 
   <Dto name="Item">
@@ -110,6 +124,10 @@
 
   <Request name="StartActivity">
     <Property name="ActivityId" type="ActivityId"/>
+    <Response />
+  </Request>
+
+  <Request name="StopActivity">
     <Response />
   </Request>
 
