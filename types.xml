@@ -79,6 +79,10 @@
   <Dto name="Profile">
     <Property name="Name" type="String" />
     <Property name="ProfileId" type="Guid" />
+    <Property name="TotalLevel" type="Int" />
+    <Property name="CreationTime" type="TimeStamp" />
+    <Property name="LastActive" type="TimeStamp" optional="true" />
+    <Property name="Activity" type="ActivityId" optional="true" />
   </Dto>
 
   <Dto name="Skill">
