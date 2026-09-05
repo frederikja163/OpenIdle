@@ -36,7 +36,7 @@ public sealed class ActivitySchedulerService
 {
     private readonly object _lock = new object();
     private readonly Dictionary<ProfileId, ActivityCompletion> _activityMap = new();
-    private readonly ManualResetEvent _resetEvent = new(true);
+    private TaskCompletionSource _signal = new(TaskCreationOptions.RunContinuationsAsynchronously);
     private readonly PriorityQueue<ProfileId, DateTime> _priorityQueue = new();
 
     public void StartEvent(ActivityCompletion activityCompletion, DateTime startTime)
@@ -55,8 +55,7 @@ public sealed class ActivitySchedulerService
 
             if (isNewEarliest)
             {
-                _resetEvent.Reset();
-                _resetEvent.Set();
+                _signal.TrySetResult();
             }
         }
     }
@@ -94,12 +93,12 @@ public sealed class ActivitySchedulerService
         await activityCompletion.Complete(endTime);
     }
 
-    public void WaitForNextEvent()
+    public async Task WaitForNextEvent(CancellationToken cancellationToken = default)
     {
         TimeSpan? waitDuration;
         lock (_lock)
         {
-            _resetEvent.Reset();
+            _signal = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
             if (!_priorityQueue.TryPeek(out _, out DateTime endTime))
             {
                 waitDuration = TimeSpan.FromSeconds(1);
@@ -116,6 +115,16 @@ public sealed class ActivitySchedulerService
             return;
         }
 
-        _resetEvent.WaitOne(waitDuration.Value);
+        using CancellationTokenSource timeout = new(waitDuration.Value);
+        using CancellationTokenSource linked = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken, timeout.Token);
+        try
+        {
+            await _signal.Task.WaitAsync(linked.Token);
+        }
+        catch (OperationCanceledException) when (!cancellationToken.IsCancellationRequested)
+        {
+            // The internal wait duration elapsed rather than a shutdown request: wake the
+            // caller so it can poll the scheduler. Do not surface the timeout as a cancellation.
+        }
     }
 }

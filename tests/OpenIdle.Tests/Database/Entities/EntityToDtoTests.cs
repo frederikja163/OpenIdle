@@ -15,7 +15,7 @@ public sealed class EntityToDtoTests
         {
             ProfileId = profile.ProfileId,
             Profile = profile,
-            ItemId = ItemId.Stone,
+            ItemId = ItemId.Tin,
             Count = 7,
         };
 
@@ -24,7 +24,7 @@ public sealed class EntityToDtoTests
         Assert.Multiple(() =>
         {
             Assert.That(dto.ProfileId, Is.EqualTo(profile.ProfileId));
-            Assert.That(dto.ItemId, Is.EqualTo(ItemId.Stone));
+            Assert.That(dto.ItemId, Is.EqualTo(ItemId.Tin));
             Assert.That(dto.Count, Is.EqualTo(7));
         });
     }

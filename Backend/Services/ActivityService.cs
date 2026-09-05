@@ -6,7 +6,9 @@ using System.Threading.Tasks;
 using Backend.Database;
 using Backend.Database.Entities;
 using Backend.Dtos;
+using Microsoft.AspNetCore.Rewrite;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore.Metadata;
 
 namespace Backend.Services;
 
@@ -16,18 +18,68 @@ public sealed class LevelRequirement(SkillId skillId, int level)
     public int Level { get; } = level;
 }
 
-public sealed class ActivityDefinition(float time, Reward[] rewards, LevelRequirement[] requirements)
+public sealed class ItemCost(int count, ItemId itemId)
+{
+    public int Count { get; } = count >= 0
+        ? count
+        : throw new ArgumentOutOfRangeException(nameof(count), "Item cost must be non-negative.");
+    public ItemId ItemId { get; } = itemId;
+}
+
+public sealed class ActivityDefinition(float time, Reward[] rewards, LevelRequirement[] requirements, ItemCost[]? costs = null)
 {
     public float Time { get; } = time;
     public Reward[] Rewards { get; } = rewards.Where(r => r.Weight is null).ToArray();
     public DropTable? DropTable { get; } = CreateDropTable(rewards);
     
     public LevelRequirement[] Requirements { get; } = requirements;
+    public ItemCost[] Costs { get; } = costs ?? [];
     
     private static DropTable? CreateDropTable(Reward[] rewards)
     {
         rewards = rewards.Where(r => r.Weight is not null).ToArray();
         return rewards.Length == 0 ? null : new DropTable(rewards);
+    }
+}
+
+public sealed class RewardCollection
+{
+    private readonly Dictionary<ItemId, int> _itemRewards = new();
+    private readonly Dictionary<SkillId, int>  _skillRewards = new();
+
+    public int TotalActivities
+    {
+        get;
+        set;
+    }
+
+    public void AddReward(Reward reward)
+    {
+        switch (reward)
+        {
+            case ItemReward itemReward:
+                int items = itemReward.Count + (_itemRewards.TryGetValue(itemReward.ItemId, out int existing)
+                    ? existing
+                    : 0);
+                _itemRewards[itemReward.ItemId] = items;
+                break;
+            case XpReward xpReward:
+                int xp = xpReward.Count + (_skillRewards.TryGetValue(xpReward.SkillId, out existing) ? existing : 0);
+                _skillRewards[xpReward.SkillId] = xp;
+                break;
+            default:
+                throw new ArgumentOutOfRangeException(nameof(reward));
+        }
+    }
+
+    public IEnumerable<ItemReward> GetItems()
+    {
+        return _itemRewards.Select(kvp => new ItemReward(kvp.Value, 1, kvp.Key));
+    }
+
+    public IEnumerable<XpReward> GetSkills()
+    {
+        return _skillRewards.Select(kvp => new XpReward(kvp.Value, 1, kvp.Key));
     }
 }
 
@@ -88,20 +140,81 @@ public sealed class ActivityService
             return;
         }
 
-        List<Reward> rewards = [];
+        Item[] ownedItems = await _itemService.GetItemsAsync(profileId);
+        Dictionary<ItemId, int> itemCache = ownedItems.ToDictionary(item => item.ItemId, item => item.Count);
+
+        RewardCollection rewards = new RewardCollection();
         DateTime now = DateTime.UtcNow;
         TimeSpan duration = TimeSpan.FromSeconds(definition.Time);
-        while (startTime + duration <= now)
+        DateTime endTime = startTime + duration;
+        bool ranOutOfItems = false;
+        while (endTime <= now)
         {
-            rewards.AddRange(await ResolveActivityAsync(profileId, startTime + duration));
-            startTime += duration;
+            if (!CanAffordCost(itemCache, definition))
+            {
+                ranOutOfItems = true;
+                break;
+            }
+
+            foreach (ItemReward itemReward in RollRewards(rewards, definition))
+            {
+                itemCache[itemReward.ItemId] = itemCache.GetValueOrDefault(itemReward.ItemId) + itemReward.Count;
+            }
+            foreach (ItemCost cost in definition.Costs)
+            {
+                itemCache[cost.ItemId] = itemCache.GetValueOrDefault(cost.ItemId) - cost.Count;
+            }
+            endTime += duration;
         }
 
-        if (rewards.Count > 0)
+        if (rewards.TotalActivities > 0)
         {
-            await SendEventAsync(rewards, profileId, activityId);
+            await ResolveRewardCollection(rewards, profileId, endTime, activityId);
         }
-        _activitySchedulerService.StartEvent(new ProfileActivityCompletion(this, profileId, activityId, duration), startTime);
+
+        if (ranOutOfItems)
+        {
+            _activitySchedulerService.RemoveEvent(profileId);
+            await _profileService.ClearActivityAsync(profileId);
+            return;
+        }
+
+        _activitySchedulerService.StartEvent(new ProfileActivityCompletion(this, profileId, activityId, duration), endTime);
+    }
+
+    private static bool CanAffordCost(Dictionary<ItemId, int> itemCache, ActivityDefinition definition)
+    {
+        foreach (ItemCost cost in definition.Costs)
+        {
+            if (itemCache.GetValueOrDefault(cost.ItemId) < cost.Count)
+            {
+                return false;
+            }
+        }
+
+        return true;
+    }
+
+    internal async Task<bool> CanAffordActivityAsync(ProfileId profileId, ActivityId activityId)
+    {
+        if (!_activities.TryGetValue(activityId, out ActivityDefinition? definition) || definition.Costs.Length == 0)
+        {
+            return true;
+        }
+
+        Item[] ownedItems = await _itemService.GetItemsAsync(
+            profileId, definition.Costs.Select(cost => cost.ItemId));
+
+        foreach (ItemCost cost in definition.Costs)
+        {
+            int owned = ownedItems.FirstOrDefault(item => item.ItemId == cost.ItemId)?.Count ?? 0;
+            if (owned < cost.Count)
+            {
+                return false;
+            }
+        }
+
+        return true;
     }
 
     internal async Task<Profile> StartActivityAsync(ProfileId profileId, ActivityId activityId, DateTime? startTime = null)
@@ -118,23 +231,29 @@ public sealed class ActivityService
             throw new BackendException("Profile is already doing an activity.");
         }
 
-        foreach (LevelRequirement requirement in definition.Requirements)
+        foreach ((LevelRequirement requirement, Skill skill) in definition.Requirements.OrderBy(r => r.SkillId)
+                     .Zip(await _skillService.GetSkillsAsync(profileId,
+                         definition.Requirements.Select(s => s.SkillId).ToList())))
         {
-            Skill[] skills = await _skillService.GetSkillsAsync(profileId, [requirement.SkillId]);
-            if ((skills.FirstOrDefault()?.Level ?? 0) < requirement.Level)
+            if (skill.Level < requirement.Level)
             {
-                throw new BackendException($"Activity '{activityId}' requires {requirement.SkillId} level {requirement.Level}.");
+                throw new BackendException(
+                    $"Activity '{activityId}' requires {requirement.SkillId} level {requirement.Level}.");
             }
+        }
+
+        if (!await CanAffordActivityAsync(profileId, activityId))
+        {
+            ItemCost cost = definition.Costs.First();
+            throw new BackendException($"Activity '{activityId}' requires {cost.Count} of {cost.ItemId}.");
         }
 
         DateTime startedAt = startTime ?? DateTime.UtcNow;
         TimeSpan duration = TimeSpan.FromSeconds(definition.Time);
 
-        await using GameDbContext dbContext = await _dbContextFactory.CreateDbContextAsync();
-        dbContext.Profiles.Attach(profile);
+        await _profileService.SetActivityAsync(profileId, activityId, startedAt);
         profile.ActivityId = activityId;
         profile.ActivityStartTime = startedAt;
-        await dbContext.SaveChangesAsync();
 
         _activitySchedulerService.StartEvent(
             new ProfileActivityCompletion(this, profileId, activityId, duration), startedAt);
@@ -142,7 +261,21 @@ public sealed class ActivityService
         return profile;
     }
 
-    internal async Task<List<Reward>> ResolveActivityAsync(ProfileId profileId, DateTime endTime)
+    internal async Task StopActivityAsync(ProfileId profileId)
+    {
+        Profile profile = await _profileService.GetProfileAsync(profileId);
+
+        if (profile.ActivityId is null)
+        {
+            throw new BackendException("Profile is not doing an activity.");
+        }
+
+        _activitySchedulerService.RemoveEvent(profileId);
+
+        await _profileService.ClearActivityAsync(profileId);
+    }
+
+    internal async Task ResolveActivityAsync(ProfileId profileId, RewardCollection rewardCollection)
     {
         Profile profile = await _profileService.GetProfileAsync(profileId);
 
@@ -156,16 +289,18 @@ public sealed class ActivityService
             throw new BackendException($"Activity '{activityId}' does not have a valid definition.");
         }
 
+        RollRewards(rewardCollection, definition);
+    }
+
+    private IEnumerable<ItemReward> RollRewards(RewardCollection rewardCollection, ActivityDefinition definition)
+    {
         List<Reward> grantedRewards = [.. definition.Rewards];
         if (definition.DropTable is {})
         {
             grantedRewards.Add(_dropTableService.RollReward(definition.DropTable));
         }
 
-        List<Reward> resolvedRewards = [];
         List<ItemReward> itemRewards = [];
-        List<XpReward> xpRewards = [];
-        await using GameDbContext dbContext = await _dbContextFactory.CreateDbContextAsync();
         foreach (Reward reward in grantedRewards)
         {
             Reward resolved = reward switch
@@ -176,40 +311,36 @@ public sealed class ActivityService
 
             switch (resolved)
             {
-                case ItemReward { Count: >= 0 } itemReward:
+                case ItemReward itemReward:
+                    rewardCollection.AddReward(itemReward);
                     itemRewards.Add(itemReward);
-                    resolvedRewards.Add(itemReward);
                     break;
-                case XpReward { Count: >= 0 } xpReward:
-                    xpRewards.Add(xpReward);
-                    resolvedRewards.Add(xpReward);
+                case XpReward xpReward:
+                    rewardCollection.AddReward(xpReward);
                     break;
                 default:
                     throw new UnreachableException("Rewards should resolve to an item or xp reward, with a non negative count.");
             }
         }
 
-        if (itemRewards.Count > 0)
-        {
-            await _itemService.AddItemsAsync(dbContext, profileId, itemRewards);
-        }
-
-        if (xpRewards.Count > 0)
-        {
-            await _skillService.AddSkillsAsync(dbContext, profileId, xpRewards);
-        }
-
-        dbContext.Attach(profile);
-        profile.ActivityStartTime = endTime;
-
-        await dbContext.SaveChangesAsync();
-        return [.. resolvedRewards];
+        rewardCollection.TotalActivities++;
+        return itemRewards;
     }
 
-    internal async Task SendEventAsync(List<Reward> rewards, ProfileId profileId, ActivityId activityId)
+    internal async Task ResolveRewardCollection(RewardCollection rewards, ProfileId profileId, DateTime startTime, ActivityId activityId)
     {
-        Item[] items = await _itemService.GetItemsAsync(profileId, rewards.OfType<ItemReward>().Select(i => i.ItemId).Distinct());
-        Skill[] skills = await _skillService.GetSkillsAsync(profileId, rewards.OfType<XpReward>().Select(x => x.SkillId).Distinct());
+        await using GameDbContext dbContext = await _dbContextFactory.CreateDbContextAsync();
+        Profile? profile = await dbContext.Profiles.FirstOrDefaultAsync(p => p.ProfileId == profileId);
+        if (profile is null || profile.ActivityId is not { } currentActivityId || currentActivityId != activityId)
+        {
+            return;
+        }
+
+        await _profileService.SetActivityAsync(dbContext, profile.ProfileId, activityId, startTime);
+        ItemCost[] costs = _activities.TryGetValue(activityId, out ActivityDefinition? definition) ? definition.Costs : [];
+        Item[] items = await _itemService.ApplyItemDeltaAsync(dbContext, profileId, rewards.GetItems(), costs, rewards.TotalActivities);
+        Skill[] skills = await _skillService.AddSkillsAsync(dbContext, profileId, rewards.GetSkills());
+        await dbContext.SaveChangesAsync();
         await _socketRegistry.SendToProfileAsync(profileId, new ActivityEndedEvent
         {
             ActivityId = activityId,
@@ -225,7 +356,14 @@ internal sealed class ProfileActivityCompletion(
 {
     public override async Task Complete(DateTime endTime)
     {
-        List<Reward> rewards = await activityService.ResolveActivityAsync(ProfileId, endTime);
-        await activityService.SendEventAsync(rewards, ProfileId, activityId);
+        if (!await activityService.CanAffordActivityAsync(ProfileId, activityId))
+        {
+            await activityService.StopActivityAsync(ProfileId);
+            return;
+        }
+
+        RewardCollection rewards = new();
+        await activityService.ResolveActivityAsync(ProfileId, rewards);
+        await activityService.ResolveRewardCollection(rewards, ProfileId, endTime, activityId);
     }
 }

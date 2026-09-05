@@ -2,58 +2,383 @@
 <Types>
   <Skill name="Mining">
     <Slot name="Head" required="true">
-      <Tag name="head"/>
+      <Tag name="pickaxehead"/>
     </Slot>
     <Slot name="Handle" required="true">
       <Tag name="handle"/>
     </Slot>
   </Skill>
-  <Skill name="LumberJacking"/>
-  <Skill name="Crafting"/>
+  <Skill name="LumberJacking">
+    <Slot name="Head" required="true">
+      <Tag name="axehead"/>
+    </Slot>
+    <Slot name="Handle" required="true">
+      <Tag name="handle"/>
+    </Slot>
+  </Skill>
+  <Skill name="Crafting">
+    <Slot name="Head" required="true">
+      <Tag name="hammerhead"/>
+    </Slot>
+    <Slot name="Handle" required="true">
+      <Tag name="handle"/>
+    </Slot>
+  </Skill>
 
-  <Item name="Stone">
+  <!-- Ores -->
+  <Item name="Tin">
     <Tag name="ore"/>
   </Item>
-  <Item name="BrokenRock">
+  <Item name="Copper">
     <Tag name="ore"/>
   </Item>
-  <Item name="Wood">
+  <Item name="Bronze">
+    <Tag name="ore"/>
+  </Item>
+  <Item name="Iron">
+    <Tag name="ore"/>
+  </Item>
+  <Item name="Steel">
+    <Tag name="ore"/>
+  </Item>
+
+  <!-- Woods -->
+  <Item name="Balsa">
     <Tag name="wood"/>
   </Item>
-  <Item name="Food">
-    <Tag name="food"/>
+  <Item name="Pine">
+    <Tag name="wood"/>
+  </Item>
+  <Item name="Cedar">
+    <Tag name="wood"/>
+  </Item>
+  <Item name="Cherry">
+    <Tag name="wood"/>
+  </Item>
+  <Item name="Oak">
+    <Tag name="wood"/>
   </Item>
 
-  <Item name="IronPickaxeHead">
-    <Tag name="head"/>
-    <Tag name="iron"/>
-    <Stat name="speed" value="1.1"/>
-    <Stat name="itemProductivity" value="1.25"/>
-    <Stat name="xpProductivity" value="1.0"/>
-    <Stat name="durable" value="1.5"/>
+  <!-- Handles -->
+  <Item name="BalsaHandle">
+    <Tag name="handle"/>
+    <Stat name="speed" value="0.82"/>
   </Item>
-
+  <Item name="PineHandle">
+    <Tag name="handle"/>
+    <Stat name="speed" value="0.70"/>
+  </Item>
+  <Item name="CedarHandle">
+    <Tag name="handle"/>
+    <Stat name="speed" value="0.58"/>
+  </Item>
+  <Item name="CherryHandle">
+    <Tag name="handle"/>
+    <Stat name="speed" value="0.46"/>
+  </Item>
   <Item name="OakHandle">
     <Tag name="handle"/>
-    <Stat name="speed" value="0.9"/>
-    <Stat name="durable" value="1.2"/>
+    <Stat name="speed" value="0.34"/>
   </Item>
 
-  <DropTable name="BrokenRockTable">
-    <ItemReward item="None" weight="10" count="0"/>
-    <ItemReward item="BrokenRock" weight="1" count="1"/>
+  <!-- Hammer Heads -->
+  <Item name="TinHammerHead">
+    <Tag name="hammerhead"/>
+    <Stat name="itemProductivity" value="1.0"/>
+  </Item>
+  <Item name="CopperHammerHead">
+    <Tag name="hammerhead"/>
+    <Stat name="itemProductivity" value="1.1"/>
+  </Item>
+  <Item name="BronzeHammerHead">
+    <Tag name="hammerhead"/>
+    <Stat name="itemProductivity" value="1.2"/>
+  </Item>
+  <Item name="IronHammerHead">
+    <Tag name="hammerhead"/>
+    <Stat name="itemProductivity" value="1.3"/>
+  </Item>
+  <Item name="SteelHammerHead">
+    <Tag name="hammerhead"/>
+    <Stat name="itemProductivity" value="1.4"/>
+  </Item>
+
+  <!-- Pickaxe Heads -->
+  <Item name="TinPickaxeHead">
+    <Tag name="pickaxehead"/>
+    <Stat name="itemProductivity" value="1.0"/>
+  </Item>
+  <Item name="CopperPickaxeHead">
+    <Tag name="pickaxehead"/>
+    <Stat name="itemProductivity" value="1.1"/>
+  </Item>
+  <Item name="BronzePickaxeHead">
+    <Tag name="pickaxehead"/>
+    <Stat name="itemProductivity" value="1.2"/>
+  </Item>
+  <Item name="IronPickaxeHead">
+    <Tag name="pickaxehead"/>
+    <Stat name="itemProductivity" value="1.3"/>
+  </Item>
+  <Item name="SteelPickaxeHead">
+    <Tag name="pickaxehead"/>
+    <Stat name="itemProductivity" value="1.4"/>
+  </Item>
+
+  <!-- Axe Heads -->
+  <Item name="TinAxeHead">
+    <Tag name="axehead"/>
+    <Stat name="itemProductivity" value="1.0"/>
+  </Item>
+  <Item name="CopperAxeHead">
+    <Tag name="axehead"/>
+    <Stat name="itemProductivity" value="1.1"/>
+  </Item>
+  <Item name="BronzeAxeHead">
+    <Tag name="axehead"/>
+    <Stat name="itemProductivity" value="1.2"/>
+  </Item>
+  <Item name="IronAxeHead">
+    <Tag name="axehead"/>
+    <Stat name="itemProductivity" value="1.3"/>
+  </Item>
+  <Item name="SteelAxeHead">
+    <Tag name="axehead"/>
+    <Stat name="itemProductivity" value="1.4"/>
+  </Item>
+
+  <!-- Bonus drop tables -->
+  <DropTable name="TinBonusTable">
+    <ItemReward item="None" weight="3" count="0"/>
+    <ItemReward item="Tin" weight="1" count="1"/>
+  </DropTable>
+  <DropTable name="CopperBonusTable">
+    <ItemReward item="None" weight="3" count="0"/>
+    <ItemReward item="Copper" weight="1" count="1"/>
+  </DropTable>
+  <DropTable name="BronzeBonusTable">
+    <ItemReward item="None" weight="3" count="0"/>
+    <ItemReward item="Bronze" weight="1" count="1"/>
+  </DropTable>
+  <DropTable name="IronBonusTable">
+    <ItemReward item="None" weight="3" count="0"/>
+    <ItemReward item="Iron" weight="1" count="1"/>
+  </DropTable>
+  <DropTable name="SteelBonusTable">
+    <ItemReward item="None" weight="3" count="0"/>
+    <ItemReward item="Steel" weight="1" count="1"/>
+  </DropTable>
+  <DropTable name="BalsaBonusTable">
+    <ItemReward item="None" weight="3" count="0"/>
+    <ItemReward item="Balsa" weight="1" count="1"/>
+  </DropTable>
+  <DropTable name="PineBonusTable">
+    <ItemReward item="None" weight="3" count="0"/>
+    <ItemReward item="Pine" weight="1" count="1"/>
+  </DropTable>
+  <DropTable name="CedarBonusTable">
+    <ItemReward item="None" weight="3" count="0"/>
+    <ItemReward item="Cedar" weight="1" count="1"/>
+  </DropTable>
+  <DropTable name="CherryBonusTable">
+    <ItemReward item="None" weight="3" count="0"/>
+    <ItemReward item="Cherry" weight="1" count="1"/>
+  </DropTable>
+  <DropTable name="OakBonusTable">
+    <ItemReward item="None" weight="3" count="0"/>
+    <ItemReward item="Oak" weight="1" count="1"/>
   </DropTable>
 
-  <DropTable name="StoneTable">
-    <ItemReward item="Stone" weight="5" count="2"/>
-    <TableReward table="BrokenRockTable" weight="1" count="1"/>
-  </DropTable>
+  <!-- Activities - Mining -->
+  <Activity name="MineTin" time="8">
+    <ItemReward item="Tin" count="2"/>
+    <XpReward skill="Mining" count="200"/>
+    <LevelRequirement skill="Mining" count="1"/>
+    <TableReward table="TinBonusTable" count="1"/>
+  </Activity>
+  <Activity name="MineCopper" time="13">
+    <ItemReward item="Copper" count="2"/>
+    <XpReward skill="Mining" count="234"/>
+    <LevelRequirement skill="Mining" count="11"/>
+    <TableReward table="CopperBonusTable" count="1"/>
+  </Activity>
+  <Activity name="MineBronze" time="18">
+    <ItemReward item="Bronze" count="2"/>
+    <XpReward skill="Mining" count="274"/>
+    <LevelRequirement skill="Mining" count="21"/>
+    <TableReward table="BronzeBonusTable" count="1"/>
+  </Activity>
+  <Activity name="MineIron" time="23">
+    <ItemReward item="Iron" count="2"/>
+    <XpReward skill="Mining" count="320"/>
+    <LevelRequirement skill="Mining" count="31"/>
+    <TableReward table="IronBonusTable" count="1"/>
+  </Activity>
+  <Activity name="MineSteel" time="28">
+    <ItemReward item="Steel" count="2"/>
+    <XpReward skill="Mining" count="375"/>
+    <LevelRequirement skill="Mining" count="41"/>
+    <TableReward table="SteelBonusTable" count="1"/>
+  </Activity>
 
-  <Activity name="Stone" time="2.5">
-    <ItemReward item="Stone" count="4"/>
-    <XpReward skill="Mining" count="10"/>
-    <TableReward table="StoneTable" count="1"/>
-    <LevelRequirement skill="Mining" count="0"/>
+  <!-- Activities - Lumberjacking -->
+  <Activity name="ChopBalsa" time="8">
+    <ItemReward item="Balsa" count="2"/>
+    <XpReward skill="LumberJacking" count="200"/>
+    <LevelRequirement skill="LumberJacking" count="1"/>
+    <TableReward table="BalsaBonusTable" count="1"/>
+  </Activity>
+  <Activity name="ChopPine" time="13">
+    <ItemReward item="Pine" count="2"/>
+    <XpReward skill="LumberJacking" count="234"/>
+    <LevelRequirement skill="LumberJacking" count="11"/>
+    <TableReward table="PineBonusTable" count="1"/>
+  </Activity>
+  <Activity name="ChopCedar" time="18">
+    <ItemReward item="Cedar" count="2"/>
+    <XpReward skill="LumberJacking" count="274"/>
+    <LevelRequirement skill="LumberJacking" count="21"/>
+    <TableReward table="CedarBonusTable" count="1"/>
+  </Activity>
+  <Activity name="ChopCherry" time="23">
+    <ItemReward item="Cherry" count="2"/>
+    <XpReward skill="LumberJacking" count="320"/>
+    <LevelRequirement skill="LumberJacking" count="31"/>
+    <TableReward table="CherryBonusTable" count="1"/>
+  </Activity>
+  <Activity name="ChopOak" time="28">
+    <ItemReward item="Oak" count="2"/>
+    <XpReward skill="LumberJacking" count="375"/>
+    <LevelRequirement skill="LumberJacking" count="41"/>
+    <TableReward table="OakBonusTable" count="1"/>
+  </Activity>
+
+  <!-- Activities - Crafting: Handles -->
+  <Activity name="CraftBalsaHandle" time="8">
+    <ItemCost item="Balsa" cost="1"/>
+    <ItemReward item="BalsaHandle" count="10"/>
+    <XpReward skill="Crafting" count="200"/>
+    <LevelRequirement skill="Crafting" count="1"/>
+  </Activity>
+  <Activity name="CraftPineHandle" time="13">
+    <ItemCost item="Pine" cost="1"/>
+    <ItemReward item="PineHandle" count="10"/>
+    <XpReward skill="Crafting" count="234"/>
+    <LevelRequirement skill="Crafting" count="11"/>
+  </Activity>
+  <Activity name="CraftCedarHandle" time="18">
+    <ItemCost item="Cedar" cost="1"/>
+    <ItemReward item="CedarHandle" count="10"/>
+    <XpReward skill="Crafting" count="274"/>
+    <LevelRequirement skill="Crafting" count="21"/>
+  </Activity>
+  <Activity name="CraftCherryHandle" time="23">
+    <ItemCost item="Cherry" cost="1"/>
+    <ItemReward item="CherryHandle" count="10"/>
+    <XpReward skill="Crafting" count="320"/>
+    <LevelRequirement skill="Crafting" count="31"/>
+  </Activity>
+  <Activity name="CraftOakHandle" time="28">
+    <ItemCost item="Oak" cost="1"/>
+    <ItemReward item="OakHandle" count="10"/>
+    <XpReward skill="Crafting" count="375"/>
+    <LevelRequirement skill="Crafting" count="41"/>
+  </Activity>
+
+  <!-- Activities - Crafting: Hammer Heads -->
+  <Activity name="CraftTinHammerHead" time="8">
+    <ItemCost item="Tin" cost="1"/>
+    <ItemReward item="TinHammerHead" count="10"/>
+    <XpReward skill="Crafting" count="200"/>
+    <LevelRequirement skill="Crafting" count="1"/>
+  </Activity>
+  <Activity name="CraftCopperHammerHead" time="13">
+    <ItemCost item="Copper" cost="1"/>
+    <ItemReward item="CopperHammerHead" count="10"/>
+    <XpReward skill="Crafting" count="234"/>
+    <LevelRequirement skill="Crafting" count="11"/>
+  </Activity>
+  <Activity name="CraftBronzeHammerHead" time="18">
+    <ItemCost item="Bronze" cost="1"/>
+    <ItemReward item="BronzeHammerHead" count="10"/>
+    <XpReward skill="Crafting" count="274"/>
+    <LevelRequirement skill="Crafting" count="21"/>
+  </Activity>
+  <Activity name="CraftIronHammerHead" time="23">
+    <ItemCost item="Iron" cost="1"/>
+    <ItemReward item="IronHammerHead" count="10"/>
+    <XpReward skill="Crafting" count="320"/>
+    <LevelRequirement skill="Crafting" count="31"/>
+  </Activity>
+  <Activity name="CraftSteelHammerHead" time="28">
+    <ItemCost item="Steel" cost="1"/>
+    <ItemReward item="SteelHammerHead" count="10"/>
+    <XpReward skill="Crafting" count="375"/>
+    <LevelRequirement skill="Crafting" count="41"/>
+  </Activity>
+
+  <!-- Activities - Crafting: Pickaxe Heads -->
+  <Activity name="CraftTinPickaxeHead" time="8">
+    <ItemCost item="Tin" cost="1"/>
+    <ItemReward item="TinPickaxeHead" count="10"/>
+    <XpReward skill="Crafting" count="200"/>
+    <LevelRequirement skill="Crafting" count="1"/>
+  </Activity>
+  <Activity name="CraftCopperPickaxeHead" time="13">
+    <ItemCost item="Copper" cost="1"/>
+    <ItemReward item="CopperPickaxeHead" count="10"/>
+    <XpReward skill="Crafting" count="234"/>
+    <LevelRequirement skill="Crafting" count="11"/>
+  </Activity>
+  <Activity name="CraftBronzePickaxeHead" time="18">
+    <ItemCost item="Bronze" cost="1"/>
+    <ItemReward item="BronzePickaxeHead" count="10"/>
+    <XpReward skill="Crafting" count="274"/>
+    <LevelRequirement skill="Crafting" count="21"/>
+  </Activity>
+  <Activity name="CraftIronPickaxeHead" time="23">
+    <ItemCost item="Iron" cost="1"/>
+    <ItemReward item="IronPickaxeHead" count="10"/>
+    <XpReward skill="Crafting" count="320"/>
+    <LevelRequirement skill="Crafting" count="31"/>
+  </Activity>
+  <Activity name="CraftSteelPickaxeHead" time="28">
+    <ItemCost item="Steel" cost="1"/>
+    <ItemReward item="SteelPickaxeHead" count="10"/>
+    <XpReward skill="Crafting" count="375"/>
+    <LevelRequirement skill="Crafting" count="41"/>
+  </Activity>
+
+  <!-- Activities - Crafting: Axe Heads -->
+  <Activity name="CraftTinAxeHead" time="8">
+    <ItemCost item="Tin" cost="1"/>
+    <ItemReward item="TinAxeHead" count="10"/>
+    <XpReward skill="Crafting" count="200"/>
+    <LevelRequirement skill="Crafting" count="1"/>
+  </Activity>
+  <Activity name="CraftCopperAxeHead" time="13">
+    <ItemCost item="Copper" cost="1"/>
+    <ItemReward item="CopperAxeHead" count="10"/>
+    <XpReward skill="Crafting" count="234"/>
+    <LevelRequirement skill="Crafting" count="11"/>
+  </Activity>
+  <Activity name="CraftBronzeAxeHead" time="18">
+    <ItemCost item="Bronze" cost="1"/>
+    <ItemReward item="BronzeAxeHead" count="10"/>
+    <XpReward skill="Crafting" count="274"/>
+    <LevelRequirement skill="Crafting" count="21"/>
+  </Activity>
+  <Activity name="CraftIronAxeHead" time="23">
+    <ItemCost item="Iron" cost="1"/>
+    <ItemReward item="IronAxeHead" count="10"/>
+    <XpReward skill="Crafting" count="320"/>
+    <LevelRequirement skill="Crafting" count="31"/>
+  </Activity>
+  <Activity name="CraftSteelAxeHead" time="28">
+    <ItemCost item="Steel" cost="1"/>
+    <ItemReward item="SteelAxeHead" count="10"/>
+    <XpReward skill="Crafting" count="375"/>
+    <LevelRequirement skill="Crafting" count="41"/>
   </Activity>
 
   <Dto name="Item">
@@ -110,6 +435,10 @@
 
   <Request name="StartActivity">
     <Property name="ActivityId" type="ActivityId"/>
+    <Response />
+  </Request>
+
+  <Request name="StopActivity">
     <Response />
   </Request>
 
