@@ -157,7 +157,7 @@ public sealed class TsSchemaEmitter : IDtoEmitter
             PropertyType.Guid => "guid",
             PropertyType.UserId => "userId",
             PropertyType.ProfileId => "profileId",
-            PropertyType.Timestamp => "int",
+            PropertyType.Timestamp => "long",
             _ => throw new ArgumentOutOfRangeException(nameof(property), property.PropertyType,
                 "Unhandled property type."),
         };
