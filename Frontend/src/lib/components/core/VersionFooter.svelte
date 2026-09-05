@@ -42,10 +42,16 @@
 	A <footer> rather than a Row, for the landmark. No role="status": the
 	connection banner in the (auth) chrome is the page's one live region, and a
 	build number is not worth announcing.
+
+	self-stretch spans the page even inside a column that keeps its other
+	children to their own width (the login page); the text then centres in it.
 -->
 <footer
 	data-testid="version-footer"
-	class={cn('flex flex-wrap items-baseline gap-(--sp-5) text-text-faint', className)}
+	class={cn(
+		'flex flex-wrap items-baseline justify-center gap-(--sp-5) self-stretch text-text-faint',
+		className
+	)}
 >
 	<span class="oi-label-sm">OpenIdle</span>
 	<span class="oi-body-sm">
