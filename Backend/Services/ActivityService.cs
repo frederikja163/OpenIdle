@@ -193,7 +193,7 @@ public sealed class ActivityService
         return true;
     }
 
-    internal async Task<bool> CanAffordActivityAsync(ProfileId profileId, ActivityId activityId, int completions)
+    internal async Task<bool> CanAffordActivityAsync(ProfileId profileId, ActivityId activityId)
     {
         if (!_activities.TryGetValue(activityId, out ActivityDefinition? definition) || definition.Costs.Length == 0)
         {
@@ -206,7 +206,7 @@ public sealed class ActivityService
         foreach (ItemCost cost in definition.Costs)
         {
             int owned = ownedItems.FirstOrDefault(item => item.ItemId == cost.ItemId)?.Count ?? 0;
-            if (owned < cost.Count * completions)
+            if (owned < cost.Count)
             {
                 return false;
             }
@@ -238,7 +238,7 @@ public sealed class ActivityService
             }
         }
 
-        if (!await CanAffordActivityAsync(profileId, activityId, 1))
+        if (!await CanAffordActivityAsync(profileId, activityId))
         {
             ItemCost cost = definition.Costs.First();
             throw new BackendException($"Activity '{activityId}' requires {cost.Count} of {cost.ItemId}.");
@@ -346,7 +346,7 @@ internal sealed class ProfileActivityCompletion(
 {
     public override async Task Complete(DateTime endTime)
     {
-        if (!await activityService.CanAffordActivityAsync(ProfileId, activityId, 1))
+        if (!await activityService.CanAffordActivityAsync(ProfileId, activityId))
         {
             await activityService.StopActivityAsync(ProfileId);
             return;
