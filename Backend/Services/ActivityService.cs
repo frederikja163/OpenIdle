@@ -167,8 +167,6 @@ public sealed class ActivityService
             endTime += duration;
         }
 
-        // endTime is the deadline of the cycle that is now in progress; the scheduler and the
-        // persisted anchor both take the start of that cycle.
         DateTime currentCycleStart = endTime - duration;
 
         if (rewards.TotalActivities > 0)
