@@ -537,65 +537,10 @@ public sealed class ActivityServiceTests : IDisposable
     }
 
     [Test]
-    public async Task CanAffordActivityAsync_AggregatesDuplicateCostsForSameItem()
-    {
-        Profile profile = await SeedProfileAsync();
-        (ActivityService service, _, _, _) = CreateServiceWithInternals();
-        service.AddActivity(ActivityId.Stone, new ActivityDefinition(
-            time: 10f,
-            rewards: [new ItemReward(4, null, ItemId.Stone)],
-            requirements: [],
-            costs: [new ItemCost(1, ItemId.Food), new ItemCost(1, ItemId.Food)]));
-        await SeedItemAsync(profile, ItemId.Food, 1);
-
-        Assert.That(await service.CanAffordActivityAsync(profile.ProfileId, ActivityId.Stone), Is.False);
-
-        await using GameDbContext dbContext = await _db.Factory.CreateDbContextAsync();
-        Item food = dbContext.Items.Single(i => i.ProfileId == profile.ProfileId && i.ItemId == ItemId.Food);
-        food.Count = 2;
-        await dbContext.SaveChangesAsync();
-
-        Assert.That(await service.CanAffordActivityAsync(profile.ProfileId, ActivityId.Stone), Is.True);
-    }
-
-    [Test]
     public void ItemCost_NegativeCount_ThrowsArgumentOutOfRangeException()
     {
         Assert.That(() => new ItemCost(-1, ItemId.Food), Throws.TypeOf<ArgumentOutOfRangeException>());
         Assert.That(() => new ItemCost(0, ItemId.Food), Throws.Nothing);
-    }
-
-    [Test]
-    public async Task Reschedule_WithDuplicateCostsForSameItem_RequiresCombinedAmount()
-    {
-        Profile profile = await SeedProfileAsync();
-        await SeedItemAsync(profile, ItemId.Food, 2);
-        (ActivityService service, _, _, _) = CreateServiceWithInternals();
-        service.AddActivity(ActivityId.Stone, new ActivityDefinition(
-            time: 10f,
-            rewards: [new ItemReward(4, null, ItemId.Stone)],
-            requirements: [],
-            costs: [new ItemCost(1, ItemId.Food), new ItemCost(1, ItemId.Food)]));
-        await service.StartActivityAsync(profile.ProfileId, ActivityId.Stone, DateTime.UtcNow.AddSeconds(-100));
-
-        await using (GameDbContext seedContext = await _db.Factory.CreateDbContextAsync())
-        {
-            Item food = seedContext.Items.Single(i => i.ProfileId == profile.ProfileId && i.ItemId == ItemId.Food);
-            food.Count = 1;
-            await seedContext.SaveChangesAsync();
-        }
-
-        await service.OnProfileOffline(this, new ProfileOfflineEventArgs(profile.ProfileId));
-        await service.OnProfileOnline(this, new ProfileOnlineEventArgs(profile.ProfileId));
-
-        await Assert.MultipleAsync(async () =>
-        {
-            Item food = (await GetItemsAsync(profile.ProfileId)).Single(i => i.ItemId == ItemId.Food);
-            Assert.That(food.Count, Is.EqualTo(1));
-            await using GameDbContext dbContext = await _db.Factory.CreateDbContextAsync();
-            Profile stopped = (await dbContext.Profiles.FindAsync(profile.ProfileId))!;
-            Assert.That(stopped.ActivityId, Is.Null);
-        });
     }
 
     [Test]

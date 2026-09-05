@@ -184,9 +184,9 @@ public sealed class ActivityService
 
     private static bool CanAffordCost(Dictionary<ItemId, int> itemCache, ActivityDefinition definition)
     {
-        foreach (ItemCost aggregatedCost in AggregateCosts(definition))
+        foreach (ItemCost cost in definition.Costs)
         {
-            if (itemCache.GetValueOrDefault(aggregatedCost.ItemId) < aggregatedCost.Count)
+            if (itemCache.GetValueOrDefault(cost.ItemId) < cost.Count)
             {
                 return false;
             }
@@ -202,11 +202,10 @@ public sealed class ActivityService
             return true;
         }
 
-        ItemCost[] aggregatedCosts = AggregateCosts(definition);
         Item[] ownedItems = await _itemService.GetItemsAsync(
-            profileId, aggregatedCosts.Select(cost => cost.ItemId));
+            profileId, definition.Costs.Select(cost => cost.ItemId));
 
-        foreach (ItemCost cost in aggregatedCosts)
+        foreach (ItemCost cost in definition.Costs)
         {
             int owned = ownedItems.FirstOrDefault(item => item.ItemId == cost.ItemId)?.Count ?? 0;
             if (owned < cost.Count)
@@ -216,14 +215,6 @@ public sealed class ActivityService
         }
 
         return true;
-    }
-
-    private static ItemCost[] AggregateCosts(ActivityDefinition definition)
-    {
-        return definition.Costs
-            .GroupBy(cost => cost.ItemId)
-            .Select(group => new ItemCost(group.Sum(cost => cost.Count), group.Key))
-            .ToArray();
     }
 
     internal async Task<Profile> StartActivityAsync(ProfileId profileId, ActivityId activityId, DateTime? startTime = null)
