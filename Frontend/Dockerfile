@@ -65,7 +65,8 @@ COPY --from=build /app/package.json ./package.json
 
 # HOST must be 0.0.0.0 or the server is unreachable from outside the container.
 # ORIGIN is set per environment (adapter-node uses it to validate form actions);
-# PUBLIC_WS_URL and PUBLIC_ALLOW_WS_OVERRIDE likewise — see deploy/.
+# PUBLIC_WS_URL, PUBLIC_API_URL and PUBLIC_ALLOW_WS_OVERRIDE likewise — see
+# deploy/.
 ENV NODE_ENV=production \
     HOST=0.0.0.0 \
     PORT=3000

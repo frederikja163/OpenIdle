@@ -8,9 +8,9 @@ import { expect, test, type WebSocketRoute } from '@playwright/test';
 // test that needs the socket to behave a certain way stubs it with
 // routeWebSocket rather than assuming nothing is listening. The version footer
 // on /login, /profiles and /debug fetches the backend's build over HTTP
-// (GET /version next to the /ws the client is pointed at), so a test without
-// a stub sees a failed fetch and a footer reading "unavailable" — harmless to
-// a test that never looks at it.
+// (GET /version under PUBLIC_API_URL, or next to an overridden /ws), so a test
+// without a stub sees a failed fetch and a footer reading "unavailable" —
+// harmless to a test that never looks at it.
 
 // Matches the URL itself rather than a glob, which Playwright would resolve
 // against baseURL and so never match a socket on another port.
@@ -48,11 +48,17 @@ function respondToRequests(
 	};
 }
 
-/** Makes the backend's HTTP version endpoint claim BACKEND_BUILD. */
-async function stubVersion(page: import('@playwright/test').Page): Promise<void> {
-	await page.route('**/version', (route) =>
-		route.fulfill({ contentType: 'application/json', body: JSON.stringify(BACKEND_BUILD) })
-	);
+/**
+ * Makes the backend's HTTP version endpoint claim BACKEND_BUILD, wherever it is
+ * asked for, and records where that was.
+ */
+async function stubVersion(page: import('@playwright/test').Page): Promise<string[]> {
+	const asked: string[] = [];
+	await page.route('**/version', (route) => {
+		asked.push(route.request().url());
+		return route.fulfill({ contentType: 'application/json', body: JSON.stringify(BACKEND_BUILD) });
+	});
+	return asked;
 }
 
 test('the root route funnels through the auth guards to /login', async ({ page }) => {
@@ -213,7 +219,7 @@ test('the Debug button opens the protocol console and Back returns to the app', 
 });
 
 test('the version footer names this build and the pointed-at backend build', async ({ page }) => {
-	await stubVersion(page);
+	const asked = await stubVersion(page);
 	await page.routeWebSocket(WS_ROUTE, (ws) => ws.onMessage(respondToRequests(ws, [THORIN])));
 
 	// Before anyone signs in: the footer asks the backend over HTTP, not a
@@ -223,6 +229,8 @@ test('the version footer names this build and the pointed-at backend build', asy
 	await expect(footer).toContainText('OpenIdle');
 	await expect(footer).toContainText('frontend 2026-09-04 23:26:40 1e1c256');
 	await expect(footer).toContainText('backend 2026-09-04 22:13:20 b2c3d4e');
+	// PUBLIC_API_URL, not the socket's host: the two are separate settings.
+	expect(asked).toEqual(['http://127.0.0.1:5067/version']);
 
 	// The value is not tied to any connection, so it survives the login.
 	await page.getByRole('button', { name: 'Log in' }).click();

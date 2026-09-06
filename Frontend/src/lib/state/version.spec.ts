@@ -1,11 +1,11 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 const fetchMock = vi.hoisted(() => vi.fn());
-const getWsUrl = vi.hoisted(() => vi.fn(() => 'ws://localhost:5066/ws'));
+const getApiUrl = vi.hoisted(() => vi.fn(() => 'http://localhost:5066'));
 
-// The store must read the URL the client is actually pointed at, and nothing
-// else from the client: the footer never opens a socket.
-vi.mock('$lib/ws/client', () => ({ getWsUrl }));
+// The store must read the API base the client is actually pointed at, and
+// nothing else from the client: the footer never opens a socket.
+vi.mock('$lib/ws/client', () => ({ getApiUrl }));
 
 const { ensureBackendVersion, loadBackendVersion, versionState } =
 	await import('$lib/state/version.svelte');
@@ -28,9 +28,9 @@ function serve(
 // The module keeps the last-asked URL across tests, so each test points the
 // client somewhere of its own rather than inheriting the previous test's state.
 let backends = 0;
-function pointAt(wsUrl = `ws://backend-${++backends}.example/ws`): string {
-	getWsUrl.mockReturnValue(wsUrl);
-	return wsUrl.replace(/^ws/, 'http').replace(/\/ws$/, '/version');
+function pointAt(apiUrl = `http://backend-${++backends}.example`): string {
+	getApiUrl.mockReturnValue(apiUrl);
+	return `${apiUrl}/version`;
 }
 
 /** The AbortSignal the store handed to the n-th fetch. */
@@ -75,7 +75,7 @@ describe('ensureBackendVersion', () => {
 		fetchMock.mockResolvedValue(serve());
 		await ensureBackendVersion();
 
-		const moved = pointAt('wss://tunnel.example/ws');
+		const moved = pointAt('https://tunnel.example');
 		await ensureBackendVersion();
 
 		expect(fetchMock).toHaveBeenCalledTimes(2);

@@ -11,6 +11,10 @@ export default defineConfig({
 			// developer's machine run the same configuration; without it the
 			// production build refuses to start, by design.
 			PUBLIC_WS_URL: 'ws://127.0.0.1:5066/ws',
+			// Deliberately not the socket's port: the version footer fetches from
+			// here, and a different port is what lets a test tell "the configured
+			// API" apart from "the socket's host" — nothing listens on either.
+			PUBLIC_API_URL: 'http://127.0.0.1:5067',
 			// Exercises the deployed-dev-frontend configuration, which is the only
 			// one where the ?ws= override is live.
 			PUBLIC_ALLOW_WS_OVERRIDE: 'true',

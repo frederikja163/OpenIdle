@@ -9,7 +9,7 @@
 
 [SvelteKit](./sveltekit.md) cannot build without an adapter, and the placeholder it was scaffolded with — [@sveltejs/adapter-auto](./sveltejs-adapter-auto.md) — detects nothing on a self-hosted target and downloads an unpinned adapter mid-build. That had to be resolved before anything could be deployed at all.
 
-Resolving it turned out to depend on a second question that was not on the table when `adapter-auto` was first reviewed: **the frontend now ships as a Docker image, and the same image has to run in more than one environment.** Four things are hosted — prod backend, prod frontend, dev backend, dev frontend — and the frontend's only environment-specific configuration is the WebSocket address of the backend it talks to (`PUBLIC_WS_URL`), plus whether the `?ws=` developer override is live (`PUBLIC_ALLOW_WS_OVERRIDE`). *Where* those values are read decides whether one image can serve both environments or whether each needs its own build.
+Resolving it turned out to depend on a second question that was not on the table when `adapter-auto` was first reviewed: **the frontend now ships as a Docker image, and the same image has to run in more than one environment.** Four things are hosted — prod backend, prod frontend, dev backend, dev frontend — and the frontend's only environment-specific configuration is the address of the backend it talks to (`PUBLIC_WS_URL` for the socket, `PUBLIC_API_URL` for its HTTP side), plus whether the `?ws=` developer override is live (`PUBLIC_ALLOW_WS_OVERRIDE`). *Where* those values are read decides whether one image can serve both environments or whether each needs its own build.
 
 ## 2. Alternatives considered
 
@@ -44,7 +44,7 @@ The concrete win is that `Frontend/Dockerfile` produces **one** image that `depl
 
 ### Pros
 
-- `PUBLIC_WS_URL` and `PUBLIC_ALLOW_WS_OVERRIDE` are read per request, so one image serves every environment and promotion is a retag rather than a rebuild.
+- `PUBLIC_WS_URL`, `PUBLIC_API_URL` and `PUBLIC_ALLOW_WS_OVERRIDE` are read per request, so one image serves every environment and promotion is a retag rather than a rebuild.
 - First-party, pinned in `bun.lock`, and — unlike `adapter-auto` — downloads nothing during a build.
 - The emitted server is self-contained: `build/` imports only `node:` builtins, so the runtime image ships no `node_modules` at all.
 - Supports `+server.ts`, which the frontend healthcheck and the post-deploy gate depend on.

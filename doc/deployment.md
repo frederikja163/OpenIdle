@@ -14,7 +14,7 @@ These are the constraints the whole design exists to satisfy:
 
 Two mechanisms enforce them, and they work in opposite directions:
 
-- **Outbound** — the frontend decides which backend to dial, in `Frontend/src/lib/ws/ws-url.ts`. Production ships without `PUBLIC_ALLOW_WS_OVERRIDE`, so a `?ws=` link is inert there.
+- **Outbound** — the frontend decides which backend to dial, in `Frontend/src/lib/ws/ws-url.ts`: `PUBLIC_WS_URL` for the socket and `PUBLIC_API_URL` for the backend's HTTP side (see [Build info](#build-info)). Production ships without `PUBLIC_ALLOW_WS_OVERRIDE`, so a `?ws=` link is inert there.
 - **Inbound** — the backend decides which sites may open a socket, via `AllowedWsOrigins`. Production names the prod frontend and nothing else. Only the socket is gated: the backend's HTTP side (`/health`, `/version`) is public plumbing that answers any origin, since the API is meant to be publicly reachable (see [Build info](#build-info)).
 
 Neither alone is enough. The override switch stops a prod *user* being redirected at another backend; the origin allowlist stops another *site* driving the prod backend.
@@ -67,7 +67,7 @@ The images cannot derive these themselves because `.dockerignore` drops `.git`. 
 
 Both images therefore answer `GET /version` with `{"commit": "<full sha>", "commitTime": <epoch ms>}`, so one curl per host says which commit is running. The backend's HTTP endpoints answer any origin (`Access-Control-Allow-Origin: *`): they are public, read-only plumbing, and a browser could not read the version footer's cross-origin fetch without that header. Only the WebSocket handshake is origin-gated, by [the origin allowlist](#the-origin-allowlist).
 
-The version footer on the login, profiles and debug pages shows both — the bundle's own build, and the build of whichever backend the client points at — as `YYYY-MM-DD HH:MM:SS <short sha>` in UTC. The frontend derives the backend's version endpoint from the ws URL the client is pointed at (`PUBLIC_WS_URL`, a `?ws=` override, or the dev fallback), mapping `ws://`/`wss://` to `http://`/`https://` and replacing the final path segment with `/version` (so `wss://host/api/ws` asks `https://host/api/version`); an override therefore moves the version fetch with everything else. It asks once per backend when a footer mounts, and again each time the socket opens, since a reconnect may have reached a redeployed backend. Builds outside CI (`bun run dev`, `dotnet run`, a plain `docker build`) carry no values and read `local`. To reproduce the CI values by hand:
+The version footer on the login, profiles and debug pages shows both — the bundle's own build, and the build of whichever backend the client points at — as `YYYY-MM-DD HH:MM:SS <short sha>` in UTC. The backend half is fetched from `GET /version` under `PUBLIC_API_URL`, the HTTP base of the backend the frontend is deployed against (`https://api.openidle.example`, no trailing path beyond any prefix the backend is mounted under). The variable is optional: when it is unset the base is derived from `PUBLIC_WS_URL` by swapping `ws://`/`wss://` for `http://`/`https://` and dropping the final path segment (so `wss://host/api/ws` implies `https://host/api`), which is right whenever the proxy exposes both sides of the backend at one host. A `?ws=` override — or a change on the debug page — always derives the same way from the override, because it names a whole backend and the configured API URL belongs to the one just overridden away; the version fetch therefore moves with the socket. Whatever the reverse proxy forwards for the socket, it must forward `/version` (like `/health`) to the backend too, or the footer reads `unavailable` while the game works. The footer asks once per backend when it mounts, and again each time the socket opens, since a reconnect may have reached a redeployed backend. Builds outside CI (`bun run dev`, `dotnet run`, a plain `docker build`) carry no values and read `local`. To reproduce the CI values by hand:
 
 ```sh
 docker build -f Backend/Dockerfile -t openidle-backend \
@@ -128,6 +128,7 @@ TLS and public hostnames are the reverse proxy's job. The containers speak plain
 |---|---|---|---|---|
 | image tag | `:prod` | `:prod` | `:dev` | `:dev` |
 | `PUBLIC_WS_URL` | — | prod backend `wss://…/ws` | — | dev backend `wss://…/ws` |
+| `PUBLIC_API_URL` | — | prod backend `https://…` (optional, see [Build info](#build-info)) | — | dev backend `https://…` (optional) |
 | `PUBLIC_ALLOW_WS_OVERRIDE` | — | **unset** | — | `true` |
 | `ORIGIN` | — | prod frontend origin | — | dev frontend origin |
 | `AllowedWsOrigins__0` | prod frontend origin | — | dev frontend origin | — |
@@ -144,7 +145,7 @@ SQLite, a single file, at `/data/openidle.db` via `ConnectionStrings__Default`. 
 
 ### Local frontend → dev backend
 
-Set `PUBLIC_WS_URL` in `Frontend/.env.local` to the dev backend's endpoint and run `bun run dev`. The dev backend already allows `http://localhost:5173`.
+Set `PUBLIC_WS_URL` in `Frontend/.env.local` to the dev backend's endpoint (and `PUBLIC_API_URL` to its HTTP base, unless deriving it from the socket address is right) and run `bun run dev`. The dev backend already allows `http://localhost:5173`.
 
 ### Dev frontend → your local backend
 
@@ -154,7 +155,7 @@ Open the deployed dev frontend with `?ws=` naming your backend:
 https://dev.openidle.example/login?ws=ws://localhost:5066/ws
 ```
 
-The value is remembered in `localStorage` under `openidle:ws-url`, so it survives reloads and need only be typed once. `?ws=` with no value — or `?ws=reset` — clears it and hands the client back to its own backend. Anything that is not a `ws://` or `wss://` URL is ignored with a console warning rather than breaking the client, and any override already stored stays in force.
+The value is remembered in `localStorage` under `openidle:ws-url`, so it survives reloads and need only be typed once. `?ws=` with no value — or `?ws=reset` — clears it and hands the client back to its own backend. Anything that is not a `ws://` or `wss://` URL is ignored with a console warning rather than breaking the client, and any override already stored stays in force. The version footer follows the override too: it asks `http://localhost:5066/version`, derived from the override, rather than the deployment's `PUBLIC_API_URL`.
 
 This works because each developer's local backend has an empty `AllowedWsOrigins`, which means "allow any origin" — the deliberate default for local development.
 

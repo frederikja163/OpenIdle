@@ -1,5 +1,5 @@
-import { getWsUrl } from '$lib/ws/client';
-import { versionHttpUrl } from '$lib/ws/ws-url';
+import { getApiUrl } from '$lib/ws/client';
+import { versionUrl } from '$lib/ws/ws-url';
 import type { BuildInfo } from '$lib/utils/version';
 
 /*
@@ -8,9 +8,10 @@ import type { BuildInfo } from '$lib/utils/version';
  * sessionState(): a build is not session data and must outlive a session drop.
  *
  * The backend half deliberately stays off the socket: asking for a build is
- * plumbing and must not pull a WebSocket open. The endpoint derives from the
- * URL the client is pointed at, so an override — ?ws=, or a change on the
- * debug page — moves the version fetch with everything else.
+ * plumbing and must not pull a WebSocket open. It goes to the API base the
+ * client reports (PUBLIC_API_URL, or the socket's host when an override — ?ws=,
+ * or a change on the debug page — has moved the app), so the version fetch
+ * follows the socket wherever it is pointed.
  */
 
 const REQUEST_TIMEOUT_MS = 5_000;
@@ -79,7 +80,7 @@ export async function loadBackendVersion(): Promise<void> {
 }
 
 function currentVersionUrl(): string {
-	return versionHttpUrl(getWsUrl());
+	return versionUrl(getApiUrl());
 }
 
 async function fetchBuild(url: string, controller: AbortController): Promise<BuildInfo> {

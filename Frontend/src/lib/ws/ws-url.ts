@@ -165,21 +165,102 @@ export function defaultWsUrl(): string {
 	throw new Error('PUBLIC_WS_URL must be configured outside development');
 }
 
+export interface ApiUrlInput {
+	/** PUBLIC_API_URL as configured for this deployment, if it is set. */
+	readonly configured: string | undefined;
+	/** The WebSocket URL the client is pointed at, which the HTTP side is derived from otherwise. */
+	readonly wsUrl: string;
+	/**
+	 * Whether `wsUrl` is an override rather than the deployment's own backend.
+	 * An override names a whole backend, so its HTTP side has to follow it: the
+	 * configured API URL belongs to the backend that was just overridden away.
+	 */
+	readonly wsOverridden: boolean;
+}
+
+export interface ApiUrlResolution {
+	readonly url: string;
+	readonly source: 'configured' | 'derived';
+	/** Problems worth surfacing. Never fatal — a bad value falls back to derivation. */
+	readonly warnings: readonly string[];
+}
+
 /**
- * The backend's HTTP version endpoint, derived from its WebSocket URL: the ws
- * URL is the only address the client knows the backend by, and fetch speaks
- * http(s), so the derivation is what makes an override move the fetch too.
- *
- * /version is a sibling of /ws, so only the final path segment is replaced:
- * a backend mounted under a prefix (wss://host/api/ws) keeps that prefix.
+ * The HTTP base of the backend, as a pure function of its inputs: the
+ * configured `PUBLIC_API_URL`, unless the socket is overridden or nothing is
+ * configured, in which case it is derived from the WebSocket URL with
+ * {@link apiUrlFromWsUrl}. Deriving is the fallback rather than the rule so a
+ * backend whose HTTP side lives somewhere other than next to its socket can
+ * say so explicitly.
  */
-export function versionHttpUrl(wsUrl: string): string {
-	const parsed = new URL(wsUrl);
-	parsed.protocol = parsed.protocol === 'wss:' ? 'https:' : 'http:';
-	parsed.pathname = parsed.pathname.replace(/\/[^/]*\/?$/, '/version');
+export function selectApiUrl(input: ApiUrlInput): ApiUrlResolution {
+	const warnings: string[] = [];
+	if (!input.wsOverridden && input.configured) {
+		const configured = parseApiUrl(input.configured);
+		if (configured !== null) {
+			return { url: configured, source: 'configured', warnings };
+		}
+		warnings.push(
+			`Ignoring PUBLIC_API_URL=${input.configured}: expected an http:// or https:// URL. Deriving the API address from the WebSocket URL instead.`
+		);
+	}
+	return { url: apiUrlFromWsUrl(input.wsUrl), source: 'derived', warnings };
+}
+
+/**
+ * Only http:// and https:// are accepted, since fetch speaks nothing else. The
+ * likely mistake is pasting the ws:// address here, which would otherwise fail
+ * far away from the variable that caused it.
+ */
+function parseApiUrl(raw: string): string | null {
+	let parsed: URL;
+	try {
+		parsed = new URL(raw.trim());
+	} catch {
+		return null;
+	}
+	if (parsed.protocol !== 'http:' && parsed.protocol !== 'https:') {
+		return null;
+	}
 	parsed.search = '';
 	parsed.hash = '';
-	return parsed.href;
+	return stripTrailingSlash(parsed.href);
+}
+
+/**
+ * The HTTP base a backend's WebSocket URL implies: the same host with the
+ * scheme swapped and the final path segment (the `/ws`) removed, so a backend
+ * mounted under a prefix (wss://host/api/ws) keeps that prefix.
+ */
+export function apiUrlFromWsUrl(wsUrl: string): string {
+	const parsed = new URL(wsUrl);
+	parsed.protocol = parsed.protocol === 'wss:' ? 'https:' : 'http:';
+	parsed.pathname = parsed.pathname.replace(/\/[^/]*\/?$/, '');
+	parsed.search = '';
+	parsed.hash = '';
+	return stripTrailingSlash(parsed.href);
+}
+
+/** The backend's `GET /version`, under whichever API base it is reached at. */
+export function versionUrl(apiUrl: string): string {
+	return `${stripTrailingSlash(apiUrl)}/version`;
+}
+
+function stripTrailingSlash(url: string): string {
+	return url.replace(/\/+$/, '');
+}
+
+/**
+ * Gathers the ambient inputs for {@link selectApiUrl}: the deployment's
+ * `PUBLIC_API_URL`, and the WebSocket URL the client is actually on, which the
+ * caller knows and this module does not.
+ */
+export function resolveApiUrl(wsUrl: string, wsOverridden: boolean): string {
+	const resolution = selectApiUrl({ configured: env.PUBLIC_API_URL, wsUrl, wsOverridden });
+	for (const warning of resolution.warnings) {
+		console.warn(warning);
+	}
+	return resolution.url;
 }
 
 /**
