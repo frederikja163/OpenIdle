@@ -127,7 +127,7 @@
 			style:left="{x}px"
 			style:top="{y}px"
 			class={cn(
-				'pointer-events-none fixed z-50 grid max-w-65 min-w-42 animate-[oi-pop_var(--dur-fast)_var(--ease-out)] gap-(--sp-3) rounded-md border border-line-strong bg-surface-overlay p-(--sp-5) shadow-(--shadow-pop) backdrop-blur-[10px] backdrop-saturate-115'
+				'pointer-events-none fixed z-50 grid max-w-65 min-w-42 animate-[oi-pop_var(--dur-fast)_var(--ease-out)] gap-(--sp-3) rounded-md border border-line-strong bg-surface-overlay p-(--sp-5) shadow-(--shadow-pop) backdrop-filter-(--blur-overlay)'
 			)}
 		>
 			<span class="oi-display-sm text-text-strong">{title}</span>
@@ -136,7 +136,9 @@
 			{/if}
 			{#if rows.length > 0}
 				<span class="grid gap-(--sp-2) border-t border-line-hairline pt-(--sp-3)">
-					{#each rows as row (row.label)}
+					<!-- Keyed by position: a label is a caller's display string, and two
+					     rows sharing one is a duplicate key that takes the panel down. -->
+					{#each rows as row, index (index)}
 						<span class="flex justify-between gap-(--sp-5)">
 							<span class={cn('oi-body-sm', labelTones[row.tone ?? 'neutral'])}>{row.label}</span>
 							<span class={cn('oi-num-sm', valueTones[row.tone ?? 'neutral'])}>{row.value}</span>

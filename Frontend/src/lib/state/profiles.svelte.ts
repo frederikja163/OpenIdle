@@ -1,6 +1,6 @@
 import { getWsClient, type PrivilegedSend } from '$lib/ws/client';
 import type { ProfileDto } from '$lib/ws/protocol';
-import { sessionIntent, sessionRun, sessionState } from './session.svelte';
+import { resetProfileState, sessionIntent, sessionRun, sessionState } from './session.svelte';
 
 export type ProfilesStatus = 'idle' | 'loading' | 'loaded' | 'error';
 
@@ -20,7 +20,12 @@ export const profilesState = sessionState(() => ({
 	// connection that produced it.
 	selectedProfileId: null as string | null,
 	selectingProfileId: null as string | null,
-	selectError: null as string | null
+	selectError: null as string | null,
+	// A reconnect's replay refusing the remembered profile. Kept apart from
+	// `selectError` because the two have different audiences: this one is nobody's
+	// doing and belongs to whichever page was waiting for the profile, while
+	// selectError answers a Load the visitor just pressed.
+	replayError: null as string | null
 }));
 
 /*
@@ -115,6 +120,16 @@ export async function selectProfile(profileId: string): Promise<boolean> {
 	}
 	profilesState.selectingProfileId = profileId;
 	profilesState.selectError = null;
+	profilesState.replayError = null;
+	// Emptied before the request rather than after its response, because the
+	// backend sends the new profile's catch-up payout ahead of the response when
+	// it earned anything offline — and applying that on top of the previous
+	// profile's totals is what turned a payout into a delta against another
+	// profile's numbers. A refused select empties a board it did not need to,
+	// which costs one reload and nothing else.
+	if (profileId !== profilesState.selectedProfileId) {
+		resetProfileState();
+	}
 	const outcome = await sessionRun(
 		() => getWsClient().request('SelectProfileRequest', { profileId }),
 		{
@@ -150,7 +165,7 @@ export async function replayProfileSelection(send: PrivilegedSend): Promise<void
 		// The intent is not reactive, so this is the only trace of the refusal a
 		// page can react to — the game board reads it to stop waiting for a
 		// profile that is never coming back.
-		profilesState.selectError = error instanceof Error ? error.message : String(error);
+		profilesState.replayError = error instanceof Error ? error.message : String(error);
 		throw error;
 	}
 	profilesState.selectedProfileId = profileId;

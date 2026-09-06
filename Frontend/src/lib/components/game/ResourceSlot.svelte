@@ -1,6 +1,6 @@
 <script lang="ts">
-	import type { Component } from 'svelte';
 	import ItemArt, { type Rarity } from '$lib/components/game/ItemArt.svelte';
+	import type { IconComponent } from '$lib/components/icon';
 	import { cn } from '$lib/utils/stylingUtils';
 
 	/*
@@ -15,7 +15,7 @@
 	 */
 	interface Props {
 		name: string;
-		glyph: Component<{ size?: number | string }>;
+		glyph: IconComponent;
 		rarity?: Rarity;
 		count?: number;
 		selected?: boolean;

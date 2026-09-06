@@ -1,8 +1,9 @@
-import { canAfford } from '$lib/game/catalog';
+import { canAfford, unmetRequirements } from '$lib/game/catalog';
 import type { BoardReward } from '$lib/game/types';
 import { getWsClient, type WsClient } from '$lib/ws/client';
+import { ACTIVITY_DATA } from '$lib/ws/protocol';
 import type { ActivityId, ItemId, ServerEventOf, SkillDto, SkillId } from '$lib/ws/protocol';
-import { sessionRun, sessionState } from './session.svelte';
+import { profileState, sessionRun } from './session.svelte';
 
 export type GameStatus = 'idle' | 'loading' | 'loaded' | 'error';
 
@@ -16,8 +17,12 @@ export interface RunningActivity {
  * The selected profile's game, as the socket reports it. Skills and items are
  * the server's absolute totals keyed by id; the rest is what only this side
  * knows — the activity it believes is running and the last payout it saw.
+ *
+ * Scoped to the profile rather than the connection: every field below belongs
+ * to whichever profile the socket is pointed at, so pointing it at another one
+ * has to empty them.
  */
-export const gameState = sessionState(() => ({
+export const gameState = profileState(() => ({
 	status: 'idle' as GameStatus,
 	error: null as string | null,
 	skills: {} as Partial<Record<SkillId, SkillDto>>,
@@ -115,7 +120,13 @@ export function applyActivityEnded(event: ServerEventOf<'ActivityEndedEvent'>): 
 		gameState.items[item.itemId] = item.count;
 		loadOverlay?.items.push(item.itemId);
 	}
-	gameState.running = { activityId: event.activityId, startedAt: Date.now() };
+	// What the payout says is running is only adopted when nothing this side has
+	// asked for is still in flight. A cycle can complete on the server while a
+	// start is on its way there, and the event then names the activity that start
+	// is replacing: the request's own outcome is the newer answer, so it wins.
+	if (gameState.pending === null) {
+		gameState.running = { activityId: event.activityId, startedAt: Date.now() };
+	}
 	// Before the load there is no baseline: the deltas above would be the
 	// profile's whole history, and a catch-up batch would float "+31219 XP".
 	if (loaded && (xp !== 0 || items.length > 0)) {
@@ -124,7 +135,11 @@ export function applyActivityEnded(event: ServerEventOf<'ActivityEndedEvent'>): 
 	// The backend checks the costs again at the next deadline and stops without
 	// a word if they are short, so this is that stop, predicted from the same
 	// numbers. Nothing more would ever be paid out anyway.
-	if (!canAfford(event.activityId, gameState.items)) {
+	if (
+		gameState.running !== null &&
+		gameState.running.activityId === event.activityId &&
+		!canAfford(event.activityId, gameState.items)
+	) {
 		gameState.running = null;
 	}
 }
@@ -145,11 +160,54 @@ async function stopQuietly(client: WsClient): Promise<void> {
 }
 
 /**
+ * The refusal the backend would answer with, worked out from what this store
+ * already holds, or null if it would accept.
+ *
+ * Only consulted once the board has loaded. Before that there are no skills or
+ * items to check against, and an empty store would refuse every gated activity
+ * — including on the one path that most needs to reach the socket, taking over
+ * an activity a reloaded page knows nothing about.
+ */
+function localRefusal(activityId: ActivityId): string | null {
+	if (gameState.status !== 'loaded' || activityId === 'None') {
+		return null;
+	}
+	const levels: Partial<Record<SkillId, number>> = {};
+	for (const skill of Object.values(gameState.skills)) {
+		if (skill) {
+			levels[skill.skillId] = skill.level;
+		}
+	}
+	// Only the first shortfall of each kind is reported, and levels before costs,
+	// because that is the order StartActivityAsync checks them in.
+	const [unmet] = unmetRequirements(activityId, levels);
+	if (unmet) {
+		return `Activity '${activityId}' requires ${unmet.skill} level ${unmet.level}.`;
+	}
+	if (!canAfford(activityId, gameState.items)) {
+		// The backend names the activity's first cost rather than whichever one is
+		// actually short, so this does too.
+		const cost = ACTIVITY_DATA[activityId].costs[0];
+		return `Activity '${activityId}' requires ${cost.count} of ${cost.item}.`;
+	}
+	return null;
+}
+
+/**
  * Starts an activity, stopping the running one first because the backend
  * refuses a start on top of another. Pressing the running action is a no-op.
+ *
+ * A start this side can already tell will be refused is never sent, because
+ * sending it would cost the running activity: the stop lands first and the
+ * refusal arrives too late to put it back.
  */
 export async function startActivity(activityId: ActivityId): Promise<boolean> {
 	if (gameState.pending !== null || gameState.running?.activityId === activityId) {
+		return false;
+	}
+	const refusal = localRefusal(activityId);
+	if (refusal !== null) {
+		gameState.actionError = refusal;
 		return false;
 	}
 	gameState.pending = activityId;
@@ -159,6 +217,10 @@ export async function startActivity(activityId: ActivityId): Promise<boolean> {
 			const client = getWsClient();
 			if (gameState.running !== null) {
 				await stopQuietly(client);
+				// Nothing is running now, whatever becomes of the start below. Left
+				// standing, a refused start would leave the board sweeping a meter and
+				// offering to stop an activity the backend has already dropped.
+				gameState.running = null;
 			}
 			try {
 				await client.request('StartActivityRequest', { activityId });
@@ -169,6 +231,7 @@ export async function startActivity(activityId: ActivityId): Promise<boolean> {
 				// The socket is doing something this store never heard of — the page
 				// was reloaded mid-activity, or another tab started one. Take over.
 				await stopQuietly(client);
+				gameState.running = null;
 				await client.request('StartActivityRequest', { activityId });
 			}
 		},

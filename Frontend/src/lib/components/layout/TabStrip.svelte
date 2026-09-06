@@ -1,23 +1,30 @@
-<script lang="ts">
-	import type { Component } from 'svelte';
-	import { cn } from '$lib/utils/stylingUtils';
+<script lang="ts" module>
+	import type { IconComponent } from '$lib/components/icon';
 
 	/*
 	 * OpenIdle Design System tab strip (TabStrip.jsx): a hairline-underlined row
 	 * where the selected tab is marked by a verdant rule drawn as an inset shadow
 	 * rather than a border, so switching tabs never shifts the strip's height.
+	 *
+	 * Generic over the id so a caller whose tabs are a closed set — the inventory's
+	 * item kinds, say — keeps that type through `value` and `onChange` instead of
+	 * widening to string and casting it back.
 	 */
-	export interface Tab {
-		id: string;
+	export interface Tab<Id extends string = string> {
+		id: Id;
 		label: string;
-		icon?: Component<{ size?: number | string }>;
+		icon?: IconComponent;
 		count?: number;
 	}
+</script>
+
+<script lang="ts" generics="Id extends string">
+	import { cn } from '$lib/utils/stylingUtils';
 
 	interface Props {
-		tabs: Tab[];
-		value: string;
-		onChange?: (id: string) => void;
+		tabs: Tab<Id>[];
+		value: Id;
+		onChange?: (id: Id) => void;
 		class?: string;
 	}
 

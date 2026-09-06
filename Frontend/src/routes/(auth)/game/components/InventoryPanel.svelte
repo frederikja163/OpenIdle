@@ -4,13 +4,15 @@
 	import Hammer from '@lucide/svelte/icons/hammer';
 	import PackageOpen from '@lucide/svelte/icons/package-open';
 	import Search from '@lucide/svelte/icons/search';
+	import SearchX from '@lucide/svelte/icons/search-x';
 	import IconButton from '$lib/components/core/IconButton.svelte';
 	import EmptyState from '$lib/components/feedback/EmptyState.svelte';
 	import Tooltip from '$lib/components/feedback/Tooltip.svelte';
 	import ResourceSlot from '$lib/components/game/ResourceSlot.svelte';
 	import Panel from '$lib/components/layout/Panel.svelte';
 	import TabStrip, { type Tab } from '$lib/components/layout/TabStrip.svelte';
-	import type { InventoryItem } from '$lib/game/types';
+	import { Input } from '$lib/components/ui/input';
+	import type { InventoryItem, ItemKind } from '$lib/game/types';
 
 	/*
 	 * The board's inventory: a tabbed well of item slots. The well is clamped and
@@ -23,45 +25,111 @@
 
 	let { items }: Props = $props();
 
-	let tab = $state('all');
+	/** The tabs are the item kinds plus an "everything" one, so the ids are too. */
+	type InventoryTab = 'all' | ItemKind;
 
-	const tabs: Tab[] = $derived([
+	let tab = $state<InventoryTab>('all');
+	let byCount = $state(false);
+	let searching = $state(false);
+	let query = $state('');
+
+	const tabs: Tab<InventoryTab>[] = $derived([
 		{ id: 'all', label: 'All', count: items.length },
 		{ id: 'res', label: 'Resources', icon: Gem },
-		{ id: 'tools', label: 'Tools', icon: Hammer }
+		{ id: 'tool', label: 'Tools', icon: Hammer }
 	]);
 
-	const shown = $derived(
-		items.filter((item) =>
-			tab === 'all' ? true : tab === 'res' ? item.kind === 'res' : item.kind === 'tool'
+	const EMPTY_COPY: Record<InventoryTab, { title: string; hint: string }> = {
+		all: { title: 'Your pack is empty', hint: 'Start an action to gather your first resources.' },
+		res: { title: 'No resources yet', hint: 'Mine ore or chop logs to fill this tab.' },
+		tool: { title: 'No tools yet', hint: 'Craft handles and heads from ore and logs.' }
+	};
+
+	const needle = $derived(searching ? query.trim().toLowerCase() : '');
+
+	const matching = $derived(
+		items.filter(
+			(item) =>
+				(tab === 'all' || item.kind === tab) &&
+				(needle === '' || item.name.toLowerCase().includes(needle))
 		)
 	);
 
-	const empty = $derived(
-		tab === 'tools'
-			? { title: 'No tools yet', hint: 'Craft handles and heads from ore and logs.' }
-			: tab === 'res'
-				? { title: 'No resources yet', hint: 'Mine ore or chop logs to fill this tab.' }
-				: { title: 'Your pack is empty', hint: 'Start an action to gather your first resources.' }
-	);
+	// Sorting copies rather than ordering in place: `items` is the board's own
+	// derived array. Array.sort is stable, so ties keep catalog order.
+	const shown = $derived(byCount ? [...matching].sort((a, b) => b.count - a.count) : matching);
+
+	function toggleSearch(): void {
+		searching = !searching;
+		if (!searching) {
+			query = '';
+		}
+	}
+
+	// A field the visitor just asked for should not need a second click. Driven
+	// off the bound element rather than `autofocus`, which would also take focus
+	// on a plain page load, and than a `use:` action, which components do not take.
+	let field = $state<HTMLInputElement | null>(null);
+	$effect(() => {
+		field?.focus();
+	});
 </script>
 
 <Panel title="Inventory" padded={false} class="min-h-[218px] shrink-0">
 	{#snippet actions()}
-		<!-- Both are inert until there is a real pack to sort or search. -->
-		<IconButton icon={ArrowDownUp} label="Sort" size="sm" />
-		<IconButton icon={Search} label="Search" size="sm" />
+		<IconButton
+			icon={ArrowDownUp}
+			label="Sort by count"
+			size="sm"
+			active={byCount}
+			aria-pressed={byCount}
+			onclick={() => (byCount = !byCount)}
+		/>
+		<IconButton
+			icon={Search}
+			label="Search"
+			size="sm"
+			active={searching}
+			aria-expanded={searching}
+			onclick={toggleSearch}
+		/>
 	{/snippet}
 
 	<div class="px-(--gutter-panel)">
 		<TabStrip {tabs} value={tab} onChange={(id) => (tab = id)} />
 	</div>
 
+	{#if searching}
+		<div class="px-(--gutter-panel) pt-(--sp-4)">
+			<Input
+				type="search"
+				bind:ref={field}
+				bind:value={query}
+				placeholder="Search items"
+				aria-label="Search items"
+			/>
+		</div>
+	{/if}
+
 	<div
 		class="oi-scroll m-(--gutter-panel) max-h-37 min-h-27 overflow-y-auto rounded-md bg-surface-inset p-(--sp-5) shadow-(--inset-well)"
 	>
 		{#if shown.length === 0}
-			<EmptyState compact icon={PackageOpen} title={empty.title} hint={empty.hint} />
+			{#if needle === ''}
+				<EmptyState
+					compact
+					icon={PackageOpen}
+					title={EMPTY_COPY[tab].title}
+					hint={EMPTY_COPY[tab].hint}
+				/>
+			{:else}
+				<EmptyState
+					compact
+					icon={SearchX}
+					title="No items match"
+					hint="Nothing in this tab is named like that."
+				/>
+			{/if}
 		{:else}
 			<div
 				class="grid grid-cols-[repeat(auto-fill,var(--size-slot))] content-start gap-(--gap-grid)"

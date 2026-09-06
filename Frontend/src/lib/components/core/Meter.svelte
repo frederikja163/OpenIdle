@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { tick } from 'svelte';
 	import { cn } from '$lib/utils/stylingUtils';
 
 	/*
@@ -41,39 +42,52 @@
 	}: Props = $props();
 
 	/*
-	 * The drawn width trails `value`: a rise eases toward it over the transition
-	 * duration, a drop skips the easing and lands on the new value at once. The
-	 * two are told apart from the last value drawn, and the transition is
-	 * re-armed on the next frame after a snap so the following rise can animate.
+	 * A rise eases toward the new width over the transition duration; a drop —
+	 * a level-up resetting the XP bar, a payout resetting the action bar — lands
+	 * on it at once, because a bar that rewound would read as progress lost.
+	 *
+	 * Disarming the transition, drawing the new width and re-arming is not enough
+	 * on its own: the browser compares the width against the last style it
+	 * computed, so unless it computes one while the transition is off, it sees the
+	 * new width and the restored transition together and animates the drop anyway.
+	 * Reading a layout property is what forces that computation, and it has to
+	 * happen after the DOM carries the new width — hence the tick(). A
+	 * requestAnimationFrame in its place does not work: the callback runs before
+	 * the frame's style recalculation, not after it.
 	 */
-	let shown = $state(0);
+	let fill = $state<HTMLDivElement | null>(null);
 	let drawing = $state(false);
-	let seeded = false;
+	let previous: number | undefined;
 
-	const pct = $derived(max <= 0 ? 0 : Math.max(0, Math.min(100, (shown / max) * 100)));
+	// A zero max is "nothing to fill", not a division: 0/0 is NaN, which reaches
+	// the style attribute as `width: NaN%` and is dropped, leaving a full-width bar.
+	const pct = $derived(max <= 0 ? 0 : Math.max(0, Math.min(100, (value / max) * 100)));
 
-	$effect(() => {
-		// First run: appear at the value we mount at, without animating up from
-		// an empty bar. `drawing` is only armed afterwards.
-		if (!seeded) {
-			seeded = true;
-			shown = value;
-			requestAnimationFrame(() => {
-				drawing = true;
-			});
+	// $effect.pre so the armed state and the width it applies to land in the same
+	// DOM update, and reading `value` alone so a change schedules exactly one run.
+	$effect.pre(() => {
+		const next = value;
+		const rising = previous !== undefined && next >= previous;
+		previous = next;
+		if (rising) {
+			drawing = true;
 			return;
 		}
-		if (value === shown) return;
-		if (value < shown) {
-			drawing = false;
-			shown = value;
-			requestAnimationFrame(() => {
-				drawing = true;
-			});
-		} else {
+		// The first run mounts at the current value rather than animating up from
+		// an empty bar; a transition never fires on an element's first style
+		// anyway, so this is the same path as a drop.
+		drawing = false;
+		let cancelled = false;
+		void tick().then(() => {
+			if (cancelled) {
+				return;
+			}
+			void fill?.offsetWidth;
 			drawing = true;
-			shown = value;
-		}
+		});
+		return () => {
+			cancelled = true;
+		};
 	});
 
 	const fillMotion = $derived(
@@ -117,6 +131,7 @@
 	)}
 >
 	<div
+		bind:this={fill}
 		class={cn(
 			'h-full rounded-(--radius-full) shadow-[inset_0_1px_0_rgba(255,255,255,.28)]',
 			fillMotion,

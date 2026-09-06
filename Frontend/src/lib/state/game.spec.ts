@@ -8,28 +8,9 @@ import type {
 	SkillId
 } from '$lib/ws/protocol';
 
-const { request, connection } = vi.hoisted(() => ({
-	request: vi.fn(),
-	// The generation the store reads to decide whether a result still belongs to
-	// the live connection. Bumping it here is a socket dropping.
-	connection: { generation: 0 }
-}));
+vi.mock('$lib/ws/client', async () => (await import('$lib/state/test-support')).clientModule);
 
-// One object handed back on every call, like the real singleton — see
-// profiles.spec.ts for why a fresh object per call would test nothing.
-vi.mock('$lib/ws/client', () => {
-	const client = {
-		request,
-		get generation() {
-			return connection.generation;
-		},
-		onClose: () => () => {},
-		onStatus: () => () => {},
-		reopen: () => {}
-	};
-	return { getWsClient: () => client };
-});
-
+const { connection, request, resetConnection } = await import('$lib/state/test-support');
 const { applyActivityEnded, gameState, loadGame, startActivity, stopActivity } =
 	await import('$lib/state/game.svelte');
 const { forgetSessionIntent, resetSessionState } = await import('$lib/state/session.svelte');
@@ -91,8 +72,7 @@ async function loadWith(world: World): Promise<void> {
 }
 
 beforeEach(() => {
-	request.mockReset();
-	connection.generation = 0;
+	resetConnection();
 	resetSessionState();
 	forgetSessionIntent();
 });
@@ -214,6 +194,33 @@ describe('applyActivityEnded', () => {
 		expect(gameState.running?.activityId).toBe('CraftBalsaHandle');
 	});
 
+	it('leaves the running activity to the start that is still in flight', async () => {
+		await loadWith({ skills: [skill('Mining', 40000, 16)] });
+		applyActivityEnded(ended('MineTin'));
+		let land = (): void => {};
+		request.mockImplementation((type: string) =>
+			type === 'StartActivityRequest'
+				? new Promise((resolve) => (land = () => resolve(responseTo(type, {}))))
+				: Promise.resolve(responseTo(type, {}))
+		);
+
+		const starting = startActivity('MineCopper');
+		// The stop has landed; the start is still on its way over.
+		await vi.waitUntil(() => gameState.running === null);
+
+		// The cycle the server was already running completes in that window, and
+		// its event still names the activity being replaced.
+		applyActivityEnded(ended('MineTin', { items: [item('Tin', 2)] }));
+
+		expect(gameState.items.Tin).toBe(2);
+		// Not resurrected: the request in flight is the newer answer.
+		expect(gameState.running).toBeNull();
+
+		land();
+		await starting;
+		expect(gameState.running?.activityId).toBe('MineCopper');
+	});
+
 	it('wins over a load it lands in the middle of', async () => {
 		const releases: (() => void)[] = [];
 		request.mockImplementation(
@@ -317,6 +324,53 @@ describe('startActivity', () => {
 		expect(gameState.actionError).toBe("Activity 'MineCopper' requires Mining level 11.");
 		expect(gameState.running).toBeNull();
 		expect(gameState.pending).toBeNull();
+	});
+
+	it('drops the activity it stopped when the start meant to replace it fails', async () => {
+		// Level 16 so the store's own check lets this one through to the socket.
+		await loadWith({ skills: [skill('Mining', 40000, 16)] });
+		applyActivityEnded(ended('MineTin'));
+		respondOrRefuse({ StartActivityRequest: ['Internal server error.'] });
+
+		await expect(startActivity('MineCopper')).resolves.toBe(false);
+
+		expect(request).toHaveBeenCalledWith('StopActivityRequest', {});
+		expect(gameState.actionError).toBe('Internal server error.');
+		// The stop landed, so nothing is running — least of all the activity the
+		// board would otherwise still be sweeping a meter for.
+		expect(gameState.running).toBeNull();
+	});
+
+	it('refuses a start below the level without spending the running activity on it', async () => {
+		await loadWith({ skills: [skill('Mining', 900, 2)] });
+		applyActivityEnded(ended('MineTin'));
+		request.mockClear();
+
+		await expect(startActivity('MineCopper')).resolves.toBe(false);
+
+		expect(request).not.toHaveBeenCalled();
+		expect(gameState.actionError).toBe("Activity 'MineCopper' requires Mining level 11.");
+		expect(gameState.running?.activityId).toBe('MineTin');
+	});
+
+	it('refuses a start its pack cannot cover, wording it as the backend would', async () => {
+		await loadWith({});
+		request.mockClear();
+
+		await expect(startActivity('CraftBalsaHandle')).resolves.toBe(false);
+
+		expect(request).not.toHaveBeenCalled();
+		expect(gameState.actionError).toBe("Activity 'CraftBalsaHandle' requires 1 of Balsa.");
+	});
+
+	it('asks the socket rather than guessing before the board has loaded', async () => {
+		// Nothing has been loaded, so the store knows no levels and no items — and
+		// must not read that emptiness as a profile that cannot mine copper.
+		respond();
+
+		await expect(startActivity('MineCopper')).resolves.toBe(true);
+
+		expect(request).toHaveBeenCalledWith('StartActivityRequest', { activityId: 'MineCopper' });
 	});
 
 	it('ignores a press on the action already running', async () => {

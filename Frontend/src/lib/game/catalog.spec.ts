@@ -20,11 +20,15 @@ describe('toGameAction', () => {
 			xp: 200,
 			qty: 2
 		});
-		expect(toGameAction('MineTin').lockedAt).toBeUndefined();
+		// Level 1 opens it, which is no gate at all.
+		expect(toGameAction('MineTin').requirements).toEqual([]);
 	});
 
-	it('gates on the requirement for its own skill', () => {
-		expect(toGameAction('MineSteel')).toMatchObject({ lockedAt: 41, ms: 28000 });
+	it('carries the level gates it is declared with', () => {
+		expect(toGameAction('MineSteel')).toMatchObject({
+			requirements: [{ skill: 'Mining', level: 41 }],
+			ms: 28000
+		});
 	});
 
 	it('turns costs into inputs', () => {

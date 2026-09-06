@@ -1,6 +1,6 @@
 <script lang="ts">
-	import type { Component } from 'svelte';
 	import Meter from '$lib/components/core/Meter.svelte';
+	import type { IconComponent } from '$lib/components/icon';
 	import { cn } from '$lib/utils/stylingUtils';
 
 	/*
@@ -11,7 +11,7 @@
 	 */
 	interface Props {
 		name: string;
-		icon: Component<{ size?: number | string }>;
+		icon: IconComponent;
 		level?: number;
 		xp?: number;
 		xpMax?: number;

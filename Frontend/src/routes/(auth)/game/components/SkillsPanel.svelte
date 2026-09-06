@@ -10,15 +10,9 @@
 	import Row from '$lib/components/layout/Row.svelte';
 	import { Badge } from '$lib/components/ui/badge';
 	import { Button } from '$lib/components/ui/button';
-	import { itemMeta } from '$lib/game/catalog';
-	import type {
-		BoardReward,
-		GameAction,
-		PlayableSkillId,
-		RunningAction,
-		Skill
-	} from '$lib/game/types';
-	import type { ItemId } from '$lib/ws/protocol';
+	import { itemMeta, unmetRequirements } from '$lib/game/catalog';
+	import type { BoardReward, GameAction, PlayableSkillId, Skill } from '$lib/game/types';
+	import type { ItemId, SkillId } from '$lib/ws/protocol';
 	import Lock from '@lucide/svelte/icons/lock';
 	import PanelLeftClose from '@lucide/svelte/icons/panel-left-close';
 	import PanelLeftOpen from '@lucide/svelte/icons/panel-left-open';
@@ -33,7 +27,7 @@
 		skills: Skill[];
 		actions: Record<PlayableSkillId, GameAction[]>;
 		activeSkill: PlayableSkillId;
-		running: RunningAction | null;
+		running: GameAction | null;
 		progress: number;
 		reward: BoardReward | null;
 		held: Partial<Record<ItemId, number>>;
@@ -59,27 +53,15 @@
 
 	const skill = $derived(skills.find((s) => s.id === activeSkill) ?? skills[0]);
 	const list = $derived(actions[activeSkill] ?? []);
-	const runningAction = $derived(
-		running
-			? Object.values(actions)
-					.flat()
-					.find((action) => action.id === running.action)
-			: undefined
+
+	// An action can be gated on any skill, not only the one whose grid it sits in,
+	// so the whole rail's levels and names are what a lock is read against.
+	const levels = $derived<Partial<Record<SkillId, number>>>(
+		Object.fromEntries(skills.map((entry) => [entry.id, entry.level]))
 	);
-
-	// An input's id is an ItemId by construction (the catalog reads it off the
-	// contract); ActionInput types it as a string because the card is generic.
-	function have(input: { id: string }): number {
-		return held[input.id as ItemId] ?? 0;
-	}
-
-	function hasMaterials(action: GameAction): boolean {
-		return (action.inputs ?? []).every((input) => have(input) >= input.qty);
-	}
-
-	function isLocked(action: GameAction) {
-		return (action.lockedAt != null && action.lockedAt > skill.level) || !hasMaterials(action);
-	}
+	const skillNames = $derived<Partial<Record<SkillId, string>>>(
+		Object.fromEntries(skills.map((entry) => [entry.id, entry.name]))
+	);
 </script>
 
 <Panel title="Skills" padded={false} class="min-h-0 flex-1">
@@ -99,10 +81,10 @@
 		not resize as the board moves from Talc Ore to Calcite Pickaxe Head.
 	-->
 	{#snippet actions()}
-		{#if runningAction}
-			<Button variant="danger" size="sm" title="Stop {runningAction.name}" onclick={onStopAction}>
+		{#if running}
+			<Button variant="danger" size="sm" title="Stop {running.name}" onclick={onStopAction}>
 				<Square fill="currentColor" />
-				<span class="max-w-45 truncate">Stop {runningAction.name}</span>
+				<span class="max-w-45 truncate">Stop {running.name}</span>
 			</Button>
 		{/if}
 	{/snippet}
@@ -168,25 +150,27 @@
 				{:else}
 					<div class="grid grid-cols-[repeat(auto-fill,var(--size-action-card))] gap-(--gap-grid)">
 						{#each list as action (action.id)}
-							{@const isRunning = running?.action === action.id}
-							{@const locked = isLocked(action)}
-							{@const lockedBy = hasMaterials(action) ? 'level' : 'items'}
+							{@const isRunning = running?.id === action.id}
 							<div class="relative">
 								<ActionCard
 									name={action.name}
 									glyph={action.glyph}
 									rarity={action.rarity}
 									yieldQty={action.qty}
-									duration="{Math.round(action.ms / 1000)}s"
+									duration="{action.ms / 1000}s"
 									xp={action.xp}
 									running={isRunning}
 									progress={isRunning ? progress : 0}
-									inputs={action.inputs?.map((input) => ({ ...input, have: have(input) }))}
-									{locked}
-									lockedAt={action.lockedAt}
-									{lockedBy}
-									lockedSkill={skill.name}
-									skillLevel={skill.level}
+									inputs={action.inputs?.map((input) => ({
+										...input,
+										have: held[input.id] ?? 0
+									}))}
+									skill={skill.name}
+									levelLocks={unmetRequirements(action.id, levels).map((lock) => ({
+										skill: skillNames[lock.skill] ?? lock.skill,
+										have: lock.have,
+										need: lock.level
+									}))}
 									onclick={() => onStartAction(action)}
 									onStop={onStopAction}
 								/>

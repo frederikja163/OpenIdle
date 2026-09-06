@@ -1,6 +1,6 @@
 <script lang="ts" module>
-	import type { Component } from 'svelte';
 	import type { Rarity } from '$lib/components/game/ItemArt.svelte';
+	import type { IconComponent } from '$lib/components/icon';
 
 	/*
 	 * OpenIdle Design System action card (ActionCard.jsx): one runnable action —
@@ -9,21 +9,32 @@
 	 * Three states share the card and must stay distinguishable at a glance:
 	 * running carries the board's only --glow-accent, and locked drops to 45%
 	 * and refuses the click — whether the lock is a skill level or missing
-	 * materials, with `lockedBy: 'items'` reporting the shortfall in its tooltip.
+	 * materials, with the shortfall named in its tooltip.
+	 *
+	 * The card is handed the facts and works the lock out itself, rather than
+	 * being told the verdict as well: a caller that decided "locked on materials"
+	 * while the card saw nothing missing would draw a lock tooltip with no rows
+	 * in it.
 	 *
 	 * The running card carries no persistent glyph — the border, the glow and the
 	 * striped meter are the state. Its `onStop` button only surfaces on hover.
 	 */
-	export type ActionLock = 'level' | 'items';
-
 	export interface ActionInput {
 		id: string;
 		name: string;
-		glyph: Component<{ size?: number | string }>;
+		glyph: IconComponent;
 		rarity?: Rarity;
 		qty: number;
 		/** How many the visitor actually holds; filled in by the board. */
 		have?: number;
+	}
+
+	/** A skill level the action is gated behind, and where the visitor stands. */
+	export interface ActionLevelLock {
+		/** The skill's display name, not its id — the card only ever prints it. */
+		skill: string;
+		have: number;
+		need: number;
 	}
 </script>
 
@@ -43,7 +54,7 @@
 
 	interface Props {
 		name: string;
-		glyph: Component<{ size?: number | string }>;
+		glyph: IconComponent;
 		rarity?: Rarity;
 		yieldQty?: number;
 		inputs?: ActionInput[];
@@ -51,11 +62,9 @@
 		xp?: number;
 		running?: boolean;
 		progress?: number;
-		locked?: boolean;
-		lockedAt?: number;
-		lockedBy?: ActionLock;
-		lockedSkill?: string;
-		skillLevel?: number;
+		/** Display name of the skill the card sits under, to shorten its own gate. */
+		skill?: string;
+		levelLocks?: ActionLevelLock[];
 		onclick?: () => void;
 		onStop?: () => void;
 	}
@@ -70,16 +79,25 @@
 		xp = 1,
 		running = false,
 		progress = 0,
-		locked = false,
-		lockedAt,
-		lockedBy = 'level',
-		lockedSkill,
-		skillLevel,
+		skill,
+		levelLocks = [],
 		onclick,
 		onStop
 	}: Props = $props();
 
 	const missing = $derived((inputs ?? []).filter((input) => (input.have ?? 0) < input.qty));
+	// Materials before levels: a recipe short of both reads as the one the
+	// visitor can do something about now.
+	const lockedBy = $derived<'items' | 'level' | null>(
+		missing.length > 0 ? 'items' : levelLocks.length > 0 ? 'level' : null
+	);
+	const locked = $derived(lockedBy !== null);
+
+	// A gate on the card's own skill is already named by the panel around it, so
+	// it prints as a bare level; anything else has to say which skill it means.
+	const ownGate = $derived(
+		levelLocks.length === 1 && levelLocks[0].skill === skill ? levelLocks[0] : null
+	);
 
 	const lockRows: TooltipRow[] = $derived(
 		lockedBy === 'items'
@@ -88,15 +106,11 @@
 					value: `${input.have ?? 0} / ${input.qty}`,
 					tone: 'danger' as const
 				}))
-			: lockedAt != null
-				? [
-						{
-							label: `${lockedSkill ?? 'Skill'} level`,
-							value: `${skillLevel ?? 0} / ${lockedAt}`,
-							tone: 'danger' as const
-						}
-					]
-				: []
+			: levelLocks.map((lock) => ({
+					label: `${lock.skill} level`,
+					value: `${lock.have} / ${lock.need}`,
+					tone: 'danger' as const
+				}))
 	);
 </script>
 
@@ -158,10 +172,10 @@
 					>
 						{#if lockedBy === 'items'}
 							Missing materials
-						{:else if lockedAt}
-							Unlocks at level {lockedAt}
+						{:else if ownGate}
+							Unlocks at level {ownGate.need}
 						{:else}
-							Locked
+							Needs {levelLocks.map((lock) => `${lock.skill} ${lock.need}`).join(', ')}
 						{/if}
 					</span>
 				{:else}
@@ -186,8 +200,8 @@
 						class={cn(
 							'inline-flex items-center gap-0.75 rounded-xs border py-0.5 pr-1 pl-0.5',
 							isShort
-								? 'border-[rgba(236,118,118,.45)] bg-[rgba(210,71,71,.18)]'
-								: 'border-line-hairline bg-[rgba(168,184,199,.08)]'
+								? 'border-(--crimson-400)/45 bg-(--crimson-500)/18'
+								: 'border-line-hairline bg-action-quiet'
 						)}
 					>
 						<ItemArt glyph={input.glyph} rarity={input.rarity} size={18} variant="bare" />

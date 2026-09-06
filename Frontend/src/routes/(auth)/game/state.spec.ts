@@ -1,8 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-vi.mock('$lib/ws/client', () => ({
-	getWsClient: () => ({ request: vi.fn(), generation: 0 })
-}));
+vi.mock('$lib/ws/client', async () => (await import('$lib/state/test-support')).clientModule);
 
 const { gameState } = await import('$lib/state/game.svelte');
 const { resetSessionState } = await import('$lib/state/session.svelte');
@@ -50,7 +48,12 @@ describe('BoardState', () => {
 
 		gameState.running = { activityId: 'ChopBalsa', startedAt: Date.now() };
 		expect(board.selectedSkill).toBe('LumberJacking');
-		expect(board.running).toMatchObject({ skill: 'LumberJacking', action: 'ChopBalsa', ms: 8000 });
+		expect(board.running).toMatchObject({
+			skill: 'LumberJacking',
+			id: 'ChopBalsa',
+			name: 'Chop Balsa Log',
+			ms: 8000
+		});
 
 		board.activeSkill = 'Crafting';
 		expect(board.selectedSkill).toBe('Crafting');

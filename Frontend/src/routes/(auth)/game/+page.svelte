@@ -7,7 +7,8 @@
 	import Column from '$lib/components/layout/Column.svelte';
 	import Row from '$lib/components/layout/Row.svelte';
 	import { Button } from '$lib/components/ui/button';
-	import { gameState, loadGame } from '$lib/state/game.svelte';
+	import { actionsBySkill } from '$lib/game/catalog';
+	import { gameState, loadGame, startActivity, stopActivity } from '$lib/state/game.svelte';
 	import { profilesState } from '$lib/state/profiles.svelte';
 	import { sessionIntent } from '$lib/state/session.svelte';
 	import InventoryPanel from './components/InventoryPanel.svelte';
@@ -22,7 +23,8 @@
 	const board = new BoardState();
 
 	// Fires on arrival and again after a reconnect: the session reset puts the
-	// store back to 'idle', and the profile replay restores the selection.
+	// store back to 'idle', and the profile replay restores the selection. Also
+	// after a profile switch, which empties the store for the same reason.
 	$effect(() => {
 		if (profilesState.selectedProfileId !== null && gameState.status === 'idle') {
 			void loadGame();
@@ -34,11 +36,11 @@
 	$effect(() => board.run());
 
 	// No profile on this connection and none being restored. The intent is not
-	// reactive, so the refusal a replay leaves in selectError is what re-runs
-	// this when a remembered profile turns out to be gone.
+	// reactive, so the refusal a replay leaves behind is what re-runs this when a
+	// remembered profile turns out to be gone.
 	const noProfile = $derived(
 		profilesState.selectedProfileId === null &&
-			(sessionIntent.profileId === null || profilesState.selectError !== null)
+			(sessionIntent.profileId === null || profilesState.replayError !== null)
 	);
 </script>
 
@@ -64,8 +66,8 @@
 				title="No profile selected"
 				hint="The board plays whichever profile you load."
 			/>
-			{#if profilesState.selectError}
-				<p role="alert" class="oi-body-md text-text-danger">{profilesState.selectError}</p>
+			{#if profilesState.replayError}
+				<p role="alert" class="oi-body-md text-text-danger">{profilesState.replayError}</p>
 			{/if}
 			<Button variant="primary" href={resolve('/profiles')}>Choose a profile</Button>
 		</Column>
@@ -90,15 +92,15 @@
 
 		<SkillsPanel
 			skills={board.skills}
-			actions={board.actions}
+			actions={actionsBySkill}
 			activeSkill={board.selectedSkill}
 			running={board.running}
 			progress={board.progress}
-			reward={board.reward}
-			held={board.held}
+			reward={gameState.lastReward}
+			held={gameState.items}
 			onSelectSkill={(id) => (board.activeSkill = id)}
-			onStartAction={(action) => board.start(action)}
-			onStopAction={() => board.stop()}
+			onStartAction={(action) => void startActivity(action.id)}
+			onStopAction={() => void stopActivity()}
 		/>
 	{/if}
 </div>

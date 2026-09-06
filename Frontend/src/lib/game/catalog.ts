@@ -5,15 +5,24 @@ import Mountain from '@lucide/svelte/icons/mountain';
 import Pickaxe from '@lucide/svelte/icons/pickaxe';
 import Trees from '@lucide/svelte/icons/trees';
 import type { Rarity } from '$lib/components/game/ItemArt.svelte';
+import type { IconComponent } from '$lib/components/icon';
 import {
 	ACTIVITY_DATA,
 	type ActivityId,
 	type ActivityName,
 	type ItemId,
 	type ItemReward,
+	type SkillId,
 	type XpReward
 } from '$lib/ws/protocol';
-import type { GameAction, IconComponent, ItemKind, PlayableItemId, PlayableSkillId } from './types';
+import type {
+	GameAction,
+	GameActionInput,
+	ItemKind,
+	PlayableItemId,
+	PlayableSkillId,
+	SkillRequirement
+} from './types';
 
 /*
  * Display data for the ids the backend deals in. Both tables are checked
@@ -127,7 +136,29 @@ export function toGameAction(name: ActivityName): GameAction {
 	}
 	const skill = xp.skill;
 	const art = ITEMS[primary.item];
-	const requirement = definition.requirements.find((level) => level.skill === skill)?.count;
+	// Every gate the activity declares, not only the one on the skill it trains:
+	// the backend checks them all, so a card that read just its own skill would
+	// look runnable and be refused on every click. Level 1 gates nothing.
+	const requirements: SkillRequirement[] = [];
+	for (const requirement of definition.requirements) {
+		if (requirement.skill !== 'None' && requirement.count > 1) {
+			requirements.push({ skill: requirement.skill, level: requirement.count });
+		}
+	}
+	const inputs: GameActionInput[] = [];
+	for (const cost of definition.costs) {
+		if (cost.item === 'None') {
+			continue;
+		}
+		const meta = itemMeta(cost.item);
+		inputs.push({
+			id: cost.item,
+			name: meta.name,
+			glyph: meta.glyph,
+			rarity: meta.rarity,
+			qty: cost.count
+		});
+	}
 	return {
 		id: name,
 		skill,
@@ -137,21 +168,8 @@ export function toGameAction(name: ActivityName): GameAction {
 		ms: definition.time * 1000,
 		xp: xp.count,
 		qty: primary.count,
-		// Level 1 gates nothing; the card would only print a lock for it.
-		lockedAt: requirement !== undefined && requirement > 1 ? requirement : undefined,
-		inputs:
-			definition.costs.length === 0
-				? undefined
-				: definition.costs.map((cost) => {
-						const meta = itemMeta(cost.item);
-						return {
-							id: cost.item,
-							name: meta.name,
-							glyph: meta.glyph,
-							rarity: meta.rarity,
-							qty: cost.count
-						};
-					})
+		requirements,
+		inputs: inputs.length === 0 ? undefined : inputs
 	};
 }
 
@@ -163,9 +181,18 @@ export const actionsBySkill: Record<PlayableSkillId, GameAction[]> = Object.from
 const actionsById = new Map<ActivityName, GameAction>();
 
 for (const name of Object.keys(ACTIVITY_DATA) as ActivityName[]) {
-	const action = toGameAction(name);
-	actionsBySkill[action.skill].push(action);
-	actionsById.set(name, action);
+	try {
+		const action = toGameAction(name);
+		actionsBySkill[action.skill].push(action);
+		actionsById.set(name, action);
+	} catch (error) {
+		// One undrawable activity must not take the whole app down. This module is
+		// reached from the root layout through the session wiring, so a throw here
+		// blanks /login and /profiles as well as the board — for a card the board
+		// can simply leave out. catalog.spec.ts asserts the contract instead, which
+		// is where a missing catalog entry is meant to be caught.
+		console.warn(`Leaving activity '${name}' off the board:`, error);
+	}
 }
 
 export function actionById(id: ActivityId): GameAction | undefined {
@@ -178,4 +205,34 @@ export function canAfford(activityId: ActivityId, items: Partial<Record<ItemId, 
 		return false;
 	}
 	return ACTIVITY_DATA[activityId].costs.every((cost) => (items[cost.item] ?? 0) >= cost.count);
+}
+
+/** A level gate the profile has not reached, and where it actually stands. */
+export interface UnmetRequirement extends SkillRequirement {
+	have: number;
+}
+
+/**
+ * Mirrors StartActivityAsync's requirement loop: every level gate the profile
+ * falls short of, in the order the contract declares them. A skill with no row
+ * yet counts as level 1, which is what the backend creates one at.
+ */
+export function unmetRequirements(
+	activityId: ActivityId,
+	levels: Partial<Record<SkillId, number>>
+): UnmetRequirement[] {
+	if (activityId === 'None') {
+		return [];
+	}
+	const unmet: UnmetRequirement[] = [];
+	for (const requirement of ACTIVITY_DATA[activityId].requirements) {
+		if (requirement.skill === 'None') {
+			continue;
+		}
+		const have = levels[requirement.skill] ?? 1;
+		if (have < requirement.count) {
+			unmet.push({ skill: requirement.skill, level: requirement.count, have });
+		}
+	}
+	return unmet;
 }

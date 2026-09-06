@@ -41,11 +41,11 @@
 </script>
 
 <script lang="ts">
-	import type { Component } from 'svelte';
+	import type { IconComponent } from '$lib/components/icon';
 	import { cn } from '$lib/utils/stylingUtils';
 
 	interface Props {
-		glyph: Component<{ size?: number | string }>;
+		glyph: IconComponent;
 		/** Box edge in px; also sets the glyph at 46% of it. */
 		size?: number;
 		/** Overrides the box width — the action card's well spans the whole card. */

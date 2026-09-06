@@ -1,6 +1,6 @@
 <script lang="ts">
 	import ChevronsUp from '@lucide/svelte/icons/chevrons-up';
-	import type { Component } from 'svelte';
+	import type { IconComponent } from '$lib/components/icon';
 	import { cn } from '$lib/utils/stylingUtils';
 
 	/*
@@ -13,7 +13,7 @@
 
 	interface Props {
 		amount: string;
-		icon?: Component<{ size?: number | string }>;
+		icon?: IconComponent;
 		tone?: RewardTone;
 		class?: string;
 	}

@@ -1,5 +1,5 @@
 <script lang="ts">
-	import type { Component } from 'svelte';
+	import type { IconComponent } from '$lib/components/icon';
 	import Row from '$lib/components/layout/Row.svelte';
 	import { cn } from '$lib/utils/stylingUtils';
 
@@ -11,7 +11,7 @@
 	type StatPillTone = 'neutral' | 'accent' | 'xp';
 
 	interface Props {
-		icon: Component<{ size?: number | string }>;
+		icon: IconComponent;
 		label?: string;
 		value: string | number;
 		tone?: StatPillTone;

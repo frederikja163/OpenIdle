@@ -1,5 +1,5 @@
 <script lang="ts">
-	import type { Component } from 'svelte';
+	import type { IconComponent } from '$lib/components/icon';
 	import { cn } from '$lib/utils/stylingUtils';
 
 	/*
@@ -8,7 +8,7 @@
 	 * the inventory well, where the full padding would not fit.
 	 */
 	interface Props {
-		icon: Component<{ size?: number | string }>;
+		icon: IconComponent;
 		title: string;
 		hint?: string;
 		compact?: boolean;
