@@ -1,4 +1,5 @@
 ﻿using System;
+using System.Diagnostics;
 using System.Linq;
 using System.Threading.Tasks;
 using Backend.Database;
@@ -10,11 +11,43 @@ using SQLitePCL;
 
 namespace Backend.Services;
 
-public sealed class ProfileService(IDbContextFactory<GameDbContext> dbContextFactory, SocketRegistryService socketRegistry)
+public sealed class ProfileService
 {
+    private readonly IDbContextFactory<GameDbContext> _dbContextFactory;
+    private readonly SocketRegistryService _socketRegistry;
+
+    public ProfileService(IDbContextFactory<GameDbContext> dbContextFactory, SocketRegistryService socketRegistry)
+    {
+        _dbContextFactory = dbContextFactory;
+        _socketRegistry = socketRegistry;
+        _socketRegistry.ProfileOnline += SocketRegistryOnProfileOnline;
+        _socketRegistry.ProfileOffline += SocketRegistryOnProfileOffline;
+    }
+
+    private async Task SocketRegistryOnProfileOnline(object? sender, ProfileOnlineEventArgs e)
+    {
+        await UpdateLastActiveAsync(e.ProfileId);
+    }
+
+    private async Task UpdateLastActiveAsync(ProfileId profileId)
+    {
+        await using GameDbContext dbContext = await _dbContextFactory.CreateDbContextAsync();
+
+        Profile profile = await dbContext.Profiles
+                              .FirstOrDefaultAsync(p => p.ProfileId == profileId) ??
+                          throw new UnreachableException("Profile does not exist.");
+        profile.LastActiveTime = DateTime.UtcNow;
+        await dbContext.SaveChangesAsync();
+    }
+
+    private async Task SocketRegistryOnProfileOffline(object? sender, ProfileOfflineEventArgs e)
+    {
+        await UpdateLastActiveAsync(e.ProfileId);
+    }
+
     internal async Task<Profile[]> GetProfilesAsync(UserId userId)
     {
-        await using GameDbContext dbContext = await dbContextFactory.CreateDbContextAsync();
+        await using GameDbContext dbContext = await _dbContextFactory.CreateDbContextAsync();
 
         return await dbContext.Profiles
             .Where(p => p.Users.Any(u => u.UserId == userId))
@@ -23,7 +56,7 @@ public sealed class ProfileService(IDbContextFactory<GameDbContext> dbContextFac
 
     internal async Task<Profile> GetProfileAsync(UserId userId, ProfileId profileId)
     {
-        await using GameDbContext dbContext = await dbContextFactory.CreateDbContextAsync();
+        await using GameDbContext dbContext = await _dbContextFactory.CreateDbContextAsync();
 
         return await dbContext.Profiles
                    .FirstOrDefaultAsync(p => p.ProfileId == profileId && p.Users.Any(u => u.UserId == userId))
@@ -32,7 +65,7 @@ public sealed class ProfileService(IDbContextFactory<GameDbContext> dbContextFac
 
     internal async Task<Profile> GetProfileAsync(ProfileId profileId)
     {
-        await using GameDbContext dbContext = await dbContextFactory.CreateDbContextAsync();
+        await using GameDbContext dbContext = await _dbContextFactory.CreateDbContextAsync();
 
         return await dbContext.Profiles
                    .FirstOrDefaultAsync(p => p.ProfileId == profileId)
@@ -51,13 +84,15 @@ public sealed class ProfileService(IDbContextFactory<GameDbContext> dbContextFac
             throw new BackendException("Profile name must be alphanumeric.");
         }
 
-        await using GameDbContext dbContext = await dbContextFactory.CreateDbContextAsync();
+        await using GameDbContext dbContext = await _dbContextFactory.CreateDbContextAsync();
 
         User user = new() { UserId = userId };
         Profile profile = new Profile()
         {
             ProfileId = Guid.NewGuid(),
             Name = name,
+            CreationTime =  DateTime.UtcNow,
+            LastActiveTime =  DateTime.UtcNow,
         };
 
         dbContext.Attach(user);
@@ -92,13 +127,13 @@ public sealed class ProfileService(IDbContextFactory<GameDbContext> dbContextFac
     {
         Profile profile = await GetProfileAsync(userId, profileId);
         socket.ProfileId = profileId;
-        await socketRegistry.SetProfile(socket, profileId);
+        await _socketRegistry.SetProfile(socket, profileId);
         return profile;
     }
 
     public async Task SetActivityAsync(ProfileId profileId, ActivityId activityId, DateTime startTime)
     {
-        await using GameDbContext dbContext = await dbContextFactory.CreateDbContextAsync();
+        await using GameDbContext dbContext = await _dbContextFactory.CreateDbContextAsync();
         await SetActivityAsync(dbContext, profileId, activityId, startTime);
         await dbContext.SaveChangesAsync();
     }
@@ -113,7 +148,7 @@ public sealed class ProfileService(IDbContextFactory<GameDbContext> dbContextFac
 
     public async Task ClearActivityAsync(ProfileId profileId)
     {
-        await using GameDbContext dbContext = await dbContextFactory.CreateDbContextAsync();
+        await using GameDbContext dbContext = await _dbContextFactory.CreateDbContextAsync();
 
         Profile profile = await dbContext.Profiles.FirstOrDefaultAsync(p => p.ProfileId == profileId)
                           ?? throw new BackendException("Profile does not exist.");

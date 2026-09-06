@@ -153,6 +153,8 @@ public sealed class SkillServiceTests : IDisposable
         {
             Name = $"P{Guid.NewGuid():N}"[..8],
             ProfileId = Guid.NewGuid(),
+            CreationTime = DateTime.UtcNow,
+            LastActiveTime = DateTime.UtcNow
         };
         dbContext.Profiles.Add(profile);
         await dbContext.SaveChangesAsync();

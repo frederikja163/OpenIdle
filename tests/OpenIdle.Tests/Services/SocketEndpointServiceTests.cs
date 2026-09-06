@@ -182,7 +182,17 @@ public sealed class TestUserController : SocketControllerBase
     {
         await SendUserEventAsync(new ProfilesChangedEvent()
         {
-            Profiles = [new ProfileDto() { ProfileId = Guid.NewGuid(), Name = "x" }],
+            Profiles =
+            [
+                new ProfileDto()
+                {
+                    ProfileId = Guid.NewGuid(),
+                    Name = "x",
+                    TotalLevel = 0,
+                    CreationTime = 0,
+                    LastActive = null
+                }
+            ],
         });
     }
 }

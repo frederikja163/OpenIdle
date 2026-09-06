@@ -1,5 +1,5 @@
 ﻿using System;
-using System.Collections.Concurrent;
+using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 using System.Net.WebSockets;
@@ -12,17 +12,33 @@ namespace Backend.Services;
 
 public sealed class SocketRegistryService
 {
-    private readonly object _profileSync = new();
-    private readonly ConcurrentDictionary<ProfileId, ConcurrentDictionary<Socket, byte>> _socketsByProfile = new();
-    private readonly ConcurrentDictionary<Socket, ProfileId> _profileBySocket = new();
-    private readonly ConcurrentDictionary<UserId, ConcurrentDictionary<Socket, byte>> _socketsByUser = new();
-    private readonly ConcurrentDictionary<Socket, UserId> _userBySocket = new();
+    private readonly object _sync = new();
+    private readonly Dictionary<ProfileId, HashSet<Socket>> _socketsByProfile = new();
+    private readonly Dictionary<Socket, ProfileId> _profileBySocket = new();
+    private readonly Dictionary<UserId, HashSet<Socket>> _socketsByUser = new();
+    private readonly Dictionary<Socket, UserId> _userBySocket = new();
 
     internal event AsyncEventHandler<MessageReceivedEventArgs>? MessageReceived;
     internal event AsyncEventHandler<SocketCloseEventArgs>? Close;
     internal event AsyncEventHandler<ProfileOnlineEventArgs>? ProfileOnline;
     internal event AsyncEventHandler<ProfileOfflineEventArgs>? ProfileOffline;
 
+    internal bool IsProfileOnline(ProfileId profileId)
+    {
+        lock (_sync)
+        {
+            return _socketsByProfile.TryGetValue(profileId, out var sockets) && sockets.Count > 0;
+        }
+    }
+
+    internal bool IsUserOnline(UserId userId)
+    {
+        lock (_sync)
+        {
+            return _socketsByUser.TryGetValue(userId, out var sockets) && sockets.Count > 0;
+        }
+    }
+    
     internal void RegisterSocket(Socket socket)
     {
         socket.MessageReceived += SocketOnMessageReceived;
@@ -34,14 +50,14 @@ public sealed class SocketRegistryService
         ProfileId? offlineProfileId = null;
         ProfileId? onlineProfileId = null;
 
-        lock (_profileSync)
+        lock (_sync)
         {
             if (_profileBySocket.TryGetValue(socket, out ProfileId currentProfileId) && currentProfileId == profileId)
             {
                 return;
             }
 
-            if (_profileBySocket.TryRemove(socket, out ProfileId previousProfileId) &&
+            if (_profileBySocket.Remove(socket, out ProfileId previousProfileId) &&
                 RemoveSocketFromProfile(socket, previousProfileId))
             {
                 offlineProfileId = previousProfileId;
@@ -67,25 +83,42 @@ public sealed class SocketRegistryService
 
     internal void SetUser(Socket socket, UserId userId)
     {
-        if (_userBySocket.TryRemove(socket, out UserId previousUserId) &&
-            _socketsByUser.TryGetValue(previousUserId, out ConcurrentDictionary<Socket, byte>? previousSockets))
+        lock (_sync)
         {
-            previousSockets.TryRemove(socket, out _);
-        }
+            if (_userBySocket.Remove(socket, out UserId previousUserId) &&
+                _socketsByUser.TryGetValue(previousUserId, out HashSet<Socket>? previousSockets))
+            {
+                previousSockets.Remove(socket);
+                if (previousSockets.Count == 0)
+                {
+                    _socketsByUser.Remove(previousUserId);
+                }
+            }
 
-        _userBySocket[socket] = userId;
-        ConcurrentDictionary<Socket, byte> sockets = _socketsByUser.GetOrAdd(userId, _ => new());
-        sockets[socket] = 0;
+            _userBySocket[socket] = userId;
+            if (!_socketsByUser.TryGetValue(userId, out HashSet<Socket>? sockets))
+            {
+                sockets = new HashSet<Socket>();
+                _socketsByUser[userId] = sockets;
+            }
+            sockets.Add(socket);
+        }
     }
 
     internal async Task SendToProfileAsync(ProfileId profileId, EventBase eventBase)
     {
-        if (!_socketsByProfile.TryGetValue(profileId, out ConcurrentDictionary<Socket, byte>? sockets))
+        Socket[] snapshot;
+        lock (_sync)
         {
-            return;
+            if (!_socketsByProfile.TryGetValue(profileId, out HashSet<Socket>? sockets))
+            {
+                return;
+            }
+
+            snapshot = sockets.ToArray();
         }
 
-        foreach (Socket socket in sockets.Keys.ToArray())
+        foreach (Socket socket in snapshot)
         {
             using CancellationTokenSource timeout = new(TimeSpan.FromSeconds(5));
             try
@@ -102,12 +135,18 @@ public sealed class SocketRegistryService
 
     internal async Task SendToUserAsync(UserId userId, EventBase eventBase)
     {
-        if (!_socketsByUser.TryGetValue(userId, out ConcurrentDictionary<Socket, byte>? sockets))
+        Socket[] snapshot;
+        lock (_sync)
         {
-            return;
+            if (!_socketsByUser.TryGetValue(userId, out HashSet<Socket>? sockets))
+            {
+                return;
+            }
+
+            snapshot = sockets.ToArray();
         }
 
-        foreach (Socket socket in sockets.Keys.ToArray())
+        foreach (Socket socket in snapshot)
         {
             using CancellationTokenSource timeout = new(TimeSpan.FromSeconds(5));
             try
@@ -150,12 +189,22 @@ public sealed class SocketRegistryService
     private async Task RemoveSocket(Socket socket)
     {
         ProfileId? offlineProfileId = null;
-        lock (_profileSync)
+        lock (_sync)
         {
-            if (_profileBySocket.TryRemove(socket, out ProfileId profileId) &&
+            if (_profileBySocket.Remove(socket, out ProfileId profileId) &&
                 RemoveSocketFromProfile(socket, profileId))
             {
                 offlineProfileId = profileId;
+            }
+
+            if (_userBySocket.Remove(socket, out UserId userId) &&
+                _socketsByUser.TryGetValue(userId, out HashSet<Socket>? userSockets))
+            {
+                userSockets.Remove(socket);
+                if (userSockets.Count == 0)
+                {
+                    _socketsByUser.Remove(userId);
+                }
             }
         }
 
@@ -163,36 +212,35 @@ public sealed class SocketRegistryService
         {
             await NotifyProfileOffline(offlineProfile);
         }
-
-        if (_userBySocket.TryRemove(socket, out UserId userId) &&
-            _socketsByUser.TryGetValue(userId, out ConcurrentDictionary<Socket, byte>? userSockets))
-        {
-            userSockets.TryRemove(socket, out _);
-        }
     }
 
     private bool AddSocketToProfile(Socket socket, ProfileId profileId)
     {
-        ConcurrentDictionary<Socket, byte> sockets = _socketsByProfile.GetOrAdd(profileId, _ => new());
-        lock (sockets)
+        if (!_socketsByProfile.TryGetValue(profileId, out HashSet<Socket>? sockets))
         {
-            bool becameOnline = sockets.IsEmpty;
-            sockets[socket] = 0;
-            return becameOnline;
+            sockets = new HashSet<Socket>();
+            _socketsByProfile[profileId] = sockets;
         }
+
+        bool becameOnline = sockets.Count == 0;
+        sockets.Add(socket);
+        return becameOnline;
     }
 
     private bool RemoveSocketFromProfile(Socket socket, ProfileId profileId)
     {
-        if (!_socketsByProfile.TryGetValue(profileId, out ConcurrentDictionary<Socket, byte>? sockets))
+        if (!_socketsByProfile.TryGetValue(profileId, out HashSet<Socket>? sockets))
         {
             return false;
         }
 
-        lock (sockets)
+        bool removed = sockets.Remove(socket);
+        if (sockets.Count == 0)
         {
-            return sockets.TryRemove(socket, out _) && sockets.IsEmpty;
+            _socketsByProfile.Remove(profileId);
         }
+
+        return removed && sockets.Count == 0;
     }
 
     private async Task NotifyProfileOffline(ProfileId profileId)
