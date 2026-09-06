@@ -18,17 +18,13 @@
  * JsonStringEnumConverter (Backend/SocketJsonSerializer.cs).
  */
 
+/**
+ * How a value is rendered and encoded, not what it means: a `Timestamp` in
+ * types.xml arrives here as `long` (epoch milliseconds, a whole number on the
+ * wire) and is labelled from `typeName`.
+ */
 export type PropertyKind =
-	| 'string'
-	| 'int'
-	| 'float'
-	| 'guid'
-	| 'userId'
-	| 'profileId'
-	/** Epoch milliseconds — a whole number on the wire, like `int`. */
-	| 'timestamp'
-	| 'enum'
-	| 'dto';
+	'string' | 'int' | 'long' | 'float' | 'guid' | 'userId' | 'profileId' | 'enum' | 'dto';
 
 export interface SchemaProperty {
 	/** The PascalCase name from types.xml, e.g. `ProfileId`. */

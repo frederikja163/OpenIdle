@@ -25,6 +25,7 @@ internal static class AppHost
         builder.Services.AddOpenIdleCors();
         builder.Services.AddSingleton<UserService>();
         builder.Services.AddSingleton<ProfileService>();
+        builder.Services.AddSingleton<SettingsService>();
         builder.Services.AddSingleton<DropTableService>();
         builder.Services.AddSingleton<SkillService>();
         builder.Services.AddSingleton<ItemService>();

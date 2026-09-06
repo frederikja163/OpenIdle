@@ -33,6 +33,7 @@ public sealed class TsSchemaEmitterTests
           <Dto name="Profile">
             <Property name="Name" type="String"/>
             <Property name="ProfileId" type="Guid"/>
+            <Property name="StartedAt" type="Timestamp"/>
           </Dto>
           <Request name="GetSkills">
             <Property name="SkillIds" type="SkillId" multiple="true" optional="true"/>
@@ -93,10 +94,12 @@ public sealed class TsSchemaEmitterTests
             // Not folded into 'guid': the console offers a profile picker for one and a plain
             // text box for the other, so the distinction has to survive the emit.
             Assert.That(output, Does.Contain("wireName: 'profileId', kind: 'guid'"));
-            // Kind() throws on any PropertyType it does not name, so this pins that a
-            // Timestamp property in types.xml cannot break generation. The console
-            // treats the kind like 'int' and labels the field from typeName.
-            Assert.That(output, Does.Contain("wireName: 'since', kind: 'timestamp'"));
+            // Kind() throws on any PropertyType it does not name, so these pin that a
+            // Timestamp property in types.xml cannot break generation. It is a plain
+            // number to the console, and the XML token survives as the label.
+            Assert.That(output, Does.Contain("wireName: 'startedAt', kind: 'long', typeName: 'Timestamp'"));
+            // Optional, and on a request rather than a dto — the same kind either way.
+            Assert.That(output, Does.Contain("wireName: 'since', kind: 'long', typeName: 'Timestamp'"));
         });
     }
 

@@ -11,7 +11,6 @@
 	import githubMark from '$lib/assets/github-mark-white.svg';
 	import Row from '$lib/components/layout/Row.svelte';
 	import { Button } from '$lib/components/ui/button';
-	import { debugEnabled } from '$lib/debug/flag';
 	import { connectionState } from '$lib/state/session.svelte';
 	import { logout, userState } from '$lib/state/user.svelte';
 	import { cn } from '$lib/utils/stylingUtils';
@@ -146,12 +145,10 @@
 			/>
 		</a>
 
-		{#if debugEnabled()}
-			<Button variant="ghost" size="sm" href={resolve('/debug')}>
-				<Bug />
-				Debug
-			</Button>
-		{/if}
+		<Button variant="ghost" size="sm" href={resolve('/debug')}>
+			<Bug />
+			Debug
+		</Button>
 
 		<!--
 			The design's TopBar sets this rule's own 6px margins on top of the

@@ -11,8 +11,8 @@ using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 namespace Backend.Migrations
 {
     [DbContext(typeof(GameDbContext))]
-    [Migration("20260811200635_AddItemsAndSkills")]
-    partial class AddItemsAndSkills
+    [Migration("20260906123801_AddUserAndProfileSettings")]
+    partial class AddUserAndProfileSettings
     {
         /// <inheritdoc />
         protected override void BuildTargetModel(ModelBuilder modelBuilder)
@@ -42,6 +42,12 @@ namespace Backend.Migrations
                         .ValueGeneratedOnAdd()
                         .HasColumnType("TEXT");
 
+                    b.Property<string>("ActivityId")
+                        .HasColumnType("TEXT");
+
+                    b.Property<DateTime?>("ActivityStartTime")
+                        .HasColumnType("TEXT");
+
                     b.Property<string>("Name")
                         .IsRequired()
                         .HasMaxLength(30)
@@ -53,6 +59,23 @@ namespace Backend.Migrations
                         .IsUnique();
 
                     b.ToTable("Profiles");
+                });
+
+            modelBuilder.Entity("Backend.Database.Entities.ProfileSetting", b =>
+                {
+                    b.Property<Guid>("ProfileId")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Name")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Value")
+                        .IsRequired()
+                        .HasColumnType("TEXT");
+
+                    b.HasKey("ProfileId", "Name");
+
+                    b.ToTable("ProfileSettings");
                 });
 
             modelBuilder.Entity("Backend.Database.Entities.Skill", b =>
@@ -85,6 +108,23 @@ namespace Backend.Migrations
                     b.ToTable("Users");
                 });
 
+            modelBuilder.Entity("Backend.Database.Entities.UserSetting", b =>
+                {
+                    b.Property<Guid>("UserId")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Name")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Value")
+                        .IsRequired()
+                        .HasColumnType("TEXT");
+
+                    b.HasKey("UserId", "Name");
+
+                    b.ToTable("UserSettings");
+                });
+
             modelBuilder.Entity("ProfileUser", b =>
                 {
                     b.Property<Guid>("ProfilesProfileId")
@@ -111,6 +151,15 @@ namespace Backend.Migrations
                     b.Navigation("Profile");
                 });
 
+            modelBuilder.Entity("Backend.Database.Entities.ProfileSetting", b =>
+                {
+                    b.HasOne("Backend.Database.Entities.Profile", null)
+                        .WithMany()
+                        .HasForeignKey("ProfileId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+                });
+
             modelBuilder.Entity("Backend.Database.Entities.Skill", b =>
                 {
                     b.HasOne("Backend.Database.Entities.Profile", "Profile")
@@ -120,6 +169,15 @@ namespace Backend.Migrations
                         .IsRequired();
 
                     b.Navigation("Profile");
+                });
+
+            modelBuilder.Entity("Backend.Database.Entities.UserSetting", b =>
+                {
+                    b.HasOne("Backend.Database.Entities.User", null)
+                        .WithMany()
+                        .HasForeignKey("UserId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
                 });
 
             modelBuilder.Entity("ProfileUser", b =>

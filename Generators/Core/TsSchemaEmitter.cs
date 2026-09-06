@@ -157,7 +157,9 @@ public sealed class TsSchemaEmitter : IDtoEmitter
             PropertyType.Guid => "guid",
             PropertyType.UserId => "userId",
             PropertyType.ProfileId => "profileId",
-            PropertyType.Timestamp => "timestamp",
+            // The kind names the wire primitive and so the input control; the
+            // semantic token (Timestamp) survives as typeName, which labels the field.
+            PropertyType.Timestamp => "long",
             _ => throw new ArgumentOutOfRangeException(nameof(property), property.PropertyType,
                 "Unhandled property type."),
         };

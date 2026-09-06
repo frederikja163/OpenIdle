@@ -114,7 +114,7 @@
 				<Input bind:value={entry.value} placeholder="00000000-0000-0000-0000-000000000000" />
 			{/if}
 		</Column>
-	{:else if property.kind === 'int' || property.kind === 'float' || property.kind === 'timestamp'}
+	{:else if property.kind === 'int' || property.kind === 'long' || property.kind === 'float'}
 		<!-- Deliberately not bind:value: Svelte coerces a number input's binding to a
 		     number, and half-typed text like "-" or "1." has no number to be. The
 		     model keeps every value as text and converts once, when the frame is
