@@ -9,8 +9,7 @@
 	import { Button } from '$lib/components/ui/button';
 	import { actionsBySkill } from '$lib/game/catalog';
 	import { gameState, loadGame, startActivity, stopActivity } from '$lib/state/game.svelte';
-	import { profilesState } from '$lib/state/profiles.svelte';
-	import { sessionIntent } from '$lib/state/session.svelte';
+	import { hasProfile, profilesState } from '$lib/state/profiles.svelte';
 	import InventoryPanel from './components/InventoryPanel.svelte';
 	import SkillsPanel from './components/SkillsPanel.svelte';
 	import { BoardState } from './state.svelte';
@@ -35,13 +34,10 @@
 	// tears the clock down, and a payout re-arms it against the new start.
 	$effect(() => board.run());
 
-	// No profile on this connection and none being restored. The intent is not
-	// reactive, so the refusal a replay leaves behind is what re-runs this when a
-	// remembered profile turns out to be gone.
-	const noProfile = $derived(
-		profilesState.selectedProfileId === null &&
-			(sessionIntent.profileId === null || profilesState.replayError !== null)
-	);
+	// No profile on this connection and none being restored — reachable here only
+	// when a reconnect's replay was refused, since nothing navigates to the board
+	// without a profile any more.
+	const noProfile = $derived(!hasProfile());
 </script>
 
 <!--

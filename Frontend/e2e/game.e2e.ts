@@ -244,15 +244,22 @@ test('the board fills the viewport without scrolling the document', async ({ pag
 	expect(overflow).toBeLessThanOrEqual(0);
 });
 
-test('the game link without a loaded profile asks for one', async ({ page }) => {
+test('the game link stays dead until a profile is loaded', async ({ page }) => {
 	await logInOne(page);
 
-	await page.getByRole('link', { name: 'Game' }).click();
+	// Still in the chrome, but not a link: with nothing loaded the board has
+	// nothing to show, so there is nowhere for it to lead.
+	const gameItem = page.locator('nav').getByText('Game', { exact: true });
+	await expect(gameItem).toHaveAttribute('aria-disabled', 'true');
+	await expect(gameItem).not.toHaveAttribute('href', /./);
+	await expect(page.getByRole('link', { name: 'Game' })).toHaveCount(0);
+
+	await page.getByRole('button', { name: 'Load' }).click();
 	await expect(page).toHaveURL(/\/game$/);
 
-	await expect(page.getByText('No profile selected')).toBeVisible();
-	await page.getByRole('link', { name: 'Choose a profile' }).click();
+	await page.getByRole('link', { name: 'Profiles' }).click();
 	await expect(page).toHaveURL(/\/profiles$/);
+	await expect(page.getByRole('link', { name: 'Game' })).toBeVisible();
 });
 
 test('the loaded profile dresses the rail and the pack', async ({ page }) => {

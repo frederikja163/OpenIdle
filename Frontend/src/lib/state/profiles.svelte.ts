@@ -28,6 +28,21 @@ export const profilesState = sessionState(() => ({
 	replayError: null as string | null
 }));
 
+/**
+ * Whether a profile is in play on this connection: one is selected, or a replay
+ * is restoring the one the last connection held and has not been refused.
+ *
+ * sessionIntent is not reactive, so a caller re-runs on the reactive fields read
+ * beside it — the selection landing and the replay's refusal are the only two
+ * things that change this answer.
+ */
+export function hasProfile(): boolean {
+	return (
+		profilesState.selectedProfileId !== null ||
+		(sessionIntent.profileId !== null && profilesState.replayError === null)
+	);
+}
+
 /*
  * Mirrors ProfileService.CreateProfileAsync in the backend so a name the server
  * would refuse never costs a round trip. The character class is deliberately

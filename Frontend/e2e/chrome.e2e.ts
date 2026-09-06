@@ -76,6 +76,25 @@ test('a successful login replaces /login rather than stacking /profiles on it', 
 	await expect(page.getByTestId('login-status')).toHaveText('Signed out');
 });
 
+test('a login bounced off the board lands on /profiles rather than an empty board', async ({
+	page
+}) => {
+	await page.routeWebSocket(WS_ROUTE, (ws) => {
+		const respond = respondToRequests(ws, [THORIN]);
+		ws.onMessage(respond);
+	});
+
+	// The guard turns the board away and records where the visitor was headed.
+	await page.goto('/game');
+	await expect(page).toHaveURL(/redirectTo=%2Fgame/);
+
+	await page.getByRole('button', { name: 'Log in' }).click();
+
+	// Honouring that would be honouring it onto a socket the login just opened,
+	// which is pointed at no profile — the board would have nothing to draw.
+	await expect(page).toHaveURL(/\/profiles$/);
+});
+
 test('a dropped socket reconnects and replays the session', async ({ page }) => {
 	const sentPerConnection: string[][] = [];
 	let dropTheFirstSocket = (): void => {};
