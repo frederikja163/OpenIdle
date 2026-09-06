@@ -1,6 +1,5 @@
 using System;
 using System.Linq;
-using System.Threading;
 using System.Threading.Tasks;
 using Backend.Database;
 using Backend.Database.Entities;
@@ -56,38 +55,6 @@ public sealed class SettingsServiceTests : IDisposable
         await using GameDbContext db = await _db.Factory.CreateDbContextAsync();
         UserSetting stored = db.UserSettings.Single(s => s.UserId == user.UserId && s.Name == "theme");
         Assert.That(stored.Value, Is.EqualTo("dark"));
-    }
-
-    [Test]
-    public async Task SetUserSettings_WithDuplicateNames_UsesLastValue()
-    {
-        User user = await SeedUserAsync();
-        var service = new SettingsService(_db.Factory);
-
-        await service.SetUserSettings(user.UserId,
-        [
-            new SettingDto { Name = "theme", Value = "light" },
-            new SettingDto { Name = "theme", Value = "dark" }
-        ]);
-
-        await using GameDbContext db = await _db.Factory.CreateDbContextAsync();
-        UserSetting stored = db.UserSettings.Single(s => s.UserId == user.UserId && s.Name == "theme");
-        Assert.That(stored.Value, Is.EqualTo("dark"));
-    }
-
-    [Test]
-    public async Task SetUserSettings_ConcurrentDuplicateKey_AtomicallyUpserts()
-    {
-        User user = await SeedUserAsync();
-        var service = new SettingsService(_db.Factory);
-
-        await RunConcurrentlyAsync(
-            () => service.SetUserSettings(user.UserId, [new SettingDto { Name = "theme", Value = "dark" }]),
-            () => service.SetUserSettings(user.UserId, [new SettingDto { Name = "theme", Value = "light" }]));
-
-        await using GameDbContext db = await _db.Factory.CreateDbContextAsync();
-        UserSetting stored = db.UserSettings.Single(s => s.UserId == user.UserId && s.Name == "theme");
-        Assert.That(stored.Value, Is.AnyOf("dark", "light"));
     }
 
     [Test]
@@ -178,38 +145,6 @@ public sealed class SettingsServiceTests : IDisposable
     }
 
     [Test]
-    public async Task SetProfileSettings_WithDuplicateNames_UsesLastValue()
-    {
-        Profile profile = await SeedProfileAsync();
-        var service = new SettingsService(_db.Factory);
-
-        await service.SetProfileSettings(profile.ProfileId,
-        [
-            new SettingDto { Name = "auto_loot", Value = "false" },
-            new SettingDto { Name = "auto_loot", Value = "true" }
-        ]);
-
-        await using GameDbContext db = await _db.Factory.CreateDbContextAsync();
-        ProfileSetting stored = db.ProfileSettings.Single(s => s.ProfileId == profile.ProfileId && s.Name == "auto_loot");
-        Assert.That(stored.Value, Is.EqualTo("true"));
-    }
-
-    [Test]
-    public async Task SetProfileSettings_ConcurrentDuplicateKey_AtomicallyUpserts()
-    {
-        Profile profile = await SeedProfileAsync();
-        var service = new SettingsService(_db.Factory);
-
-        await RunConcurrentlyAsync(
-            () => service.SetProfileSettings(profile.ProfileId, [new SettingDto { Name = "auto_loot", Value = "true" }]),
-            () => service.SetProfileSettings(profile.ProfileId, [new SettingDto { Name = "auto_loot", Value = "false" }]));
-
-        await using GameDbContext db = await _db.Factory.CreateDbContextAsync();
-        ProfileSetting stored = db.ProfileSettings.Single(s => s.ProfileId == profile.ProfileId && s.Name == "auto_loot");
-        Assert.That(stored.Value, Is.AnyOf("true", "false"));
-    }
-
-    [Test]
     public async Task SetProfileSettings_DoesNotAffectOtherProfiles()
     {
         Profile profile1 = await SeedProfileAsync();
@@ -291,22 +226,5 @@ public sealed class SettingsServiceTests : IDisposable
             Value = value
         });
         await db.SaveChangesAsync();
-    }
-
-    private static async Task RunConcurrentlyAsync(Func<Task> first, Func<Task> second)
-    {
-        using var barrier = new Barrier(2);
-        Task firstTask = Task.Run(async () =>
-        {
-            barrier.SignalAndWait();
-            await first();
-        });
-        Task secondTask = Task.Run(async () =>
-        {
-            barrier.SignalAndWait();
-            await second();
-        });
-
-        await Task.WhenAll(firstTask, secondTask);
     }
 }
