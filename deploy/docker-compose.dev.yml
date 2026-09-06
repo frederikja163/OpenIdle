@@ -42,6 +42,9 @@ services:
       # Read at runtime, not baked in: the same image runs in production with a
       # different value here.
       PUBLIC_WS_URL: ${DEV_WS_URL}
+      # Where the version footer fetches the backend's GET /version. Empty means
+      # "derive it from PUBLIC_WS_URL".
+      PUBLIC_API_URL: ${DEV_API_URL:-}
       # Lets any developer point this frontend at the backend on their own
       # machine with ?ws=ws://localhost:5066/ws. Deliberately absent from
       # docker-compose.prod.yml.

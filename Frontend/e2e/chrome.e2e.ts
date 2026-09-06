@@ -6,9 +6,11 @@ import { expect, test, type WebSocketRoute } from '@playwright/test';
 //
 // PUBLIC_WS_URL defaults to the address the backend binds in development, so a
 // test that needs the socket to behave a certain way stubs it with
-// routeWebSocket rather than assuming nothing is listening. Tests that never log
-// in need no stub: the client is constructed at import time but only connects
-// once a request is sent.
+// routeWebSocket rather than assuming nothing is listening. The version footer
+// on /login, /profiles and /debug fetches the backend's build over HTTP
+// (GET /version under PUBLIC_API_URL, or next to an overridden /ws), so a test
+// without a stub sees a failed fetch and a footer reading "unavailable" —
+// harmless to a test that never looks at it.
 
 // Matches the URL itself rather than a glob, which Playwright would resolve
 // against baseURL and so never match a socket on another port.
@@ -19,6 +21,14 @@ const WS_ROUTE = /\/ws$/;
 const LOGIN_URL = /\/login(\?.*)?$/;
 
 const THORIN = { name: 'Thorin', profileId: 'p1' };
+
+// The build the stubbed backend claims: 2026-09-04 22:13:20 UTC. Distinct from
+// the frontend's own (playwright.config.ts) so the footer's two halves cannot
+// be confused for one another.
+const BACKEND_BUILD = {
+	commit: 'b2c3d4e5f60718293a4b5c6d7e8f9012a3b4c5d6',
+	commitTime: 1_788_560_000_000
+};
 
 /**
  * The whole backend, for tests that only need the socket to say yes: every
@@ -36,6 +46,19 @@ function respondToRequests(
 		}
 		ws.send(JSON.stringify({ $type: `${$type.replace('Request', '')}Response`, requestId }));
 	};
+}
+
+/**
+ * Makes the backend's HTTP version endpoint claim BACKEND_BUILD, wherever it is
+ * asked for, and records where that was.
+ */
+async function stubVersion(page: import('@playwright/test').Page): Promise<string[]> {
+	const asked: string[] = [];
+	await page.route('**/version', (route) => {
+		asked.push(route.request().url());
+		return route.fulfill({ contentType: 'application/json', body: JSON.stringify(BACKEND_BUILD) });
+	});
+	return asked;
 }
 
 test('the root route funnels through the auth guards to /login', async ({ page }) => {
@@ -77,14 +100,9 @@ test('logging in surfaces the failure when the socket will not open', async ({ p
 test('a successful login replaces /login rather than stacking /profiles on it', async ({
 	page
 }) => {
-	await page.routeWebSocket(WS_ROUTE, (ws) => {
-		// connectToServer() is never called, so these frames are the whole
-		// backend as far as this test is concerned.
-		ws.onMessage((frame) => {
-			const { requestId } = JSON.parse(String(frame));
-			ws.send(JSON.stringify({ $type: 'LoginAsTestUserResponse', requestId }));
-		});
-	});
+	// connectToServer() is never called, so these frames are the whole backend
+	// as far as this test is concerned.
+	await page.routeWebSocket(WS_ROUTE, (ws) => ws.onMessage(respondToRequests(ws, [])));
 
 	await page.goto('/login');
 	const entries = await page.evaluate(() => history.length);
@@ -200,6 +218,50 @@ test('the Debug button opens the protocol console and Back returns to the app', 
 	await expect(page).toHaveURL(/\/profiles$/);
 });
 
+test('the version footer names this build and the pointed-at backend build', async ({ page }) => {
+	const asked = await stubVersion(page);
+	await page.routeWebSocket(WS_ROUTE, (ws) => ws.onMessage(respondToRequests(ws, [THORIN])));
+
+	// Before anyone signs in: the footer asks the backend over HTTP, not a
+	// socket.
+	await page.goto('/login');
+	const footer = page.getByTestId('version-footer');
+	await expect(footer).toContainText('OpenIdle');
+	await expect(footer).toContainText('frontend 2026-09-04 23:26:40 1e1c256');
+	await expect(footer).toContainText('backend 2026-09-04 22:13:20 b2c3d4e');
+	// PUBLIC_API_URL, not the socket's host: the two are separate settings.
+	expect(asked).toEqual(['http://127.0.0.1:5067/version']);
+
+	// The value is not tied to any connection, so it survives the login.
+	await page.getByRole('button', { name: 'Log in' }).click();
+	await expect(page).toHaveURL(/\/profiles$/);
+	await expect(page.getByTestId('version-footer')).toContainText(
+		'backend 2026-09-04 22:13:20 b2c3d4e'
+	);
+});
+
+test('the version footer says so when no backend answers', async ({ page }) => {
+	await page.route('**/version', (route) => route.abort());
+
+	await page.goto('/login');
+
+	await expect(page.getByTestId('version-footer')).toContainText('backend unavailable');
+	// One failed fetch, not a loop: signing in is still what opens the socket.
+	await expect(page.getByTestId('login-status')).toHaveText('Signed out');
+});
+
+test('the frontend reports its own build at /version, like the backend', async ({ request }) => {
+	const response = await request.get('/version');
+
+	expect(response.ok()).toBe(true);
+	// The build playwright.config.ts hands to `vite build`, in the backend's
+	// wire shape, so one curl per image answers "which commit is this?".
+	expect(await response.json()).toEqual({
+		commit: '1e1c256a0b1c2d3e4f5061728394a5b6c7d8e9f0',
+		commitTime: 1_788_564_400_000
+	});
+});
+
 test('the traffic filter remembers which kinds are hidden across reloads', async ({ page }) => {
 	await page.goto('/debug');
 
@@ -248,6 +310,24 @@ test('a ?ws= override points the socket at another backend', async ({ page }) =>
 	await expect(page).toHaveURL(/\/profiles$/);
 
 	expect(dialled).toEqual([OTHER_BACKEND]);
+});
+
+test('a ?ws= override moves the version fetch to the same backend', async ({ page }) => {
+	const asked: string[] = [];
+	await page.route('**/version', (route) => {
+		asked.push(route.request().url());
+		return route.fulfill({ contentType: 'application/json', body: JSON.stringify(BACKEND_BUILD) });
+	});
+	await captureDialledUrl(page);
+
+	await page.goto(`/login?ws=${encodeURIComponent(OTHER_BACKEND)}`);
+	await expect(page.getByTestId('version-footer')).toContainText(
+		'backend 2026-09-04 22:13:20 b2c3d4e'
+	);
+
+	// The socket's port, not the configured backend's: the two are derived from
+	// one resolved URL, so an override cannot move one without the other.
+	expect(asked).toEqual(['http://127.0.0.1:9999/version']);
 });
 
 test('an override survives a reload, so it need only be typed once', async ({ page }) => {

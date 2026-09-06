@@ -30,6 +30,7 @@ services:
     restart: unless-stopped
     environment:
       PUBLIC_WS_URL: ${PROD_WS_URL}
+      PUBLIC_API_URL: ${PROD_API_URL:-}
       ORIGIN: ${PROD_FRONTEND_ORIGIN}
     ports:
       - "${FRONTEND_PORT:-3000}:3000"

@@ -18,10 +18,20 @@ RUN dotnet restore Backend/Backend.csproj
 COPY types.xml ./
 COPY Generators/ Generators/
 COPY Backend/ Backend/
+
+# Build provenance for the version footer: CI passes the published commit and
+# its committer date (unix seconds) as build-args, and Backend.csproj stamps
+# them into the assembly. Declared after the source COPYs so a new value
+# invalidates only the publish layer, never the restore. Empty for a local
+# `docker build`, which the backend then reports as a local build.
+ARG GIT_COMMIT=
+ARG GIT_COMMIT_TIME=
 RUN dotnet publish Backend/Backend.csproj \
     --configuration Release \
     --no-restore \
-    --output /app/publish
+    --output /app/publish \
+    -p:GitCommit=$GIT_COMMIT \
+    -p:GitCommitTime=$GIT_COMMIT_TIME
 
 # Debian, not Alpine: SQLitePCLRaw.bundle_e_sqlite3 ships a glibc-linked native
 # library, and the musl variant would have to be swapped in to use Alpine.
@@ -55,7 +65,7 @@ EXPOSE 8080
 
 # The port here has to match ASPNETCORE_URLS above; they are a pair.
 HEALTHCHECK --interval=30s --timeout=3s --start-period=20s --retries=3 \
-    CMD curl --fail --silent http://127.0.0.1:8080/healthz || exit 1
+    CMD curl --fail --silent http://127.0.0.1:8080/health || exit 1
 
 # EF migrations are applied by Program.cs on boot, so there is no separate
 # migration step to run before this.

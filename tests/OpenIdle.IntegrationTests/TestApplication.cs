@@ -20,7 +20,13 @@ public sealed class TestApplication : IDisposable
 
     public Uri WsUri { get; }
 
-    public TestApplication()
+    public Uri HttpUri { get; }
+
+    /// <param name="args">
+    /// Command-line configuration for the host, e.g. "--AllowedWsOrigins:0=https://allowed.example",
+    /// for tests that need a deployed-shape setting rather than the empty development defaults.
+    /// </param>
+    public TestApplication(params string[] args)
     {
         _dbPath = Path.Combine(Path.GetTempPath(), $"openidle-it-{Guid.NewGuid():N}.db");
 
@@ -29,7 +35,7 @@ public sealed class TestApplication : IDisposable
         {
             using CancellationTokenSource initializationTimeout = new(InitializationTimeout);
 
-            app = AppHost.CreateApp([], $"Data Source={_dbPath};Pooling=False");
+            app = AppHost.CreateApp(args, $"Data Source={_dbPath};Pooling=False");
             app.Urls.Add("http://127.0.0.1:0");
             AppHost.MigrateDatabaseAsync(app.Services, initializationTimeout.Token).GetAwaiter().GetResult();
             app.StartAsync(initializationTimeout.Token).GetAwaiter().GetResult();
@@ -39,6 +45,7 @@ public sealed class TestApplication : IDisposable
             string baseAddress = addresses.Addresses.First(a => a.StartsWith("http://127.0.0.1"));
 
             _app = app;
+            HttpUri = new Uri(baseAddress);
             WsUri = new Uri(baseAddress.Replace("http://", "ws://", StringComparison.Ordinal) + "/ws");
             app = null;
         }

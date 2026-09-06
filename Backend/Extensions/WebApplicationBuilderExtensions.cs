@@ -20,10 +20,27 @@ internal static class WebApplicationBuilderExtensions
             collection.AddSingleton<SocketEndpointService>();
             collection.AddHostedService(sp => sp.GetRequiredService<SocketEndpointService>());
         }
+
+        /// <summary>
+        /// The HTTP side of the backend is public: it serves read-only plumbing
+        /// (/health, /version) that any origin may read, and it is meant to be
+        /// reachable as a public API. So every HTTP endpoint answers any origin.
+        /// Only the WebSocket handshake is origin-gated, via AllowedWsOrigins in
+        /// BuildWebSocketOptions, because the socket is where the session lives.
+        /// Browsers still need the Access-Control-Allow-Origin header to let a
+        /// page read a cross-origin response, which is why this cannot simply be
+        /// left out.
+        /// </summary>
+        internal void AddOpenIdleCors()
+        {
+            collection.AddCors(options => options.AddDefaultPolicy(policy => policy.AllowAnyOrigin()));
+        }
     }
 
     extension(WebApplication app)
     {
+        internal void UseOpenIdleCors() => app.UseCors();
+
         internal void MapSocketControllers()
         {
             app.UseWebSockets(BuildWebSocketOptions(app));
@@ -42,10 +59,15 @@ internal static class WebApplicationBuilderExtensions
         }
     }
 
+    private static string[] ReadAllowedOrigins(IConfiguration configuration)
+    {
+        return configuration.GetSection("AllowedWsOrigins").Get<string[]>() ?? [];
+    }
+
     private static WebSocketOptions BuildWebSocketOptions(WebApplication app)
     {
         WebSocketOptions options = new();
-        string[] allowedOrigins = app.Configuration.GetSection("AllowedWsOrigins").Get<string[]>() ?? [];
+        string[] allowedOrigins = ReadAllowedOrigins(app.Configuration);
 
         foreach (string origin in allowedOrigins)
         {
