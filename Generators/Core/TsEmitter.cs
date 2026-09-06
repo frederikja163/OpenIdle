@@ -318,9 +318,11 @@ public sealed class TsEmitter : IDtoEmitter
         WriteUnion("export type Reward", new[] { "ItemReward", "TableReward", "XpReward" });
 
         WriteInterface("LevelRequirement", $"skill: {skillId};", "count: number;");
+        WriteInterface("ItemCost", $"item: {itemId};", "count: number;");
         WriteInterface("DropTableDefinition", "rewards: Reward[];");
-        WriteInterface("ActivityDefinition", "rewards: Reward[];",
-            "requirements: LevelRequirement[];");
+        // `time` is the XML attribute as declared: seconds per completion.
+        WriteInterface("ActivityDefinition", "time: number;", "rewards: Reward[];",
+            "requirements: LevelRequirement[];", "costs: ItemCost[];");
 
         // The maps are keyed by names narrower than the generated DropTableId
         // and ActivityId enums, which always carry a `None` member that no
@@ -385,9 +387,11 @@ public sealed class TsEmitter : IDtoEmitter
                 string key = activity.Name.UpperCamelCase;
                 using (Scope __ = _textWriter.Scope($"{key}:", ScopeStyle.Curly, separator))
                 {
+                    _textWriter.WriteLine($"time: {activity.Time.ToString(CultureInfo.InvariantCulture)},");
                     WriteObjectArray("rewards: ", activity.Rewards.Select(RewardMembers).ToList(), ",");
                     WriteObjectArray("requirements: ",
-                        activity.Requirements.Select(RequirementMembers).ToList(), "");
+                        activity.Requirements.Select(RequirementMembers).ToList(), ",");
+                    WriteObjectArray("costs: ", activity.Costs.Select(CostMembers).ToList(), "");
                 }
             }
         }
@@ -574,6 +578,11 @@ public sealed class TsEmitter : IDtoEmitter
     private static string[] RequirementMembers(LevelRequirement requirement)
     {
         return [$"skill: {Quote(new Casing(requirement.Skill).UpperCamelCase)}", $"count: {requirement.Count}"];
+    }
+
+    private static string[] CostMembers(ItemCost cost)
+    {
+        return [$"item: {Quote(new Casing(cost.Item).UpperCamelCase)}", $"count: {cost.Count}"];
     }
 
     private static string WeightLiteral(float? weight)

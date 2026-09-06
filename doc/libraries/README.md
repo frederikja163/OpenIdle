@@ -65,8 +65,9 @@ The rest were **entailed** by those two rather than chosen independently — ins
 | [@lucide/svelte](./lucide-svelte.md) | adopted | 2026-08-03 | low | low | yes (tree-shaken per icon) |
 | [tw-animate-css](./tw-animate-css.md) | adopted | 2026-08-03 | low | low | **no** — CSS only |
 | [@internationalized/date](./internationalized-date.md) | adopted (**unused**) | 2026-08-03 | low | low | **no** — nothing imports it |
+| [@floating-ui/dom](./floating-ui-dom.md) | adopted | 2026-08-05 | low | low | yes (tooltip positioning) |
 
-Not separately documented: the ten transitives behind `bits-ui`, enumerated with versions and licences in [bits-ui](./bits-ui.md).
+Not separately documented: the ten transitives behind `bits-ui`, enumerated with versions and licences in [bits-ui](./bits-ui.md) — since 2026-08-05, `@floating-ui/dom` and its two direct deps are promoted out of that count into [floating-ui-dom](./floating-ui-dom.md).
 
 ### Typefaces
 

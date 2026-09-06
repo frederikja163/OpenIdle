@@ -1,5 +1,5 @@
 import { getWsClient, WsError, type PrivilegedSend } from '$lib/ws/client';
-import { endSession, sessionIntent, sessionState } from './session.svelte';
+import { endSession, forgetSessionIntent, sessionIntent, sessionState } from './session.svelte';
 
 export type LoginStatus = 'loggedOut' | 'loggingIn' | 'loggedIn' | 'error';
 
@@ -27,6 +27,12 @@ export async function ensureLoggedIn(): Promise<void> {
 	// be re-armed: close() shut it deliberately and it will not reconnect on its
 	// own until someone says that shutdown is over.
 	getWsClient().reopen();
+	// reopen() forgets that a connection was ever established, so nothing gets
+	// replayed onto the socket this opens. A profile a dropped session left in the
+	// intent would therefore never be restored, while every reader of the intent
+	// went on waiting for the restore — which is what left the board saying
+	// "Restoring your profile…" for ever after a session that ran out of retries.
+	forgetSessionIntent();
 	userState.status = 'loggingIn';
 	userState.error = null;
 	/*

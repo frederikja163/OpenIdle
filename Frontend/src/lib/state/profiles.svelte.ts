@@ -1,6 +1,6 @@
 import { getWsClient, type PrivilegedSend } from '$lib/ws/client';
 import type { ProfileDto } from '$lib/ws/protocol';
-import { sessionIntent, sessionRun, sessionState } from './session.svelte';
+import { resetProfileState, sessionIntent, sessionRun, sessionState } from './session.svelte';
 
 export type ProfilesStatus = 'idle' | 'loading' | 'loaded' | 'error';
 
@@ -20,8 +20,28 @@ export const profilesState = sessionState(() => ({
 	// connection that produced it.
 	selectedProfileId: null as string | null,
 	selectingProfileId: null as string | null,
-	selectError: null as string | null
+	selectError: null as string | null,
+	// A reconnect's replay refusing the remembered profile. Kept apart from
+	// `selectError` because the two have different audiences: this one is nobody's
+	// doing and belongs to whichever page was waiting for the profile, while
+	// selectError answers a Load the visitor just pressed.
+	replayError: null as string | null
 }));
+
+/**
+ * Whether a profile is in play on this connection: one is selected, or a replay
+ * is restoring the one the last connection held and has not been refused.
+ *
+ * sessionIntent is not reactive, so a caller re-runs on the reactive fields read
+ * beside it — the selection landing and the replay's refusal are the only two
+ * things that change this answer.
+ */
+export function hasProfile(): boolean {
+	return (
+		profilesState.selectedProfileId !== null ||
+		(sessionIntent.profileId !== null && profilesState.replayError === null)
+	);
+}
 
 /*
  * Mirrors ProfileService.CreateProfileAsync in the backend so a name the server
@@ -115,6 +135,16 @@ export async function selectProfile(profileId: string): Promise<boolean> {
 	}
 	profilesState.selectingProfileId = profileId;
 	profilesState.selectError = null;
+	profilesState.replayError = null;
+	// Emptied before the request rather than after its response, because the
+	// backend sends the new profile's catch-up payout ahead of the response when
+	// it earned anything offline — and applying that on top of the previous
+	// profile's totals is what turned a payout into a delta against another
+	// profile's numbers. A refused select empties a board it did not need to,
+	// which costs one reload and nothing else.
+	if (profileId !== profilesState.selectedProfileId) {
+		resetProfileState();
+	}
 	const outcome = await sessionRun(
 		() => getWsClient().request('SelectProfileRequest', { profileId }),
 		{
@@ -147,6 +177,10 @@ export async function replayProfileSelection(send: PrivilegedSend): Promise<void
 		// the backend will never accept again (a deleted one) from failing the same
 		// way on every future reconnect and aborting the rest of the replay with it.
 		sessionIntent.profileId = null;
+		// The intent is not reactive, so this is the only trace of the refusal a
+		// page can react to — the game board reads it to stop waiting for a
+		// profile that is never coming back.
+		profilesState.replayError = error instanceof Error ? error.message : String(error);
 		throw error;
 	}
 	profilesState.selectedProfileId = profileId;

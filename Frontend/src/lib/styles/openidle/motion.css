@@ -9,6 +9,10 @@
 	--dur-slow: 400ms;
 	--dur-tick: 1000ms;
 
+	/* Mirrors the board loop's TICK_MS: a meter that steps every loop tick
+	   uses this so its fill reads as one constant sweep instead of jumping. */
+	--dur-sweep: 100ms;
+
 	--ease-out: cubic-bezier(0.2, 0.8, 0.3, 1);
 	--ease-in-out: cubic-bezier(0.5, 0, 0.3, 1);
 	--ease-snap: cubic-bezier(0.2, 1.5, 0.4, 1);
