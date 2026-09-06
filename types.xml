@@ -403,6 +403,35 @@
     <Property name="UserId" type="Guid" />
   </Dto>
 
+  <Dto name="Setting">
+    <Property name="Name" type="String" />
+    <Property name="Value" type="String" />
+  </Dto>
+
+  <Request name="SetUserSettings">
+    <Property name="Settings" type="Setting" multiple="true"/>
+    <Response/>
+  </Request>
+
+  <Request name="GetUserSettings">
+    <Property name="Settings" type="String" multiple="true" optional="true"/>
+    <Response>
+      <Property name="Settings" type="Setting" multiple="true"/>
+    </Response>
+  </Request>
+
+  <Request name="SetProfileSettings">
+    <Property name="Settings" type="Setting" multiple="true"/>
+    <Response/>
+  </Request>
+
+  <Request name="GetProfileSettings">
+    <Property name="Settings" type="String" multiple="true" optional="true"/>
+    <Response>
+      <Property name="Settings" type="Setting" multiple="true"/>
+    </Response>
+  </Request>
+
   <Request name="CreateProfile">
     <Property name="Name" type="String" />
     <Response />
