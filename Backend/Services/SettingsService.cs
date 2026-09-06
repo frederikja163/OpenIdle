@@ -1,8 +1,7 @@
-using System.Collections.Generic;
+using System;
 using System.Linq;
 using System.Threading.Tasks;
 using Backend.Database;
-using Backend.Database.Entities;
 using Backend.Dtos;
 using Microsoft.EntityFrameworkCore;
 
@@ -13,22 +12,16 @@ public sealed class SettingsService(IDbContextFactory<GameDbContext> dbContextFa
     public async Task SetUserSettings(UserId userId, SettingDto[] settings)
     {
         await using GameDbContext context = await dbContextFactory.CreateDbContextAsync();
-        foreach (SettingDto setting in settings)
+        await using var transaction = await context.Database.BeginTransactionAsync();
+        foreach (SettingDto setting in settings.GroupBy(s => s.Name, StringComparer.Ordinal).Select(g => g.Last()))
         {
-            UserSetting? userSetting = await context.UserSettings.FirstOrDefaultAsync(u => u.UserId == userId && u.Name == setting.Name);
-            if (userSetting is null)
-            {
-                userSetting = new UserSetting()
-                {
-                    UserId = userId,
-                    Name = setting.Name,
-                    Value = setting.Value
-                };
-                context.UserSettings.Add(userSetting);
-            }
-            userSetting.Value = setting.Value;
+            await context.Database.ExecuteSqlInterpolatedAsync($"""
+                INSERT INTO "UserSettings" ("UserId", "Name", "Value")
+                VALUES ({userId}, {setting.Name}, {setting.Value})
+                ON CONFLICT ("UserId", "Name") DO UPDATE SET "Value" = excluded."Value";
+                """);
         }
-        await context.SaveChangesAsync();
+        await transaction.CommitAsync();
     }
 
     public async Task<SettingDto[]> GetUserSettings(UserId userId, string[] settingNames)
@@ -46,22 +39,16 @@ public sealed class SettingsService(IDbContextFactory<GameDbContext> dbContextFa
     public async Task SetProfileSettings(ProfileId profileId, SettingDto[] settings)
     {
         await using GameDbContext context = await dbContextFactory.CreateDbContextAsync();
-        foreach (SettingDto setting in settings)
+        await using var transaction = await context.Database.BeginTransactionAsync();
+        foreach (SettingDto setting in settings.GroupBy(s => s.Name, StringComparer.Ordinal).Select(g => g.Last()))
         {
-            ProfileSetting? profileSetting = await context.ProfileSettings.FirstOrDefaultAsync(p => p.ProfileId == profileId && p.Name == setting.Name);
-            if (profileSetting is null)
-            {
-                profileSetting = new ProfileSetting()
-                {
-                    ProfileId = profileId,
-                    Name = setting.Name,
-                    Value = setting.Value
-                };
-                context.ProfileSettings.Add(profileSetting);
-            }
-            profileSetting.Value = setting.Value;
+            await context.Database.ExecuteSqlInterpolatedAsync($"""
+                INSERT INTO "ProfileSettings" ("ProfileId", "Name", "Value")
+                VALUES ({profileId}, {setting.Name}, {setting.Value})
+                ON CONFLICT ("ProfileId", "Name") DO UPDATE SET "Value" = excluded."Value";
+                """);
         }
-        await context.SaveChangesAsync();
+        await transaction.CommitAsync();
     }
 
     public async Task<SettingDto[]> GetProfileSettings(ProfileId profileId, string[] settingNames)

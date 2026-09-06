@@ -13,10 +13,16 @@ internal sealed class TestGameDb : IDisposable
 
     public TestGameDb()
     {
-        _connection = new SqliteConnection("Data Source=:memory:");
+        string connectionString = new SqliteConnectionStringBuilder
+        {
+            DataSource = $"OpenIdleTests-{Guid.NewGuid():N}",
+            Mode = SqliteOpenMode.Memory,
+            Cache = SqliteCacheMode.Shared
+        }.ToString();
+        _connection = new SqliteConnection(connectionString);
         _connection.Open();
         DbContextOptions<GameDbContext> options = new DbContextOptionsBuilder<GameDbContext>()
-            .UseSqlite(_connection)
+            .UseSqlite(connectionString)
             .Options;
         using GameDbContext dbContext = new(options);
         dbContext.Database.EnsureCreated();
