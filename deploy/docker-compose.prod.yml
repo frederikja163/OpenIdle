@@ -19,6 +19,8 @@ services:
     environment:
       ASPNETCORE_URLS: http://+:8080
       ConnectionStrings__Default: Data Source=/data/openidle.db
+      AllowedWsOrigins__0: ${DEV_FRONTEND_ORIGIN}
+      AllowedWsOrigins__1: http://localhost:5173
       # Who may open a socket. Deliberately unset, here and on dev: any origin may
       # connect, because OpenIdle is meant to be driven by clients we do not ship.
       # Add AllowedWsOrigins__0 (then __1, …) and restart to narrow it if a site
