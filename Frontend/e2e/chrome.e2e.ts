@@ -1,4 +1,5 @@
-import { expect, test, type WebSocketRoute } from '@playwright/test';
+import { expect, test } from '@playwright/test';
+import { logIn, LOGIN_URL, respondToRequests, THORIN, WS_ROUTE } from './support';
 
 // Runs against `bun run build && bun run preview` (see playwright.config.ts), so
 // this is the production build rather than the dev server — which is the whole
@@ -6,21 +7,18 @@ import { expect, test, type WebSocketRoute } from '@playwright/test';
 //
 // PUBLIC_WS_URL defaults to the address the backend binds in development, so a
 // test that needs the socket to behave a certain way stubs it with
-// routeWebSocket rather than assuming nothing is listening. The version footer
-// on /login, /profiles and /debug fetches the backend's build over HTTP
-// (GET /version under PUBLIC_API_URL, or next to an overridden /ws), so a test
+// routeWebSocket rather than assuming nothing is listening. Tests that never log
+// in need no stub: the client is constructed at import time but only connects
+// once a request is sent.
+//
+// The route pattern, the stub backend and the login live in ./support.ts, shared
+// with the board suite so the two cannot drift apart on the handshake.
+//
+// The version footer on /login, /profiles and /debug is the exception that does
+// reach out without a login: it fetches the backend's build over HTTP (GET
+// /version under PUBLIC_API_URL, or next to an overridden /ws), so a test
 // without a stub sees a failed fetch and a footer reading "unavailable" —
 // harmless to a test that never looks at it.
-
-// Matches the URL itself rather than a glob, which Playwright would resolve
-// against baseURL and so never match a socket on another port.
-const WS_ROUTE = /\/ws$/;
-
-// /login carries a redirectTo query param whenever the (auth) guard bounced a
-// protected route there, so assert on the pathname plus optional query.
-const LOGIN_URL = /\/login(\?.*)?$/;
-
-const THORIN = { name: 'Thorin', profileId: 'p1' };
 
 // The build the stubbed backend claims: 2026-09-04 22:13:20 UTC. Distinct from
 // the frontend's own (playwright.config.ts) so the footer's two halves cannot
@@ -29,24 +27,6 @@ const BACKEND_BUILD = {
 	commit: 'b2c3d4e5f60718293a4b5c6d7e8f9012a3b4c5d6',
 	commitTime: 1_788_560_000_000
 };
-
-/**
- * The whole backend, for tests that only need the socket to say yes: every
- * request gets the response named after it, and ListProfiles gets a list.
- */
-function respondToRequests(
-	ws: WebSocketRoute,
-	profiles: (typeof THORIN)[]
-): (frame: string | Buffer) => void {
-	return (frame) => {
-		const { $type, requestId } = JSON.parse(String(frame));
-		if ($type === 'ListProfilesRequest') {
-			ws.send(JSON.stringify({ $type: 'ListProfilesResponse', requestId, profiles }));
-			return;
-		}
-		ws.send(JSON.stringify({ $type: `${$type.replace('Request', '')}Response`, requestId }));
-	};
-}
 
 /**
  * Makes the backend's HTTP version endpoint claim BACKEND_BUILD, wherever it is
@@ -118,6 +98,25 @@ test('a successful login replaces /login rather than stacking /profiles on it', 
 	await expect(page.getByTestId('login-status')).toHaveText('Signed out');
 });
 
+test('a login bounced off the board lands on /profiles rather than an empty board', async ({
+	page
+}) => {
+	await page.routeWebSocket(WS_ROUTE, (ws) => {
+		const respond = respondToRequests(ws, [THORIN]);
+		ws.onMessage(respond);
+	});
+
+	// The guard turns the board away and records where the visitor was headed.
+	await page.goto('/game');
+	await expect(page).toHaveURL(/redirectTo=%2Fgame/);
+
+	await page.getByRole('button', { name: 'Log in' }).click();
+
+	// Honouring that would be honouring it onto a socket the login just opened,
+	// which is pointed at no profile — the board would have nothing to draw.
+	await expect(page).toHaveURL(/\/profiles$/);
+});
+
 test('a dropped socket reconnects and replays the session', async ({ page }) => {
 	const sentPerConnection: string[][] = [];
 	let dropTheFirstSocket = (): void => {};
@@ -134,9 +133,7 @@ test('a dropped socket reconnects and replays the session', async ({ page }) => 
 		});
 	});
 
-	await page.goto('/login');
-	await page.getByRole('button', { name: 'Log in' }).click();
-	await expect(page).toHaveURL(/\/profiles$/);
+	await logIn(page);
 	await expect(page.getByText('Thorin')).toBeVisible();
 
 	// Take the profile into the game, so there is a selection to put back.
@@ -167,9 +164,7 @@ test('a dropped socket reconnects and replays the session', async ({ page }) => 
 test('deleting a profile asks first, and confirming does nothing yet', async ({ page }) => {
 	await page.routeWebSocket(WS_ROUTE, (ws) => ws.onMessage(respondToRequests(ws, [THORIN])));
 
-	await page.goto('/login');
-	await page.getByRole('button', { name: 'Log in' }).click();
-	await expect(page).toHaveURL(/\/profiles$/);
+	await logIn(page);
 
 	// Scoped to the card rather than the page: the dialog puts a second Delete
 	// button in the document, and a third would arrive with a second profile. The
@@ -204,9 +199,7 @@ test('the Debug button opens the protocol console and Back returns to the app', 
 }) => {
 	await page.routeWebSocket(WS_ROUTE, (ws) => ws.onMessage(respondToRequests(ws, [THORIN])));
 
-	await page.goto('/login');
-	await page.getByRole('button', { name: 'Log in' }).click();
-	await expect(page).toHaveURL(/\/profiles$/);
+	await logIn(page);
 
 	await page.getByRole('link', { name: 'Debug' }).click();
 	await expect(page).toHaveURL(/\/debug$/);

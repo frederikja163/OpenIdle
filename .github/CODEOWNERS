@@ -5,6 +5,8 @@
 # given file. Keep the area mapping in step with .github/labeler.yml.
 
 # Backend, its tests, the socket contract, and the DTO generator pipeline.
+# The generator's tests live in /tests/OpenIdle.Tests/Generators/; /tests/
+# already sends them to the same owner, so they need no line of their own.
 /Backend/          @frederikja163
 /tests/            @frederikja163
 /types.xml         @frederikja163

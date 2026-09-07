@@ -9,8 +9,15 @@ backend:
   - changed-files:
       - any-glob-to-any-file:
           - Backend/**
-          - tests/**
           - types.xml
+  # The .NET test project also holds the generator's tests; those belong to
+  # `generator` below, so only count test files outside that folder. Every
+  # glob in an all-globs-to-any-file list must match the same file, which is
+  # what turns the negated pattern into an exclusion.
+  - changed-files:
+      - all-globs-to-any-file:
+          - tests/**
+          - "!tests/OpenIdle.Tests/Generators/**"
 
 frontend:
   - changed-files:
@@ -21,6 +28,7 @@ generator:
   - changed-files:
       - any-glob-to-any-file:
           - Generators/**
+          - tests/OpenIdle.Tests/Generators/**
 
 # Docker, deployment and CI. Quoted because YAML reads a leading `*` as an alias.
 devops:

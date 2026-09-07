@@ -11,6 +11,8 @@
 	import githubMark from '$lib/assets/github-mark-white.svg';
 	import Row from '$lib/components/layout/Row.svelte';
 	import { Button } from '$lib/components/ui/button';
+	import { requiresProfile } from '$lib/routing/guards';
+	import { hasProfile } from '$lib/state/profiles.svelte';
 	import { connectionState } from '$lib/state/session.svelte';
 	import { logout, userState } from '$lib/state/user.svelte';
 	import { cn } from '$lib/utils/stylingUtils';
@@ -59,6 +61,12 @@
 
 	const repository = 'https://github.com/frederikja163/OpenIdle';
 
+	// The board plays whichever profile is loaded, so offering it without one only
+	// leads to an empty state. This stays true right through a reconnect — a replay
+	// that is still restoring the profile counts as having it — so the item does not
+	// go dead every time the socket blips.
+	const playable = $derived(hasProfile());
+
 	/** A view stays lit for everything nested beneath it, not just its index. */
 	function isActive(href: string) {
 		return page.url.pathname === href || page.url.pathname.startsWith(`${href}/`);
@@ -93,14 +101,23 @@
 	<nav class="flex items-center gap-(--sp-1)">
 		{#each views as view (view.href)}
 			{@const active = isActive(view.href)}
+			{@const locked = requiresProfile(view.href) && !playable}
+			<!--
+				Dropping href rather than intercepting the click is what actually makes
+				the item unreachable — by keyboard and by middle click too, neither of
+				which a handler sees. aria-current still follows the URL: a visitor who
+				got to the board another way is on it whether or not this is a link.
+			-->
 			<a
-				href={view.href}
+				href={locked ? undefined : view.href}
 				aria-current={active ? 'page' : undefined}
+				aria-disabled={locked || undefined}
+				title={locked ? 'Load a profile to play' : undefined}
 				class={cn(
 					'oi-label-md inline-flex items-center gap-(--sp-3) rounded-sm border border-transparent px-2.75 py-1.5 no-underline transition-[background-color,color] duration-(--dur-fast) ease-out',
-					active
-						? 'border-line-accent bg-surface-active text-text-accent'
-						: 'text-text-faint hover:text-text-body'
+					active ? 'border-line-accent bg-surface-active text-text-accent' : 'text-text-faint',
+					!active && !locked && 'hover:text-text-body',
+					locked && 'cursor-not-allowed opacity-42'
 				)}
 			>
 				<view.icon size={13} />
