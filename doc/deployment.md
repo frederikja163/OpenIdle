@@ -12,12 +12,9 @@ These are the constraints the whole design exists to satisfy:
 | Dev frontend | Dev backend by default; any developer's local backend on request |
 | Local frontend (`bun run dev`) | Local backend by default; the dev backend when configured |
 
-Two mechanisms enforce them, and they work in opposite directions:
+These describe **the frontends we ship**, and they are enforced outbound only: the frontend decides which backend to dial, in `Frontend/src/lib/ws/ws-url.ts`, via `PUBLIC_WS_URL` for the socket and `PUBLIC_API_URL` for the backend's HTTP side (see [Build info](#build-info)). Production ships without `PUBLIC_ALLOW_WS_OVERRIDE`, so a `?ws=` link is inert there and a prod *user* cannot be redirected at another backend.
 
-- **Outbound** — the frontend decides which backend to dial, in `Frontend/src/lib/ws/ws-url.ts`: `PUBLIC_WS_URL` for the socket and `PUBLIC_API_URL` for the backend's HTTP side (see [Build info](#build-info)). Production ships without `PUBLIC_ALLOW_WS_OVERRIDE`, so a `?ws=` link is inert there.
-- **Inbound** — the backend decides which sites may open a socket, via `AllowedWsOrigins`. Production names the prod frontend and nothing else. Only the socket is gated: the backend's HTTP side (`/health`, `/version`) is public plumbing that answers any origin, since the API is meant to be publicly reachable (see [Build info](#build-info)).
-
-Neither alone is enough. The override switch stops a prod *user* being redirected at another backend; the origin allowlist stops another *site* driving the prod backend.
+Inbound there is no equivalent rule, deliberately. **Every backend accepts a connection from any origin, on both the socket and the HTTP side.** OpenIdle is meant to be driven by clients we do not ship — other browser frontends, mobile apps, bots — so the backend does not ask who is calling. A backend can be narrowed to a list of origins if it is being abused (see [The origin allowlist](#the-origin-allowlist)), but no environment does.
 
 ## Images
 
@@ -131,11 +128,10 @@ TLS and public hostnames are the reverse proxy's job. The containers speak plain
 | `PUBLIC_API_URL` | — | prod backend `https://…` (optional, see [Build info](#build-info)) | — | dev backend `https://…` (optional) |
 | `PUBLIC_ALLOW_WS_OVERRIDE` | — | **unset** | — | `true` |
 | `ORIGIN` | — | prod frontend origin | — | dev frontend origin |
-| `AllowedWsOrigins__0` | prod frontend origin | — | dev frontend origin | — |
-| `AllowedWsOrigins__1` | — | — | `http://localhost:5173` | — |
+| `AllowedWsOrigins__0` | **unset** | — | **unset** | — |
 | volume | `/data` | — | `/data` | — |
 
-The dev backend's second allowlist entry is what lets a developer run `bun run dev` locally against it. Production has no equivalent.
+Both backends leave `AllowedWsOrigins` unset, so both accept a socket from anywhere. On dev that is also what lets a developer run `bun run dev` locally against it, whose port varies.
 
 ### The database
 
@@ -157,23 +153,25 @@ https://dev.openidle.example/login?ws=ws://localhost:5066/ws
 
 The value is remembered in `localStorage` under `openidle:ws-url`, so it survives reloads and need only be typed once. `?ws=` with no value — or `?ws=reset` — clears it and hands the client back to its own backend. Anything that is not a `ws://` or `wss://` URL is ignored with a console warning rather than breaking the client, and any override already stored stays in force. The version footer follows the override too: it asks `http://localhost:5066/version`, derived from the override, rather than the deployment's `PUBLIC_API_URL`.
 
-This works because each developer's local backend has an empty `AllowedWsOrigins`, which means "allow any origin" — the deliberate default for local development.
+This works because every backend, local or deployed, accepts a socket from any origin.
 
 **Browser caveat.** An `https://` page opening `ws://localhost` is mixed content. Chrome permits it, because localhost counts as a potentially-trustworthy origin; Firefox and Safari block it. If the socket refuses to open there, run the frontend locally instead and use the previous section.
 
-**None of this works against production.** The prod frontend ships without `PUBLIC_ALLOW_WS_OVERRIDE`, so the parameter is read by nothing, and the prod backend rejects a handshake from any origin but its own.
+**The `?ws=` override does not work against production.** The prod frontend ships without `PUBLIC_ALLOW_WS_OVERRIDE`, so the parameter is read by nothing. The prod *backend* will still accept the socket — it accepts any origin — so point a locally built frontend at it if you need to.
 
 ## The origin allowlist
 
 `AllowedWsOrigins` is bound in `Backend/Extensions/WebApplicationBuilderExtensions.cs` and passed to `UseWebSockets`. As environment variables it is an indexed array: `AllowedWsOrigins__0`, `AllowedWsOrigins__1`, and so on.
 
-Three properties are worth knowing:
+**It is unset everywhere, and should stay that way.** Empty means unrestricted — ASP.NET Core's behaviour with no options at all — which is what a game meant to be played through clients we do not ship requires. The backend logs which mode it is in at startup. Set it only to shed abuse: if a site starts driving a backend through its visitors' browsers, adding that deployment's own frontend as `AllowedWsOrigins__0` and restarting cuts the traffic off. Take it back out afterwards.
 
-- **Empty means unrestricted.** That is ASP.NET Core's behaviour with no options at all, and it is what local development wants, since the frontend's port varies. Every deployed environment must set it explicitly — the backend logs which mode it is in at startup.
-- **This is not CORS.** A WebSocket handshake is not subject to the browser's same-origin policy, so `AddCors` would do nothing here. Without the allowlist, any page anywhere could drive the backend on a visitor's behalf. The HTTP endpoints are the other way round: they carry a permissive CORS policy on purpose, because they are public and hold nothing a visitor's browser could be tricked into leaking (see [Build info](#build-info)).
-- **Only requests carrying an `Origin` header are filtered.** Browsers always send one; other clients need not. It hardens the browser attack path rather than authenticating callers, and it is not a substitute for authentication.
+Three properties are worth knowing before reaching for it:
 
-A rejected handshake gets **403**. To check a deployment:
+- **It is a lever, not a security boundary.** Only requests carrying an `Origin` header are filtered. Browsers always send one; a mobile app, a script or a bot need not, and connects either way. So the allowlist shuts out third-party *browser* clients while stopping no determined caller at all.
+- **It is not CORS, and CORS would not do this.** A WebSocket handshake is not subject to the browser's same-origin policy, so `AddCors` has no effect on it. The HTTP endpoints (`/health`, `/version`) carry a permissive CORS policy on purpose: they are public and hold nothing a visitor's browser could be tricked into leaking (see [Build info](#build-info)).
+- **It does not stand in for authentication.** The usual reason to gate a socket handshake is cross-site WebSocket hijacking, and that attack needs an *ambient* credential — a cookie the browser attaches to a handshake from any page. The backend has none: `Backend/Controllers/AuthController.cs` signs a socket in with `LoginAsTestUser`, a placeholder. Real auth must therefore be token-based — a credential the client sends as a socket message, held in origin-scoped storage — which no other page can read and which works identically for a native client. Adopt cookie auth and this allowlist stops being optional.
+
+A rejected handshake gets **403**. To check a deployment that has set the allowlist:
 
 ```sh
 curl -i -H "Origin: https://evil.example" \

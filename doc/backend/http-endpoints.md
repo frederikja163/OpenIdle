@@ -6,7 +6,7 @@ The backend exposes two plain HTTP routes today — `GET /health` ([`Backend/Con
 
 - **Where:** `Backend/Controllers/Http/`.
 - **Pattern:** `[ApiController]` + `ControllerBase`, attribute route on each action.
-- **Wiring already exists** — [`AppHost.cs`](../../Backend/AppHost.cs) calls `AddControllers()`, `AddOpenIdleCors()` and `app.UseOpenIdleCors()` / `app.MapControllers()` in `CreateApp`. You only register *services*, never controllers.
+- **Wiring already exists** — [`AppHost.cs`](../../Backend/AppHost.cs) calls `AddControllers()` and `AddCors()`, then `app.UseCors()` / `app.MapControllers()`, in `CreateApp`. You only register *services*, never controllers.
 - **To add an endpoint:** write the controller class; register any new service; build.
 
 ## 1. The existing example
@@ -91,7 +91,7 @@ The `http` launch profile serves `http://localhost:5066` ([`Backend/Properties/l
 4. Return `IActionResult` helpers (`Ok`, `NotFound`, `BadRequest`, ...).
 5. Never register the controller — only its services, in `AppHost.cs`.
 6. Everything tied to game state goes through the socket, not HTTP; use HTTP for plumbing (handshake, health, static-ish concerns).
-7. **HTTP endpoints are public.** The default CORS policy in `AddOpenIdleCors` answers any origin, because the HTTP side is meant to be a publicly reachable API and a frontend on another origin could not read a cross-origin `fetch` without it. `AllowedWsOrigins` gates the socket handshake only. So never put anything origin- or session-sensitive on HTTP; rule 6 already keeps the session on the socket. See [`../deployment.md`](../deployment.md).
+7. **HTTP endpoints are public.** The default CORS policy answers any origin, because the HTTP side is meant to be a publicly reachable API and a frontend on another origin could not read a cross-origin `fetch` without it. The socket is open to any origin too (see [`../deployment.md`](../deployment.md)), so neither side identifies its caller: never put anything origin- or session-sensitive on HTTP, and note that rule 6 keeps game state on the socket but does not by itself protect it.
 
 ## 4. Related documents
 

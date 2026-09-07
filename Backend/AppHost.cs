@@ -22,10 +22,13 @@ internal static class AppHost
             options.UseSqlite(connectionString ?? builder.Configuration.GetConnectionString("Default")));
         builder.Services.AddControllers().AddApplicationPart(typeof(Backend.Controllers.Http.WsController).Assembly);
         builder.Services.AddSocketControllers();
-        // The HTTP API is public read-only plumbing (/health, /version), so every
-        // endpoint answers any origin; browsers still need Access-Control-Allow-Origin
-        // to read a cross-origin response. Only the WebSocket handshake is origin-gated
-        // (AllowedWsOrigins in BuildWebSocketOptions), since the socket holds the session.
+        // Any origin may reach both the HTTP API and the socket: OpenIdle is meant to be
+        // driven by clients we do not ship, so gating on Origin would only shut out
+        // third-party browser frontends — non-browser clients send no Origin header and
+        // were never filtered anyway. Browsers still need Access-Control-Allow-Origin to
+        // read a cross-origin response, hence the policy. AllowedWsOrigins
+        // (BuildWebSocketOptions) can narrow the handshake, but ships empty everywhere;
+        // see doc/deployment.md.
         builder.Services.AddCors(options => options.AddDefaultPolicy(policy => policy.AllowAnyOrigin()));
         builder.Services.AddSingleton<UserService>();
         builder.Services.AddSingleton<ProfileService>();

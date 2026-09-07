@@ -51,12 +51,28 @@ public sealed class VersionHttpIntegrationTests : IDisposable
     }
 
     /// <summary>
-    /// The HTTP side is public even when the socket is not: AllowedWsOrigins gates
-    /// the handshake only, and never narrows what a browser may read over HTTP.
+    /// The shipped configuration — an empty AllowedWsOrigins, in every environment —
+    /// lets any page open a socket, which is what supporting third-party clients needs.
     /// </summary>
     [Test]
     [CancelAfter(30_000)]
-    public async Task AllowedWsOrigins_GatesTheSocketButNotHttp(CancellationToken ct)
+    public async Task Socket_AcceptsAnyOriginByDefault(CancellationToken ct)
+    {
+        using ClientWebSocket foreignSocket = new();
+        foreignSocket.Options.SetRequestHeader("Origin", ForeignOrigin);
+
+        await foreignSocket.ConnectAsync(_app.WsUri, ct).ConfigureAwait(false);
+
+        Assert.That(foreignSocket.State, Is.EqualTo(WebSocketState.Open));
+    }
+
+    /// <summary>
+    /// AllowedWsOrigins is an opt-in abuse lever no environment sets. When it is set it
+    /// narrows the handshake only, and never what a browser may read over HTTP.
+    /// </summary>
+    [Test]
+    [CancelAfter(30_000)]
+    public async Task AllowedWsOrigins_WhenSet_GatesTheSocketButNotHttp(CancellationToken ct)
     {
         using TestApplication restricted = new($"--AllowedWsOrigins:0={AllowedOrigin}");
         using HttpClient http = new() { BaseAddress = restricted.HttpUri };

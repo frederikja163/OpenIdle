@@ -22,12 +22,10 @@ services:
       # The volume below; kept as an env var so the image needs no rebuild to
       # move it.
       ConnectionStrings__Default: Data Source=/data/openidle.db
-      # Who may open a socket. Index 0 is the deployed dev frontend. Index 1 is a
-      # developer running `bun run dev` on their own machine against this
-      # backend — the local-frontend-to-dev-backend direction. Production has no
-      # equivalent second entry.
-      AllowedWsOrigins__0: ${DEV_FRONTEND_ORIGIN}
-      AllowedWsOrigins__1: http://localhost:5173
+      # Who may open a socket. Deliberately unset, as in prod: any origin may
+      # connect. On dev that also covers a developer running `bun run dev` on
+      # their own machine against this backend, whose port varies. See the note
+      # in docker-compose.prod.yml and doc/deployment.md.
     volumes:
       # SQLite is a file. Without this the database is lost on every redeploy,
       # which is exactly what a webhook-driven deploy does often.
