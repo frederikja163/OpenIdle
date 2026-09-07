@@ -221,12 +221,27 @@ function waitForText(page: Page, text: string): Promise<unknown> {
 	);
 }
 
-/** Waits out a style recalculation, so a transition that was going to start has. */
+/** Waits for a meter to start a width transition. Reads no layout, like the three above. */
+function waitForMeterTransition(page: Page): Promise<unknown> {
+	return page.waitForFunction(() => document.querySelector('[data-width-transition]') !== null);
+}
+
+/*
+ * Waits out a style recalculation, so a transition that was going to start has.
+ *
+ * Three frames rather than two, because the width change can land after a
+ * frame's style recalculation rather than before it: the transition is then
+ * created in the next frame's recalculation and its event dispatched in the one
+ * after that, which is a frame past where two would look. A busy machine —
+ * every CI runner — takes that path often enough to fail a passing meter.
+ */
 async function settle(page: Page): Promise<void> {
 	await page.evaluate(
 		() =>
 			new Promise<void>((resolve) =>
-				requestAnimationFrame(() => requestAnimationFrame(() => resolve()))
+				requestAnimationFrame(() =>
+					requestAnimationFrame(() => requestAnimationFrame(() => resolve()))
+				)
 			)
 	);
 }
@@ -372,7 +387,10 @@ test('a level-up snaps the xp meter back instead of rewinding it', async ({ page
 	});
 
 	await waitForText(page, '594/1143 XP');
-	await settle(page);
+	// Waited for rather than sampled: the drop above has to be checked against a
+	// fixed number of frames because there is no event to wait on, but a rise that
+	// does animate only has to animate eventually.
+	await waitForMeterTransition(page);
 	expect(await meterTransitionCount(page)).toBeGreaterThan(0);
 });
 
