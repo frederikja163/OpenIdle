@@ -22,7 +22,11 @@ internal static class AppHost
             options.UseSqlite(connectionString ?? builder.Configuration.GetConnectionString("Default")));
         builder.Services.AddControllers().AddApplicationPart(typeof(Backend.Controllers.Http.WsController).Assembly);
         builder.Services.AddSocketControllers();
-        builder.Services.AddOpenIdleCors();
+        // The HTTP API is public read-only plumbing (/health, /version), so every
+        // endpoint answers any origin; browsers still need Access-Control-Allow-Origin
+        // to read a cross-origin response. Only the WebSocket handshake is origin-gated
+        // (AllowedWsOrigins in BuildWebSocketOptions), since the socket holds the session.
+        builder.Services.AddCors(options => options.AddDefaultPolicy(policy => policy.AllowAnyOrigin()));
         builder.Services.AddSingleton<UserService>();
         builder.Services.AddSingleton<ProfileService>();
         builder.Services.AddSingleton<SettingsService>();
@@ -37,7 +41,7 @@ internal static class AppHost
 
         WebApplication app = builder.Build();
 
-        app.UseOpenIdleCors();
+        app.UseCors();
         app.MapControllers();
         app.MapSocketControllers();
         DropTableData.AddAll(app.Services.GetRequiredService<DropTableService>());
