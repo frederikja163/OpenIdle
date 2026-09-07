@@ -8,7 +8,13 @@ import {
 	type ServerEvent,
 	type ServerEventOf
 } from './protocol';
-import { defaultWsUrl, readStoredWsUrl, resolveWsUrl, writeStoredWsUrl } from './ws-url';
+import {
+	defaultWsUrl,
+	readStoredWsUrl,
+	resolveApiUrl,
+	resolveWsUrl,
+	writeStoredWsUrl
+} from './ws-url';
 
 const DEFAULT_REQUEST_TIMEOUT_MS = 10_000;
 const DEFAULT_CONNECT_TIMEOUT_MS = 5_000;
@@ -474,10 +480,15 @@ export class WsClient {
 	 * rather than a recovery, so it also forgets that a connection was ever
 	 * established — a first attempt that fails should surface to the login page,
 	 * not start a background retry loop.
+	 *
+	 * Forgotten only when nothing is connected. The debug console dials before a
+	 * session exists, so a login can find a socket already open: that is an
+	 * established connection, and a later drop of it is a fault to recover from
+	 * rather than a first attempt that failed.
 	 */
 	reopen(): void {
 		this.deliberatelyClosed = false;
-		this.everConnected = false;
+		this.everConnected = this.socket?.readyState === WebSocket.OPEN;
 		this.cancelReconnect();
 	}
 
@@ -659,6 +670,17 @@ export function getWsUrl(): string {
 /** The URL the app would use with no override in place. */
 export function getDefaultWsUrl(): string {
 	return defaultWsUrl();
+}
+
+/**
+ * The HTTP base of the backend the app is pointed at: PUBLIC_API_URL for the
+ * deployment's own backend, or an address derived from the socket URL when an
+ * override has pointed the app somewhere else, so that the version footer
+ * follows the socket wherever the debug page or a ?ws= link sends it.
+ */
+export function getApiUrl(): string {
+	const wsUrl = getWsUrl();
+	return resolveApiUrl(wsUrl, wsUrl !== defaultWsUrl());
 }
 
 /** Whether the app is on a URL chosen here rather than the configured one. */

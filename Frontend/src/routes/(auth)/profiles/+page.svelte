@@ -1,6 +1,7 @@
 <script lang="ts">
 	import { goto } from '$app/navigation';
 	import { resolve } from '$app/paths';
+	import VersionFooter from '$lib/components/core/VersionFooter.svelte';
 	import Column from '$lib/components/layout/Column.svelte';
 	import Row from '$lib/components/layout/Row.svelte';
 	import { loadProfiles, profilesState, selectProfile } from '$lib/state/profiles.svelte';
@@ -36,7 +37,7 @@
 	Profiles: a grid of save-slot panels plus one dashed create card, per the
 	design system's profiles template.
 -->
-<Column class="mx-auto w-full max-w-[1600px] gap-(--gutter-app) p-(--gutter-app)">
+<Column class="mx-auto w-full max-w-[1600px] grow gap-(--gutter-app) p-(--gutter-app)">
 	<Row class="items-baseline gap-(--sp-5)">
 		<h1 class="oi-display-lg text-text-strong">Profiles</h1>
 		<span class="oi-body-md text-text-muted">
@@ -71,4 +72,5 @@
 		{/each}
 		<CreateProfileCard />
 	</div>
+	<VersionFooter class="mt-auto" />
 </Column>

@@ -4,7 +4,26 @@ import { playwright } from '@vitest/browser-playwright';
 import adapter from '@sveltejs/adapter-node';
 import { sveltekit } from '@sveltejs/kit/vite';
 
+/*
+ * Build provenance for the version footer. Read from the environment of the
+ * `vite build` that produced this bundle — CI hands the published commit and its
+ * committer date (unix seconds) to Frontend/Dockerfile as build-args — and
+ * inlined as a literal, so the served JavaScript names the commit it was built
+ * from. Deliberately not a PUBLIC_* variable: those are read at runtime from the
+ * container's environment and describe where the image is deployed, whereas
+ * this describes the image itself and must not change after the build. Absent
+ * values, as in `bun run dev`, become nulls the footer shows as a local build.
+ */
+const commitTime = process.env.GIT_COMMIT_TIME;
+const build = {
+	commit: process.env.GIT_COMMIT || null,
+	commitTime: commitTime && /^\d+$/.test(commitTime) ? Number(commitTime) * 1000 : null
+};
+
 export default defineConfig({
+	define: {
+		__OPENIDLE_BUILD__: JSON.stringify(build)
+	},
 	plugins: [
 		tailwindcss(),
 		sveltekit({

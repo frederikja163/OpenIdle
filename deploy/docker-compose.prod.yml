@@ -19,7 +19,13 @@ services:
     environment:
       ASPNETCORE_URLS: http://+:8080
       ConnectionStrings__Default: Data Source=/data/openidle.db
-      AllowedWsOrigins__0: ${PROD_FRONTEND_ORIGIN}
+      AllowedWsOrigins__0: ${DEV_FRONTEND_ORIGIN}
+      AllowedWsOrigins__1: http://localhost:5173
+      # Who may open a socket. Deliberately unset, here and on dev: any origin may
+      # connect, because OpenIdle is meant to be driven by clients we do not ship.
+      # Add AllowedWsOrigins__0 (then __1, …) and restart to narrow it if a site
+      # starts driving this backend through its visitors' browsers. That is an
+      # abuse lever, not a security boundary — see doc/deployment.md.
     volumes:
       - backend-data:/data
     ports:
@@ -30,6 +36,7 @@ services:
     restart: unless-stopped
     environment:
       PUBLIC_WS_URL: ${PROD_WS_URL}
+      PUBLIC_API_URL: ${PROD_API_URL:-}
       ORIGIN: ${PROD_FRONTEND_ORIGIN}
     ports:
       - "${FRONTEND_PORT:-3000}:3000"

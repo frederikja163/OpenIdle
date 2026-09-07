@@ -1,5 +1,12 @@
 import { describe, expect, it } from 'vitest';
-import { DEFAULT_WS_URL, selectWsUrl, type WsUrlInput } from './ws-url';
+import {
+	apiUrlFromWsUrl,
+	DEFAULT_WS_URL,
+	selectApiUrl,
+	selectWsUrl,
+	versionUrl,
+	type WsUrlInput
+} from './ws-url';
 
 const DEV_BACKEND = 'wss://api.dev.openidle.example/ws';
 const LOCAL_BACKEND = 'ws://localhost:5066/ws';
@@ -150,5 +157,92 @@ describe('selectWsUrl', () => {
 		const resolution = selectWsUrl(input({ requestedOverride: `  ${LOCAL_BACKEND}  ` }));
 
 		expect(resolution.url).toBe(LOCAL_BACKEND);
+	});
+});
+
+describe('selectApiUrl', () => {
+	const DEV_API = 'https://api.dev.openidle.example';
+
+	it('uses the configured API URL for the configured backend', () => {
+		const resolution = selectApiUrl({
+			configured: DEV_API,
+			wsUrl: DEV_BACKEND,
+			wsOverridden: false
+		});
+
+		expect(resolution).toMatchObject({ url: DEV_API, source: 'configured', warnings: [] });
+	});
+
+	it('normalises the configured value, so a trailing slash cannot double up', () => {
+		const resolution = selectApiUrl({
+			configured: ` ${DEV_API}/ `,
+			wsUrl: DEV_BACKEND,
+			wsOverridden: false
+		});
+
+		expect(resolution.url).toBe(DEV_API);
+		expect(versionUrl(resolution.url)).toBe(`${DEV_API}/version`);
+	});
+
+	it('follows an overridden socket instead of the configured API', () => {
+		const resolution = selectApiUrl({
+			configured: DEV_API,
+			wsUrl: LOCAL_BACKEND,
+			wsOverridden: true
+		});
+
+		expect(resolution).toMatchObject({ url: 'http://localhost:5066', source: 'derived' });
+	});
+
+	it('derives from the socket when nothing is configured', () => {
+		const resolution = selectApiUrl({
+			configured: undefined,
+			wsUrl: DEV_BACKEND,
+			wsOverridden: false
+		});
+
+		expect(resolution).toMatchObject({
+			url: 'https://api.dev.openidle.example',
+			source: 'derived'
+		});
+	});
+
+	it('warns about and ignores a configured value that is not an http(s) URL', () => {
+		for (const configured of ['wss://api.dev.openidle.example', 'not a url']) {
+			const resolution = selectApiUrl({ configured, wsUrl: DEV_BACKEND, wsOverridden: false });
+
+			expect(resolution.source).toBe('derived');
+			expect(resolution.warnings).toEqual([expect.stringContaining(configured)]);
+		}
+	});
+});
+
+describe('apiUrlFromWsUrl', () => {
+	it('maps a ws URL to the http base on the same host', () => {
+		expect(apiUrlFromWsUrl('ws://localhost:5066/ws')).toBe('http://localhost:5066');
+	});
+
+	it('maps a wss URL to an https base', () => {
+		expect(apiUrlFromWsUrl('wss://api.openidle.example/ws')).toBe('https://api.openidle.example');
+	});
+
+	it('keeps a path prefix the backend is mounted under', () => {
+		expect(apiUrlFromWsUrl('wss://openidle.example/api/ws')).toBe('https://openidle.example/api');
+		expect(apiUrlFromWsUrl('wss://openidle.example/api/ws/')).toBe('https://openidle.example/api');
+	});
+
+	it('drops the query and hash the ws URL carried', () => {
+		expect(apiUrlFromWsUrl('ws://localhost:5066/ws?x=1#frag')).toBe('http://localhost:5066');
+	});
+});
+
+describe('versionUrl', () => {
+	it('appends /version to the API base', () => {
+		expect(versionUrl('http://localhost:5066')).toBe('http://localhost:5066/version');
+		expect(versionUrl('https://openidle.example/api')).toBe('https://openidle.example/api/version');
+	});
+
+	it('tolerates a base that already ends in a slash', () => {
+		expect(versionUrl('http://localhost:5066/')).toBe('http://localhost:5066/version');
 	});
 });

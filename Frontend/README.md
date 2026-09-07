@@ -40,10 +40,11 @@ Three files, with one job each:
 - `.env.local` — gitignored, holds this machine's real values and any secrets,
   and overrides the other two.
 
-| Variable        | Default                  |
-| --------------- | ------------------------ |
-| `PUBLIC_WS_URL` | `ws://localhost:5066/ws` |
-| `PUBLIC_DEBUG`  | `true`                   |
+| Variable         | Default                                                         |
+| ---------------- | --------------------------------------------------------------- |
+| `PUBLIC_WS_URL`  | `ws://localhost:5066/ws`                                        |
+| `PUBLIC_API_URL` | `http://localhost:5066` (derived from `PUBLIC_WS_URL` if unset) |
+| `PUBLIC_DEBUG`   | `true`                                                          |
 
 ## Building
 
