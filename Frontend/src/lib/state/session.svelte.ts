@@ -31,10 +31,12 @@ export function forgetSessionIntent(): void {
 	sessionIntent.profileId = null;
 }
 
-// An array rather than a Set because this is a plain append-only registry, not
+// Arrays rather than Sets because these are plain append-only registries, not
 // reactive state: every sessionState() call contributes its own closure, so
-// there is nothing to deduplicate.
+// there is nothing to deduplicate. Profile-scoped stores appear in both, since
+// a connection ending takes the profile with it.
 const resets: (() => void)[] = [];
+const profileResets: (() => void)[] = [];
 
 /**
  * State whose lifetime is the connection. Every field returns to the value its
@@ -45,6 +47,24 @@ const resets: (() => void)[] = [];
 export function sessionState<T extends object>(create: () => T): T {
 	const state = $state(create());
 	resets.push(() => Object.assign(state, create()));
+	return state;
+}
+
+/**
+ * State whose lifetime is the *selected profile*. One socket can be pointed at
+ * one profile after another without ever closing, and everything a profile owns
+ * — its skills, its pack, what it is doing — belongs to the profile rather than
+ * to the connection that fetched it. Without this scope a second profile
+ * inherited the first one's board, and the payout the backend pushes on select
+ * was applied as a delta against another profile's totals.
+ */
+export function profileState<T extends object>(create: () => T): T {
+	const state = $state(create());
+	const reset = (): void => {
+		Object.assign(state, create());
+	};
+	resets.push(reset);
+	profileResets.push(reset);
 	return state;
 }
 
@@ -59,6 +79,17 @@ export function endSession(): void {
 /** Empties every store but keeps the intent, so a reconnect can restore them. */
 export function resetSessionState(): void {
 	for (const reset of resets) {
+		reset();
+	}
+}
+
+/**
+ * Empties only what a profile owns, for a live socket being pointed at another
+ * one. The connection-scoped stores — the profile list, the login — survive,
+ * because the connection does.
+ */
+export function resetProfileState(): void {
+	for (const reset of profileResets) {
 		reset();
 	}
 }

@@ -1,30 +1,19 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
-const { request, connection } = vi.hoisted(() => ({
-	request: vi.fn(),
-	// The generation the store reads to decide whether a result still belongs to
-	// the live connection. Bumping it here is a socket dropping.
-	connection: { generation: 0 }
-}));
+vi.mock('$lib/ws/client', async () => (await import('$lib/state/test-support')).clientModule);
 
-// One object handed back on every call, like the real singleton: sessionRun
-// compares the generation it captured against the one on the client it fetches
-// later, so a fresh object per call would be testing a contract we do not ship.
-vi.mock('$lib/ws/client', () => {
-	const client = {
-		request,
-		get generation() {
-			return connection.generation;
-		},
-		onClose: () => () => {},
-		onStatus: () => () => {},
-		reopen: () => {}
-	};
-	return { getWsClient: () => client };
-});
-
-const { createProfile, loadProfiles, profilesState, selectProfile, validateProfileName } =
-	await import('$lib/state/profiles.svelte');
+const { connection, request, resetConnection } = await import('$lib/state/test-support');
+// The board is the profile-scoped store a select has to empty, so it is what
+// the reset is asserted through rather than a stand-in.
+const { gameState } = await import('$lib/state/game.svelte');
+const {
+	createProfile,
+	loadProfiles,
+	profilesState,
+	replayProfileSelection,
+	selectProfile,
+	validateProfileName
+} = await import('$lib/state/profiles.svelte');
 // wireSession() registers the reset against the socket in the real app; this
 // project never calls it, so the reset is driven directly here instead — which
 // is what makes a connection dropping testable at all.
@@ -39,8 +28,7 @@ function listResponse(profiles: (typeof THORIN)[]) {
 }
 
 beforeEach(() => {
-	request.mockReset();
-	connection.generation = 0;
+	resetConnection();
 	// One call each, no field lists: a field added to the store or to the intent
 	// and forgotten here can no longer leak between cases.
 	resetSessionState();
@@ -205,6 +193,35 @@ describe('selectProfile', () => {
 		await first;
 	});
 
+	it('empties the previous profile before the socket is pointed at another', async () => {
+		gameState.status = 'loaded';
+		gameState.items = { Tin: 3 };
+		let statusWhenSent: string | null = null;
+		request.mockImplementation(() => {
+			statusWhenSent = gameState.status;
+			return Promise.resolve({ $type: 'SelectProfileResponse', requestId: 1 });
+		});
+
+		await selectProfile(THORIN.profileId);
+
+		// Before the request goes out, not after its response: the backend sends
+		// the new profile's catch-up payout ahead of that response, and applying it
+		// on top of the old totals is what made a payout a delta against another
+		// profile's numbers.
+		expect(statusWhenSent).toBe('idle');
+		expect(gameState.items).toEqual({});
+	});
+
+	it('leaves the board standing when the same profile is loaded again', async () => {
+		request.mockResolvedValue({ $type: 'SelectProfileResponse', requestId: 1 });
+		await selectProfile(THORIN.profileId);
+		gameState.status = 'loaded';
+
+		await selectProfile(THORIN.profileId);
+
+		expect(gameState.status).toBe('loaded');
+	});
+
 	it('records the selection so a reconnect can restore it', async () => {
 		request.mockResolvedValue({ $type: 'SelectProfileResponse', requestId: 1 });
 
@@ -215,6 +232,41 @@ describe('selectProfile', () => {
 		resetSessionState();
 		expect(profilesState.selectedProfileId).toBeNull();
 		expect(sessionIntent.profileId).toBe(THORIN.profileId);
+	});
+});
+
+describe('replayProfileSelection', () => {
+	it('puts the socket back on the remembered profile', async () => {
+		sessionIntent.profileId = THORIN.profileId;
+		const send = vi.fn().mockResolvedValue({ $type: 'SelectProfileResponse', requestId: 1 });
+
+		await replayProfileSelection(send);
+
+		expect(send).toHaveBeenCalledWith('SelectProfileRequest', { profileId: THORIN.profileId });
+		expect(profilesState.selectedProfileId).toBe(THORIN.profileId);
+	});
+
+	it('sends nothing when there is no profile to restore', async () => {
+		const send = vi.fn();
+
+		await replayProfileSelection(send);
+
+		expect(send).not.toHaveBeenCalled();
+	});
+
+	it('forgets a refused profile and leaves the refusal where a page can see it', async () => {
+		sessionIntent.profileId = THORIN.profileId;
+		const send = vi.fn().mockRejectedValue(new Error('Profile does not belong to user.'));
+
+		await expect(replayProfileSelection(send)).rejects.toThrow('Profile does not belong to user.');
+
+		expect(sessionIntent.profileId).toBeNull();
+		expect(profilesState.selectedProfileId).toBeNull();
+		// The intent is not reactive, so the error is the only reactive evidence
+		// that the wait for a profile is over. Kept off `selectError`, which the
+		// profiles page shows as an alert: nobody asked for this one.
+		expect(profilesState.replayError).toBe('Profile does not belong to user.');
+		expect(profilesState.selectError).toBeNull();
 	});
 });
 

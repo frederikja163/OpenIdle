@@ -3,6 +3,8 @@
 	import { resolve } from '$app/paths';
 	import { page } from '$app/state';
 	import { Button } from '$lib/components/ui/button';
+	import { requiresProfile } from '$lib/routing/guards';
+	import { hasProfile } from '$lib/state/profiles.svelte';
 	import { ensureLoggedIn, userState, type LoginStatus } from '$lib/state/user.svelte';
 
 	const statusLabel: Record<LoginStatus, string> = {
@@ -32,7 +34,13 @@
 			// so it cannot be expressed through resolve(); the /profiles fallback
 			// still goes through it.
 			const redirectTo = page.url.searchParams.get('redirectTo');
-			const target = redirectTo && isSafeRedirect(redirectTo) ? redirectTo : resolve('/profiles');
+			const wanted = redirectTo && isSafeRedirect(redirectTo) ? redirectTo : resolve('/profiles');
+			// Logging in creates a session rather than resuming one, so the socket it
+			// just opened is pointed at no profile and will replay none. Returning the
+			// visitor to the board would put them straight back on the empty one they
+			// were bounced off — /profiles is where the profile comes from, and it is
+			// one click from the board.
+			const target = requiresProfile(wanted) && !hasProfile() ? resolve('/profiles') : wanted;
 			// eslint-disable-next-line svelte/no-navigation-without-resolve
 			void goto(target, { replaceState: true });
 		}

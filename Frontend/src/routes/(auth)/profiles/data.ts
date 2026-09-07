@@ -2,10 +2,8 @@ import Fish from '@lucide/svelte/icons/fish';
 import Hammer from '@lucide/svelte/icons/hammer';
 import Pickaxe from '@lucide/svelte/icons/pickaxe';
 import Trees from '@lucide/svelte/icons/trees';
-import type { Component } from 'svelte';
+import type { IconComponent } from '$lib/components/icon';
 import type { ProfileDto } from '$lib/ws/protocol';
-
-export type IconComponent = Component<{ size?: number | string }>;
 
 export interface Skill {
 	name: string;
