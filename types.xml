@@ -2,149 +2,149 @@
 <Types>
   <Skill name="Mining">
     <Slot name="Head" required="true">
-      <Tag name="pickaxehead"/>
+      <Tag name="PickaxeHead"/>
     </Slot>
     <Slot name="Handle" required="true">
-      <Tag name="handle"/>
+      <Tag name="Handle"/>
     </Slot>
   </Skill>
   <Skill name="LumberJacking">
     <Slot name="Head" required="true">
-      <Tag name="axehead"/>
+      <Tag name="AxeHead"/>
     </Slot>
     <Slot name="Handle" required="true">
-      <Tag name="handle"/>
+      <Tag name="Handle"/>
     </Slot>
   </Skill>
   <Skill name="Crafting">
     <Slot name="Head" required="true">
-      <Tag name="hammerhead"/>
+      <Tag name="HammerHead"/>
     </Slot>
     <Slot name="Handle" required="true">
-      <Tag name="handle"/>
+      <Tag name="Handle"/>
     </Slot>
   </Skill>
 
   <!-- Ores -->
   <Item name="Tin">
-    <Tag name="ore"/>
+    <Tag name="Ore"/>
   </Item>
   <Item name="Copper">
-    <Tag name="ore"/>
+    <Tag name="Ore"/>
   </Item>
   <Item name="Bronze">
-    <Tag name="ore"/>
+    <Tag name="Ore"/>
   </Item>
   <Item name="Iron">
-    <Tag name="ore"/>
+    <Tag name="Ore"/>
   </Item>
   <Item name="Steel">
-    <Tag name="ore"/>
+    <Tag name="Ore"/>
   </Item>
 
   <!-- Woods -->
   <Item name="Balsa">
-    <Tag name="wood"/>
+    <Tag name="Wood"/>
   </Item>
   <Item name="Pine">
-    <Tag name="wood"/>
+    <Tag name="Wood"/>
   </Item>
   <Item name="Cedar">
-    <Tag name="wood"/>
+    <Tag name="Wood"/>
   </Item>
   <Item name="Cherry">
-    <Tag name="wood"/>
+    <Tag name="Wood"/>
   </Item>
   <Item name="Oak">
-    <Tag name="wood"/>
+    <Tag name="Wood"/>
   </Item>
 
   <!-- Handles -->
   <Item name="BalsaHandle">
-    <Tag name="handle"/>
-    <Stat name="speed" value="0.82"/>
+    <Tag name="Handle"/>
+    <Stat name="Speed" value="0.82"/>
   </Item>
   <Item name="PineHandle">
-    <Tag name="handle"/>
-    <Stat name="speed" value="0.70"/>
+    <Tag name="Handle"/>
+    <Stat name="Speed" value="0.70"/>
   </Item>
   <Item name="CedarHandle">
-    <Tag name="handle"/>
-    <Stat name="speed" value="0.58"/>
+    <Tag name="Handle"/>
+    <Stat name="Speed" value="0.58"/>
   </Item>
   <Item name="CherryHandle">
-    <Tag name="handle"/>
-    <Stat name="speed" value="0.46"/>
+    <Tag name="Handle"/>
+    <Stat name="Speed" value="0.46"/>
   </Item>
   <Item name="OakHandle">
-    <Tag name="handle"/>
-    <Stat name="speed" value="0.34"/>
+    <Tag name="Handle"/>
+    <Stat name="Speed" value="0.34"/>
   </Item>
 
   <!-- Hammer Heads -->
   <Item name="TinHammerHead">
-    <Tag name="hammerhead"/>
-    <Stat name="itemProductivity" value="1.0"/>
+    <Tag name="HammerHead"/>
+    <Stat name="ItemProductivity" value="1.0"/>
   </Item>
   <Item name="CopperHammerHead">
-    <Tag name="hammerhead"/>
-    <Stat name="itemProductivity" value="1.1"/>
+    <Tag name="HammerHead"/>
+    <Stat name="ItemProductivity" value="1.1"/>
   </Item>
   <Item name="BronzeHammerHead">
-    <Tag name="hammerhead"/>
-    <Stat name="itemProductivity" value="1.2"/>
+    <Tag name="HammerHead"/>
+    <Stat name="ItemProductivity" value="1.2"/>
   </Item>
   <Item name="IronHammerHead">
-    <Tag name="hammerhead"/>
-    <Stat name="itemProductivity" value="1.3"/>
+    <Tag name="HammerHead"/>
+    <Stat name="ItemProductivity" value="1.3"/>
   </Item>
   <Item name="SteelHammerHead">
-    <Tag name="hammerhead"/>
-    <Stat name="itemProductivity" value="1.4"/>
+    <Tag name="HammerHead"/>
+    <Stat name="ItemProductivity" value="1.4"/>
   </Item>
 
   <!-- Pickaxe Heads -->
   <Item name="TinPickaxeHead">
-    <Tag name="pickaxehead"/>
-    <Stat name="itemProductivity" value="1.0"/>
+    <Tag name="PickaxeHead"/>
+    <Stat name="ItemProductivity" value="1.0"/>
   </Item>
   <Item name="CopperPickaxeHead">
-    <Tag name="pickaxehead"/>
-    <Stat name="itemProductivity" value="1.1"/>
+    <Tag name="PickaxeHead"/>
+    <Stat name="ItemProductivity" value="1.1"/>
   </Item>
   <Item name="BronzePickaxeHead">
-    <Tag name="pickaxehead"/>
-    <Stat name="itemProductivity" value="1.2"/>
+    <Tag name="PickaxeHead"/>
+    <Stat name="ItemProductivity" value="1.2"/>
   </Item>
   <Item name="IronPickaxeHead">
-    <Tag name="pickaxehead"/>
-    <Stat name="itemProductivity" value="1.3"/>
+    <Tag name="PickaxeHead"/>
+    <Stat name="ItemProductivity" value="1.3"/>
   </Item>
   <Item name="SteelPickaxeHead">
-    <Tag name="pickaxehead"/>
-    <Stat name="itemProductivity" value="1.4"/>
+    <Tag name="PickaxeHead"/>
+    <Stat name="ItemProductivity" value="1.4"/>
   </Item>
 
   <!-- Axe Heads -->
   <Item name="TinAxeHead">
-    <Tag name="axehead"/>
-    <Stat name="itemProductivity" value="1.0"/>
+    <Tag name="AxeHead"/>
+    <Stat name="ItemProductivity" value="1.0"/>
   </Item>
   <Item name="CopperAxeHead">
-    <Tag name="axehead"/>
-    <Stat name="itemProductivity" value="1.1"/>
+    <Tag name="AxeHead"/>
+    <Stat name="ItemProductivity" value="1.1"/>
   </Item>
   <Item name="BronzeAxeHead">
-    <Tag name="axehead"/>
-    <Stat name="itemProductivity" value="1.2"/>
+    <Tag name="AxeHead"/>
+    <Stat name="ItemProductivity" value="1.2"/>
   </Item>
   <Item name="IronAxeHead">
-    <Tag name="axehead"/>
-    <Stat name="itemProductivity" value="1.3"/>
+    <Tag name="AxeHead"/>
+    <Stat name="ItemProductivity" value="1.3"/>
   </Item>
   <Item name="SteelAxeHead">
-    <Tag name="axehead"/>
-    <Stat name="itemProductivity" value="1.4"/>
+    <Tag name="AxeHead"/>
+    <Stat name="ItemProductivity" value="1.4"/>
   </Item>
 
   <!-- Bonus drop tables -->

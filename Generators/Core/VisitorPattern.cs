@@ -57,12 +57,3 @@ public interface INode
 {
     void Accept(IVisitor visitor);
 }
-
-public static class NodeExtensions
-{
-    public static void AcceptAll<T>(this List<T> nodes, IVisitor visitor) where T : INode
-    {
-        foreach (var node in nodes)
-            node.Accept(visitor);
-    }
-}
