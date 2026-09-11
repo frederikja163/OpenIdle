@@ -195,7 +195,9 @@ public sealed class SettingsServiceTests : IDisposable
         var profile = new Profile
         {
             Name = $"P{Guid.NewGuid():N}"[..8],
-            ProfileId = Guid.NewGuid()
+            ProfileId = Guid.NewGuid(),
+            CreationTime = DateTime.UtcNow,
+            LastActiveTime = DateTime.UtcNow
         };
         db.Profiles.Add(profile);
         await db.SaveChangesAsync();
