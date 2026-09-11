@@ -3,6 +3,7 @@ using System;
 using Backend.Database;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 
 #nullable disable
@@ -10,9 +11,11 @@ using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 namespace Backend.Migrations
 {
     [DbContext(typeof(GameDbContext))]
-    partial class GameDbContextModelSnapshot : ModelSnapshot
+    [Migration("20260905215749_AddProfileTimestamps")]
+    partial class AddProfileTimestamps
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        /// <inheritdoc />
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder.HasAnnotation("ProductVersion", "10.0.10");
@@ -64,23 +67,6 @@ namespace Backend.Migrations
                     b.ToTable("Profiles");
                 });
 
-            modelBuilder.Entity("Backend.Database.Entities.ProfileSetting", b =>
-                {
-                    b.Property<Guid>("ProfileId")
-                        .HasColumnType("TEXT");
-
-                    b.Property<string>("Name")
-                        .HasColumnType("TEXT");
-
-                    b.Property<string>("Value")
-                        .IsRequired()
-                        .HasColumnType("TEXT");
-
-                    b.HasKey("ProfileId", "Name");
-
-                    b.ToTable("ProfileSettings");
-                });
-
             modelBuilder.Entity("Backend.Database.Entities.Skill", b =>
                 {
                     b.Property<Guid>("ProfileId")
@@ -111,23 +97,6 @@ namespace Backend.Migrations
                     b.ToTable("Users");
                 });
 
-            modelBuilder.Entity("Backend.Database.Entities.UserSetting", b =>
-                {
-                    b.Property<Guid>("UserId")
-                        .HasColumnType("TEXT");
-
-                    b.Property<string>("Name")
-                        .HasColumnType("TEXT");
-
-                    b.Property<string>("Value")
-                        .IsRequired()
-                        .HasColumnType("TEXT");
-
-                    b.HasKey("UserId", "Name");
-
-                    b.ToTable("UserSettings");
-                });
-
             modelBuilder.Entity("ProfileUser", b =>
                 {
                     b.Property<Guid>("ProfilesProfileId")
@@ -154,15 +123,6 @@ namespace Backend.Migrations
                     b.Navigation("Profile");
                 });
 
-            modelBuilder.Entity("Backend.Database.Entities.ProfileSetting", b =>
-                {
-                    b.HasOne("Backend.Database.Entities.Profile", null)
-                        .WithMany()
-                        .HasForeignKey("ProfileId")
-                        .OnDelete(DeleteBehavior.Cascade)
-                        .IsRequired();
-                });
-
             modelBuilder.Entity("Backend.Database.Entities.Skill", b =>
                 {
                     b.HasOne("Backend.Database.Entities.Profile", "Profile")
@@ -172,15 +132,6 @@ namespace Backend.Migrations
                         .IsRequired();
 
                     b.Navigation("Profile");
-                });
-
-            modelBuilder.Entity("Backend.Database.Entities.UserSetting", b =>
-                {
-                    b.HasOne("Backend.Database.Entities.User", null)
-                        .WithMany()
-                        .HasForeignKey("UserId")
-                        .OnDelete(DeleteBehavior.Cascade)
-                        .IsRequired();
                 });
 
             modelBuilder.Entity("ProfileUser", b =>

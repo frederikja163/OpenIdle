@@ -90,7 +90,7 @@ function entryValue(property: SchemaProperty, entry: EntryNode | undefined): unk
 		case 'long':
 		case 'float': {
 			// An empty number field means zero rather than an error: it is the value
-			// the backend's int/float would have defaulted to anyway.
+			// the backend's int/float/long would have defaulted to anyway.
 			if (entry.value.trim() === '') {
 				return 0;
 			}

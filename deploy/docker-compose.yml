@@ -1,0 +1,133 @@
+name: openidle
+
+services:
+    openidle-backend-dev:
+        image: ghcr.io/frederikja163/openidle-backend:dev
+        container_name: openidle-backend-dev
+        labels:
+            - "com.centurylinklabs.watchtower.enable=true"
+        restart: unless-stopped
+        pull_policy: always
+        volumes:
+            - openidle-dev-data:/data
+        environment:
+            AllowedWsOrigins__0: https://${OPENIDLE_DEV_FRONTEND_HOST:?set OPENIDLE_DEV_FRONTEND_HOST in the stack env vars (see .env.example)}
+            AllowedWsOrigins__1: http://localhost:5173
+        # Internal port: 8080
+
+    openidle-frontend-dev:
+        image: ghcr.io/frederikja163/openidle-frontend:dev
+        container_name: openidle-frontend-dev
+        labels:
+            - "com.centurylinklabs.watchtower.enable=true"
+        restart: unless-stopped
+        pull_policy: always
+        environment:
+            PUBLIC_WS_URL: wss://${OPENIDLE_DEV_BACKEND_HOST:?set OPENIDLE_DEV_BACKEND_HOST in the stack env vars (see .env.example)}/ws
+            PUBLIC_ALLOW_WS_OVERRIDE: "true"
+            ORIGIN: https://${OPENIDLE_DEV_FRONTEND_HOST}
+        # Internal port: 3000
+
+    openidle-backend:
+        image: ghcr.io/frederikja163/openidle-backend:prod
+        container_name: openidle-backend
+        labels:
+            - "com.centurylinklabs.watchtower.enable=true"
+        restart: unless-stopped
+        pull_policy: always
+        volumes:
+            - openidle-data:/data
+        environment:
+            AllowedWsOrigins__0: https://${OPENIDLE_PROD_FRONTEND_HOST:?set OPENIDLE_PROD_FRONTEND_HOST in the stack env vars (see .env.example)}
+        # Internal port: 8080
+
+    openidle-frontend:
+        image: ghcr.io/frederikja163/openidle-frontend:prod
+        container_name: openidle-frontend
+        labels:
+            - "com.centurylinklabs.watchtower.enable=true"
+        restart: unless-stopped
+        pull_policy: always
+        environment:
+            PUBLIC_WS_URL: wss://${OPENIDLE_PROD_BACKEND_HOST:?set OPENIDLE_PROD_BACKEND_HOST in the stack env vars (see .env.example)}/ws
+            ORIGIN: https://${OPENIDLE_PROD_FRONTEND_HOST}
+        # Internal port: 3000
+
+    # Only the sign-in paths are public; the Console and management/admin APIs are LAN-only.
+    # OPENIDLE_ZITADEL_MASTERKEY must be exactly 32 chars (openssl rand -hex 16) and must never change
+    # No watchtower label since upgrades run DB migrations.
+    openidle-zitadel:
+        image: ghcr.io/zitadel/zitadel:v4.17.3
+        container_name: openidle-zitadel
+        restart: unless-stopped
+        # Root so it can write the login client PAT into the shared bootstrap volume
+        user: "0"
+        command: start-from-init --masterkeyFromEnv
+        environment:
+            ZITADEL_MASTERKEY: ${OPENIDLE_ZITADEL_MASTERKEY:?set OPENIDLE_ZITADEL_MASTERKEY (exactly 32 chars) in the stack env vars (see .env.example)}
+            ZITADEL_PORT: 8080
+            ZITADEL_EXTERNALDOMAIN: ${OPENIDLE_ZITADEL_HOST:?set OPENIDLE_ZITADEL_HOST in the stack env vars (see .env.example)}
+            ZITADEL_EXTERNALPORT: 443
+            ZITADEL_EXTERNALSECURE: "true"
+            ZITADEL_TLS_ENABLED: "false"
+            ZITADEL_DATABASE_POSTGRES_DSN: postgresql://zitadel:${OPENIDLE_ZITADEL_DB_PASSWORD:?set OPENIDLE_ZITADEL_DB_PASSWORD (URL-safe) in the stack env vars (see .env.example)}@postgres:5432/zitadel?sslmode=disable
+            ZITADEL_FIRSTINSTANCE_ORG_NAME: OpenIdle
+            ZITADEL_FIRSTINSTANCE_ORG_HUMAN_USERNAME: admin
+            ZITADEL_FIRSTINSTANCE_ORG_HUMAN_PASSWORD: ${OPENIDLE_ZITADEL_ADMIN_PASSWORD:?set OPENIDLE_ZITADEL_ADMIN_PASSWORD (upper, lower, digit, symbol, 8+ chars) in the stack env vars (see .env.example)}
+            ZITADEL_FIRSTINSTANCE_ORG_HUMAN_PASSWORDCHANGEREQUIRED: "false"
+            ZITADEL_FIRSTINSTANCE_LOGINCLIENTPATPATH: /zitadel/bootstrap/login-client.pat
+            ZITADEL_FIRSTINSTANCE_ORG_LOGINCLIENT_MACHINE_USERNAME: login-client
+            ZITADEL_FIRSTINSTANCE_ORG_LOGINCLIENT_MACHINE_NAME: Automatically Initialized IAM_LOGIN_CLIENT
+            ZITADEL_FIRSTINSTANCE_ORG_LOGINCLIENT_PAT_EXPIRATIONDATE: "2099-01-01T00:00:00Z"
+            ZITADEL_DEFAULTINSTANCE_FEATURES_LOGINV2_REQUIRED: "true"
+            ZITADEL_DEFAULTINSTANCE_FEATURES_LOGINV2_BASEURI: https://${OPENIDLE_ZITADEL_HOST}/ui/v2/login/
+            ZITADEL_OIDC_DEFAULTLOGINURLV2: https://${OPENIDLE_ZITADEL_HOST}/ui/v2/login/login?authRequest=
+            ZITADEL_OIDC_DEFAULTLOGOUTURLV2: https://${OPENIDLE_ZITADEL_HOST}/ui/v2/login/logout?post_logout_redirect=
+        healthcheck:
+            test: ["CMD", "/app/zitadel", "ready"]
+            interval: 10s
+            timeout: 30s
+            retries: 12
+            start_period: 20s
+        volumes:
+            - openidle-zitadel-bootstrap:/zitadel/bootstrap
+        # Internal port: 8080
+
+    openidle-zitadel-login:
+        image: ghcr.io/zitadel/zitadel-login:v4.17.3
+        container_name: openidle-zitadel-login
+        restart: unless-stopped
+        user: "0"
+        environment:
+            ZITADEL_API_URL: http://openidle-zitadel:8080
+            NEXT_PUBLIC_BASE_PATH: /ui/v2/login
+            ZITADEL_SERVICE_USER_TOKEN_FILE: /zitadel/bootstrap/login-client.pat
+            CUSTOM_REQUEST_HEADERS: Host:${OPENIDLE_ZITADEL_HOST},X-Forwarded-Proto:https
+        healthcheck:
+            test:
+                [
+                    "CMD",
+                    "/bin/sh",
+                    "-c",
+                    "node /app/healthcheck.mjs http://localhost:3000/ui/v2/login/healthy",
+                ]
+            interval: 10s
+            timeout: 30s
+            retries: 12
+            start_period: 20s
+        depends_on:
+            openidle-zitadel:
+                condition: service_healthy
+        volumes:
+            - openidle-zitadel-bootstrap:/zitadel/bootstrap:ro
+        # Internal port: 3000
+
+volumes:
+    openidle-dev-data:
+    openidle-data:
+    openidle-zitadel-bootstrap:
+
+networks:
+    default:
+        name: stack_default
+        external: true

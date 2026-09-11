@@ -22,6 +22,14 @@ internal static class AppHost
             options.UseSqlite(connectionString ?? builder.Configuration.GetConnectionString("Default")));
         builder.Services.AddControllers().AddApplicationPart(typeof(Backend.Controllers.Http.WsController).Assembly);
         builder.Services.AddSocketControllers();
+        // Any origin may reach both the HTTP API and the socket: OpenIdle is meant to be
+        // driven by clients we do not ship, so gating on Origin would only shut out
+        // third-party browser frontends — non-browser clients send no Origin header and
+        // were never filtered anyway. Browsers still need Access-Control-Allow-Origin to
+        // read a cross-origin response, hence the policy. AllowedWsOrigins
+        // (BuildWebSocketOptions) can narrow the handshake, but ships empty everywhere;
+        // see doc/deployment.md.
+        builder.Services.AddCors(options => options.AddDefaultPolicy(policy => policy.AllowAnyOrigin()));
         builder.Services.AddSingleton<UserService>();
         builder.Services.AddSingleton<ProfileService>();
         builder.Services.AddSingleton<SettingsService>();
@@ -30,11 +38,13 @@ internal static class AppHost
         builder.Services.AddSingleton<ItemService>();
         builder.Services.AddSingleton<ActivityService>();
         builder.Services.AddSingleton<ToolService>();
+        builder.Services.AddSingleton(VersionService.FromAssembly());
         builder.Services.AddSingleton<ActivitySchedulerService>();
         builder.Services.AddHostedService<ActivitySchedulerHostedService>();
 
         WebApplication app = builder.Build();
 
+        app.UseCors();
         app.MapControllers();
         app.MapSocketControllers();
         DropTableData.AddAll(app.Services.GetRequiredService<DropTableService>());

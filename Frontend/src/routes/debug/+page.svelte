@@ -1,6 +1,7 @@
 <script lang="ts">
 	import { resolve } from '$app/paths';
 	import ArrowLeft from '@lucide/svelte/icons/arrow-left';
+	import VersionFooter from '$lib/components/core/VersionFooter.svelte';
 	import Column from '$lib/components/layout/Column.svelte';
 	import Row from '$lib/components/layout/Row.svelte';
 	import { Button } from '$lib/components/ui/button';
@@ -58,4 +59,7 @@
 			<TrafficLog />
 		</Column>
 	</div>
+
+	<!-- The grid above is min-h-0 grow, so it simply gives up the footer's height. -->
+	<VersionFooter />
 </Column>

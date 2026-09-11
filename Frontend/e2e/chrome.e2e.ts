@@ -1,5 +1,13 @@
 import { expect, test } from '@playwright/test';
-import { logIn, LOGIN_URL, respondToRequests, THORIN, WS_ROUTE } from './support';
+import {
+	DAY_MS,
+	logIn,
+	LOGIN_URL,
+	respondToRequests,
+	type StubProfile,
+	THORIN,
+	WS_ROUTE
+} from './support';
 
 // Runs against `bun run build && bun run preview` (see playwright.config.ts), so
 // this is the production build rather than the dev server — which is the whole
@@ -13,6 +21,33 @@ import { logIn, LOGIN_URL, respondToRequests, THORIN, WS_ROUTE } from './support
 //
 // The route pattern, the stub backend and the login live in ./support.ts, shared
 // with the board suite so the two cannot drift apart on the handshake.
+//
+// The version footer on /login, /profiles and /debug is the exception that does
+// reach out without a login: it fetches the backend's build over HTTP (GET
+// /version under PUBLIC_API_URL, or next to an overridden /ws), so a test
+// without a stub sees a failed fetch and a footer reading "unavailable" —
+// harmless to a test that never looks at it.
+
+// The build the stubbed backend claims: 2026-09-04 22:13:20 UTC. Distinct from
+// the frontend's own (playwright.config.ts) so the footer's two halves cannot
+// be confused for one another.
+const BACKEND_BUILD = {
+	commit: 'b2c3d4e5f60718293a4b5c6d7e8f9012a3b4c5d6',
+	commitTime: 1_788_560_000_000
+};
+
+/**
+ * Makes the backend's HTTP version endpoint claim BACKEND_BUILD, wherever it is
+ * asked for, and records where that was.
+ */
+async function stubVersion(page: import('@playwright/test').Page): Promise<string[]> {
+	const asked: string[] = [];
+	await page.route('**/version', (route) => {
+		asked.push(route.request().url());
+		return route.fulfill({ contentType: 'application/json', body: JSON.stringify(BACKEND_BUILD) });
+	});
+	return asked;
+}
 
 test('the root route funnels through the auth guards to /login', async ({ page }) => {
 	await page.goto('/');
@@ -53,14 +88,9 @@ test('logging in surfaces the failure when the socket will not open', async ({ p
 test('a successful login replaces /login rather than stacking /profiles on it', async ({
 	page
 }) => {
-	await page.routeWebSocket(WS_ROUTE, (ws) => {
-		// connectToServer() is never called, so these frames are the whole
-		// backend as far as this test is concerned.
-		ws.onMessage((frame) => {
-			const { requestId } = JSON.parse(String(frame));
-			ws.send(JSON.stringify({ $type: 'LoginAsTestUserResponse', requestId }));
-		});
-	});
+	// connectToServer() is never called, so these frames are the whole backend
+	// as far as this test is concerned.
+	await page.routeWebSocket(WS_ROUTE, (ws) => ws.onMessage(respondToRequests(ws, [])));
 
 	await page.goto('/login');
 	const entries = await page.evaluate(() => history.length);
@@ -172,6 +202,47 @@ test('deleting a profile asks first, and confirming does nothing yet', async ({ 
 	await expect(page.getByText('Thorin')).toBeVisible();
 });
 
+test('a card reads the profile status the server sent', async ({ page }) => {
+	// The three fixtures live in this test rather than beside THORIN: a second
+	// profile anywhere else would put a second "Load" button in the document and
+	// make the reconnect test's getByRole a strict-mode violation.
+	const running: StubProfile = {
+		name: 'Balin',
+		profileId: 'p2',
+		totalLevel: 27,
+		creationTime: Date.now() - 90 * DAY_MS,
+		activity: 'MineTin'
+	};
+	const idle: StubProfile = {
+		name: 'Dwalin',
+		profileId: 'p3',
+		totalLevel: 4,
+		creationTime: Date.now()
+	};
+	await page.routeWebSocket(WS_ROUTE, (ws) =>
+		ws.onMessage(respondToRequests(ws, [THORIN, running, idle]))
+	);
+
+	await logIn(page);
+
+	// The panel carries no role of its own, so its data-slot is the handle — the
+	// same reason the delete test above reaches for it.
+	const card = (name: string) => page.locator('[data-slot="card"]', { hasText: name });
+
+	// Sentence case in the DOM: oi-label-sm applies the uppercase in CSS, so the
+	// text and the accessible name stay as they were written.
+	await expect(card('Balin').locator('[data-slot="badge"]')).toHaveText('Mine tin');
+	await expect(card('Balin').getByText('Active now')).toBeVisible();
+
+	// Online but idle: no activity to name, so the badge only reports presence.
+	await expect(card('Dwalin').locator('[data-slot="badge"]')).toHaveText('Online');
+
+	// Offline, and no badge even though the profile still carries the activity it
+	// dropped out of: the accent is for a running action, not a remembered one.
+	await expect(card('Thorin').locator('[data-slot="badge"]')).toHaveCount(0);
+	await expect(card('Thorin').getByText('Last played 3 days ago')).toBeVisible();
+});
+
 test('the Debug button opens the protocol console and Back returns to the app', async ({
 	page
 }) => {
@@ -187,6 +258,50 @@ test('the Debug button opens the protocol console and Back returns to the app', 
 	// does not bounce to /login.
 	await page.getByRole('link', { name: 'Back to app' }).click();
 	await expect(page).toHaveURL(/\/profiles$/);
+});
+
+test('the version footer names this build and the pointed-at backend build', async ({ page }) => {
+	const asked = await stubVersion(page);
+	await page.routeWebSocket(WS_ROUTE, (ws) => ws.onMessage(respondToRequests(ws, [THORIN])));
+
+	// Before anyone signs in: the footer asks the backend over HTTP, not a
+	// socket.
+	await page.goto('/login');
+	const footer = page.getByTestId('version-footer');
+	await expect(footer).toContainText('OpenIdle');
+	await expect(footer).toContainText('frontend 2026-09-04 23:26:40 1e1c256');
+	await expect(footer).toContainText('backend 2026-09-04 22:13:20 b2c3d4e');
+	// PUBLIC_API_URL, not the socket's host: the two are separate settings.
+	expect(asked).toEqual(['http://127.0.0.1:5067/version']);
+
+	// The value is not tied to any connection, so it survives the login.
+	await page.getByRole('button', { name: 'Log in' }).click();
+	await expect(page).toHaveURL(/\/profiles$/);
+	await expect(page.getByTestId('version-footer')).toContainText(
+		'backend 2026-09-04 22:13:20 b2c3d4e'
+	);
+});
+
+test('the version footer says so when no backend answers', async ({ page }) => {
+	await page.route('**/version', (route) => route.abort());
+
+	await page.goto('/login');
+
+	await expect(page.getByTestId('version-footer')).toContainText('backend unavailable');
+	// One failed fetch, not a loop: signing in is still what opens the socket.
+	await expect(page.getByTestId('login-status')).toHaveText('Signed out');
+});
+
+test('the frontend reports its own build at /version, like the backend', async ({ request }) => {
+	const response = await request.get('/version');
+
+	expect(response.ok()).toBe(true);
+	// The build playwright.config.ts hands to `vite build`, in the backend's
+	// wire shape, so one curl per image answers "which commit is this?".
+	expect(await response.json()).toEqual({
+		commit: '1e1c256a0b1c2d3e4f5061728394a5b6c7d8e9f0',
+		commitTime: 1_788_564_400_000
+	});
 });
 
 test('the traffic filter remembers which kinds are hidden across reloads', async ({ page }) => {
@@ -237,6 +352,24 @@ test('a ?ws= override points the socket at another backend', async ({ page }) =>
 	await expect(page).toHaveURL(/\/profiles$/);
 
 	expect(dialled).toEqual([OTHER_BACKEND]);
+});
+
+test('a ?ws= override moves the version fetch to the same backend', async ({ page }) => {
+	const asked: string[] = [];
+	await page.route('**/version', (route) => {
+		asked.push(route.request().url());
+		return route.fulfill({ contentType: 'application/json', body: JSON.stringify(BACKEND_BUILD) });
+	});
+	await captureDialledUrl(page);
+
+	await page.goto(`/login?ws=${encodeURIComponent(OTHER_BACKEND)}`);
+	await expect(page.getByTestId('version-footer')).toContainText(
+		'backend 2026-09-04 22:13:20 b2c3d4e'
+	);
+
+	// The socket's port, not the configured backend's: the two are derived from
+	// one resolved URL, so an override cannot move one without the other.
+	expect(asked).toEqual(['http://127.0.0.1:9999/version']);
 });
 
 test('an override survives a reload, so it need only be typed once', async ({ page }) => {

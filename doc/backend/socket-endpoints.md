@@ -11,7 +11,7 @@ All game protocol calls travel over a single WebSocket. A "socket endpoint" is a
 - **To add an endpoint:**
   1. Declare the request (+response) in [`types.xml`](../../types.xml) (see [dto-contract](./dto-contract.md)).
   2. Write the `[Request]` method (or a new `[SocketController]` class).
-  3. If it uses a new service, register that service in [`Program.cs`](../../Backend/Program.cs).
+  3. If it uses a new service, register that service in [`AppHost.cs`](../../Backend/AppHost.cs).
   4. Build.
 
 ## 1. How the pipeline works
@@ -37,20 +37,20 @@ Key files:
 
 | File | Role |
 |---|---|
-| [`Backend/Controllers/Http/WsController.cs`](../../Backend/Controllers/Http/WsController.cs) | The only HTTP endpoint; accepts the WebSocket handshake at `GET /ws`. |
+| [`Backend/Controllers/Http/WsController.cs`](../../Backend/Controllers/Http/WsController.cs) | Accepts the WebSocket handshake at `GET /ws`; the other HTTP routes (`/health`, `/version`) are covered in [http-endpoints.md](./http-endpoints.md). |
 | [`Backend/Socket.cs`](../../Backend/Socket.cs) | Per-connection state (`UserId`, `ProfileId`), message loop, send/close. |
 | [`Backend/SocketControllerBase.cs`](../../Backend/SocketControllerBase.cs) | Base class exposing `Socket`, `User`, `Profile`, `Request`, and `RespondAsync`. |
 | [`Backend/Services/SocketRegistryService.cs`](../../Backend/Services/SocketRegistryService.cs) | Bridges per-socket events to the endpoint service. |
 | [`Backend/Services/SocketEndpointService.cs`](../../Backend/Services/SocketEndpointService.cs) | Resolves the request type to handlers, invokes them in a DI scope. |
 | [`Backend/Extensions/WebApplicationBuilderExtensions.cs`](../../Backend/Extensions/WebApplicationBuilderExtensions.cs) | `AddSocketControllers()` + `MapSocketControllers()` — reflection-based discovery. |
 
-The reflection happens once, in `MapSocketControllers()` ([`WebApplicationBuilderExtensions.cs`](../../Backend/Extensions/WebApplicationBuilderExtensions.cs), lines 24-41): it scans the executing assembly for public classes with `[SocketController]`, then for each public instance method with `[Request]`, and registers the endpoint keyed by its single parameter type. `SocketEndpointService.TryRegisterEndpoint` ([`SocketEndpointService.cs`](../../Backend/Services/SocketEndpointService.cs), lines 82-105) validates the signature and **throws at startup** if it is wrong.
+The reflection happens once, in `MapSocketControllers()` ([`WebApplicationBuilderExtensions.cs`](../../Backend/Extensions/WebApplicationBuilderExtensions.cs)): it scans the executing assembly for public classes with `[SocketController]`, then for each public instance method with `[Request]`, and registers the endpoint keyed by its single parameter type. `SocketEndpointService.TryRegisterEndpoint` ([`SocketEndpointService.cs`](../../Backend/Services/SocketEndpointService.cs), lines 82-105) validates the signature and **throws at startup** if it is wrong.
 
 When a request arrives, `SocketEndpointService` ([`SocketEndpointService.cs`](../../Backend/Services/SocketEndpointService.cs), lines 44-80) creates a DI scope, constructs the controller via `ActivatorUtilities.CreateInstance`, sets its `Context` (which carries `Socket`/`Request`), invokes the method, and awaits every returned `Task`. Multiple controllers may handle the same request type; all handlers run concurrently.
 
 ## 2. The controller contract
 
-Discovery filters applied by `MapSocketControllers()` ([`WebApplicationBuilderExtensions.cs`](../../Backend/Extensions/WebApplicationBuilderExtensions.cs), lines 31-35) — a class or method that fails these is **silently excluded** from dispatch; there is no startup error:
+Discovery filters applied by `MapSocketControllers()` ([`WebApplicationBuilderExtensions.cs`](../../Backend/Extensions/WebApplicationBuilderExtensions.cs), the `methodInfos` query) — a class or method that fails these is **silently excluded** from dispatch; there is no startup error:
 
 1. The class must be `public` and carry `[SocketController]` (discovery uses `GetExportedTypes`).
 2. The method must be `public`, an instance method, and carry `[Request]`.
@@ -64,7 +64,7 @@ Rules implied by the code (violations cause runtime failures, not clean errors):
 
 5. The class must derive `SocketControllerBase` — the dispatcher only sets `Context` when the constructed controller is one ([`SocketEndpointService.cs`](../../Backend/Services/SocketEndpointService.cs), lines 61-64).
 6. The class should be `sealed` and the method should return `Task` (the async pattern; only `Task` results are awaited).
-7. The request parameter is the already-deserialized request that `SocketEndpointService` passes straight to the endpoint method — the dispatcher does **not** construct it via DI. Only the controller instance is built from the container, so any service the controller's constructor asks for must be registered in [`Program.cs`](../../Backend/Program.cs).
+7. The request parameter is the already-deserialized request that `SocketEndpointService` passes straight to the endpoint method — the dispatcher does **not** construct it via DI. Only the controller instance is built from the container, so any service the controller's constructor asks for must be registered in [`AppHost.cs`](../../Backend/AppHost.cs).
 
 The canonical shape:
 
@@ -149,7 +149,7 @@ The entity→DTO projection is a `ToDto()` method on the entity (see [`Profile.c
 
 ### Step 4 — register any new service
 
-Only if the controller takes a service that is not registered yet. [`Program.cs`](../../Backend/Program.cs) (lines 15-16) registers singletons explicitly:
+Only if the controller takes a service that is not registered yet. [`AppHost.cs`](../../Backend/AppHost.cs) (`CreateApp`) registers singletons explicitly:
 
 ```csharp
 builder.Services.AddSingleton<ProfileService>();
