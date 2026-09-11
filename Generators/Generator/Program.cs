@@ -42,6 +42,12 @@ public static class Program
 
     private static int Run(Options options)
     {
+        if (options.Target == Target.TsSchema)
+        {
+            Console.Error.WriteLine("TsSchema emitter has not been ported to the visitor pattern yet.");
+            return 1;
+        }
+
         Root root;
         try
         {
@@ -126,8 +132,7 @@ public static class Program
                 }
                 break;
             case Target.TsSchema:
-                Console.Error.WriteLine("TsSchema emitter has not been ported to the visitor pattern yet.");
-                break;
+                throw new NotSupportedException("TsSchema emitter has not been ported to the visitor pattern yet.");
             case Target.Json:
                 writer.Write(JsonSchemaEmitter.Emit(root));
                 break;

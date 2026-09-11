@@ -2,7 +2,6 @@ using System;
 using System.Collections.Immutable;
 using System.IO;
 using System.Text;
-using System.Xml;
 using System.Xml.Serialization;
 using Generator.Core;
 using Generator.Core.Spec;
@@ -60,10 +59,10 @@ public sealed class TypesGenerator : IIncrementalGenerator
                 XmlSerializer serializer = new(typeof(Root));
                 root = (Root)serializer.Deserialize(stream)!;
             }
-            catch (InvalidOperationException ex) when (ex.InnerException is XmlException xmlEx)
+            catch (InvalidOperationException ex)
             {
                 productionContext.ReportDiagnostic(
-                    Diagnostic.Create(ParseError, Location.None, xmlEx.Message));
+                    Diagnostic.Create(ParseError, Location.None, ex.InnerException?.Message ?? ex.Message));
                 return;
             }
 

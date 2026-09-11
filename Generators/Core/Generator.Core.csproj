@@ -4,10 +4,22 @@
         <TargetFramework>netstandard2.0</TargetFramework>
         <LangVersion>latest</LangVersion>
         <Nullable>enable</Nullable>
+        <CopyLocalLockFileAssemblies>true</CopyLocalLockFileAssemblies>
     </PropertyGroup>
 
     <ItemGroup>
         <PackageReference Include="System.Text.Json" Version="8.0.5" />
     </ItemGroup>
+
+    <Target Name="GetAnalyzerTargetPaths"
+            DependsOnTargets="Build"
+            Returns="@(AnalyzerTargetPath)">
+        <ItemGroup>
+            <AnalyzerTargetPath Include="$(TargetPath)" />
+            <AnalyzerTargetPath
+                Include="@(ReferenceCopyLocalPaths->'$(TargetDir)%(Filename)%(Extension)')"
+                Condition="'%(ReferenceCopyLocalPaths.NuGetPackageId)' != ''" />
+        </ItemGroup>
+    </Target>
 
 </Project>
