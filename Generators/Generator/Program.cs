@@ -1,8 +1,9 @@
-﻿using System.Text;
+﻿using System.IO;
+using System.Text;
 using System.Xml;
+using System.Xml.Serialization;
 using CommandLine;
 using Generator.Core;
-using DtoParser = Generator.Core.Parser;
 
 public enum Target
 {
@@ -39,24 +40,19 @@ public static class Program
 
     private static int Run(Options options)
     {
-        DtoModel model;
+        TypesXmlRoot root;
         try
         {
-            model = ParseContract(options.Input);
+            root = ParseContract(options.Input);
         }
         catch (FileNotFoundException)
         {
             Console.Error.WriteLine($"DTO contract file not found: {options.Input}");
             return 1;
         }
-        catch (ParserException ex)
+        catch (InvalidOperationException ex) when (ex.InnerException is XmlException xmlEx)
         {
-            Console.Error.WriteLine(ex.Message);
-            return 1;
-        }
-        catch (XmlException ex)
-        {
-            Console.Error.WriteLine($"Invalid XML: {ex.Message}");
+            Console.Error.WriteLine($"Invalid XML: {xmlEx.Message}");
             return 1;
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
@@ -69,7 +65,7 @@ public static class Program
         try
         {
             output = CreateOutput(options.Output);
-            Emit(options.Target, output, model);
+            Emit(options.Target, output, root);
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
         {
@@ -90,12 +86,11 @@ public static class Program
         return 0;
     }
 
-    private static DtoModel ParseContract(string path)
+    private static TypesXmlRoot ParseContract(string path)
     {
-        DtoParser parser = new();
+        XmlSerializer serializer = new(typeof(TypesXmlRoot));
         using FileStream stream = File.OpenRead(path);
-        parser.Parse(stream);
-        return parser.Model;
+        return (TypesXmlRoot)serializer.Deserialize(stream)!;
     }
 
     private static TextWriter CreateOutput(string? path)
@@ -105,20 +100,28 @@ public static class Program
             : new StreamWriter(path, append: false, new UTF8Encoding(encoderShouldEmitUTF8Identifier: false));
     }
 
-    private static void Emit(Target target, TextWriter writer, DtoModel model)
+    private static void Emit(Target target, TextWriter writer, TypesXmlRoot root)
     {
-        using IDtoEmitter emitter = CreateEmitter(target, writer);
-        emitter.EmitDtos(model);
-    }
+        AddEnumsVisitor enumsVisitor = new();
+        root.Accept(enumsVisitor);
 
-    private static IDtoEmitter CreateEmitter(Target target, TextWriter writer)
-    {
-        return target switch
+        switch (target)
         {
-            Target.Cs => new CsEmitter(writer),
-            Target.Ts => new TsEmitter(writer),
-            Target.TsSchema => new TsSchemaEmitter(writer),
-            _ => throw new ArgumentOutOfRangeException(nameof(target)),
-        };
+            case Target.Cs:
+                using (CsEmitterVisitor csEmitter = new(writer))
+                {
+                    csEmitter.Emit(root);
+                }
+                break;
+            case Target.Ts:
+                using (TsEmitterVisitor tsEmitter = new(writer))
+                {
+                    tsEmitter.Emit(root);
+                }
+                break;
+            case Target.TsSchema:
+                Console.Error.WriteLine("TsSchema emitter has not been ported to the visitor pattern yet.");
+                break;
+        }
     }
 }

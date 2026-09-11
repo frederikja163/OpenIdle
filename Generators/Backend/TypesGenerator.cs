@@ -3,6 +3,7 @@ using System.Collections.Immutable;
 using System.IO;
 using System.Text;
 using System.Xml;
+using System.Xml.Serialization;
 using Generator.Core;
 using Microsoft.CodeAnalysis;
 using Microsoft.CodeAnalysis.Text;
@@ -14,7 +15,6 @@ public sealed class TypesGenerator : IIncrementalGenerator
 {
     private const string TypesFileName = "types.xml";
     private const string DtoOutputName = "Dto.g.cs";
-    private const string DropTableDataOutputName = "DropTableData.g.cs";
 
     private static readonly DiagnosticDescriptor DtoFileMissing = new(
         id: "DTC001",
@@ -50,30 +50,28 @@ public sealed class TypesGenerator : IIncrementalGenerator
                 return;
             }
 
-            Parser parser = new Parser();
+            TypesXmlRoot root;
             try
             {
                 byte[] bytes = Encoding.UTF8.GetBytes(xml[0]);
                 using MemoryStream stream = new(bytes);
-                parser.Parse(stream);
+                XmlSerializer serializer = new(typeof(TypesXmlRoot));
+                root = (TypesXmlRoot)serializer.Deserialize(stream)!;
             }
-            catch (ParserException ex)
+            catch (InvalidOperationException ex) when (ex.InnerException is XmlException xmlEx)
             {
                 productionContext.ReportDiagnostic(
-                    Diagnostic.Create(ParseError, Location.None, ex.Message));
-                return;
-            }
-            catch (XmlException ex)
-            {
-                productionContext.ReportDiagnostic(
-                    Diagnostic.Create(ParseError, Location.None, ex.Message));
+                    Diagnostic.Create(ParseError, Location.None, xmlEx.Message));
                 return;
             }
 
+            AddEnumsVisitor enumsVisitor = new();
+            root.Accept(enumsVisitor);
+
             using StringWriter writer = new();
-            using (CsEmitter emitter = new(writer))
+            using (CsEmitterVisitor csEmitter = new(writer))
             {
-                emitter.EmitDtos(parser.Model);
+                csEmitter.Emit(root);
             }
 
             productionContext.AddSource(DtoOutputName, SourceText.From(writer.ToString(), Encoding.UTF8));
