@@ -165,6 +165,18 @@ public sealed class TsEmitterVisitor : VisitorBase, IDisposable
             return;
         }
 
+        if (isDto)
+        {
+            using (Scope _ = _textWriter.Scope($"export interface {name}"))
+            {
+                foreach (XmlProperty property in properties)
+                {
+                    WriteProperty(property);
+                }
+            }
+            return;
+        }
+
         using (Scope _ = _textWriter.Scope($"export interface {name} extends {baseType}"))
         {
             _textWriter.WriteLine($"$type: {Quote(name)};");

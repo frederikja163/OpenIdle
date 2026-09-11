@@ -12,6 +12,7 @@ public sealed class CsEmitterVisitor : VisitorBase, IDisposable
 
     private readonly ScopedTextWriter _textWriter;
     private readonly List<string> _allObjects = new();
+    private readonly List<(string name, List<XmlProperty> properties)> _inlineResponses = new();
     private Section _currentSection;
     private Scope? _classScope;
     private Scope? _methodScope;
@@ -42,7 +43,13 @@ public sealed class CsEmitterVisitor : VisitorBase, IDisposable
         }
     }
 
-    public override void Visit(XmlEnum xmlEnum) => EmitEnum(xmlEnum);
+    public override void Visit(XmlEnum xmlEnum)
+    {
+        if (xmlEnum.Name == "ToolStat")
+            return;
+
+        EmitEnum(xmlEnum);
+    }
 
     public override void Visit(XmlDropTable xmlDropTable)
     {
@@ -83,6 +90,11 @@ public sealed class CsEmitterVisitor : VisitorBase, IDisposable
     {
         CloseSection();
         EmitObject(xmlRequest.Name, "RequestBase", xmlRequest.Properties);
+
+        if (xmlRequest.Response.Name == null)
+        {
+            _inlineResponses.Add((xmlRequest.Name + "Response", xmlRequest.Response.Properties));
+        }
     }
 
     public override void Visit(XmlResponse xmlResponse)
@@ -105,6 +117,12 @@ public sealed class CsEmitterVisitor : VisitorBase, IDisposable
     public void Dispose()
     {
         CloseSection();
+
+        foreach ((string name, List<XmlProperty> properties) in _inlineResponses)
+        {
+            EmitObject(name, "ResponseBase", properties);
+        }
+
         EmitBaseClasses();
     }
 
@@ -251,7 +269,7 @@ public sealed class CsEmitterVisitor : VisitorBase, IDisposable
         $"new ItemCost({cost.Cost}, ItemId.{cost.Item})";
 
     private static string ItemStatExpression(XmlItemStat stat) =>
-        $"new Backend.Services.ItemStat(ToolStat.{stat.Name}, {stat.Value.ToString(CultureInfo.InvariantCulture)}f)";
+        $"new ItemStat(ToolStat.{stat.Name}, {stat.Value.ToString(CultureInfo.InvariantCulture)}f)";
 
     private static string SlotExpression(XmlSlot slot) =>
         $"new SlotBinding(ItemSlotId.{slot.Name}, ItemTagId.{slot.AcceptedTag.Name}, {slot.Required.ToString().ToLowerInvariant()})";
