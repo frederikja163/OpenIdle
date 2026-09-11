@@ -10,6 +10,7 @@ Every third-party dependency used (or considered and rejected) by this project i
 | [ASP.NET Core (Minimal APIs + DI)](./aspnet-core.md) | adopted | 2026-08-02 | low | low |
 
 | [EF Core + SQLite](./ef-core.md) | adopted | 2026-08-03 | medium | low |
+| [Microsoft IdentityModel (JWT / OIDC validation)](./microsoft-identitymodel.md) | adopted | 2026-09-11 | low | low |
 | [DTO XML contract](./dto-xml-contract.md) | in-house | 2026-08-04 | medium | low |
 | [CommandLineParser](./commandlineparser.md) | adopted | 2026-08-06 | low | low |
 | [Microsoft.CodeAnalysis.CSharp](./microsoft-codeanalysis-csharp.md) | adopted | 2026-08-06 | low | low |
@@ -20,6 +21,12 @@ Every third-party dependency used (or considered and rejected) by this project i
 `CommandLineParser` is dev-tooling only — it parses args for the `Generator` console app (never shipped). It replaced an initial `System.CommandLine` 2.0.10 pick; the owner preferred the attribute-based syntax and the zero-dependency footprint, accepting the package's dormancy (no stable release since 2022) for a small fixed CLI. See the alternatives table in its document.
 
 `Microsoft.CodeAnalysis.CSharp` and `Microsoft.CodeAnalysis.Analyzers` are build-time only — they are what the [DTO XML contract](./dto-xml-contract.md)'s source generator ([Generator.Backend](../../Generators/Backend)) compiles against, referenced `PrivateAssets="all"` and loaded by the compiler as analyzers. Never shipped to the runtime or the browser. Note the version skew: the generator is built against Roslyn 4.14.0 while the .NET 10 SDK hosts Roslyn 5.0.0 — safe (hosts load older-built analyzers), but the pin must never exceed the host's version on upgrades.
+
+`Microsoft.IdentityModel.Protocols.OpenIdConnect` and `Microsoft.IdentityModel.JsonWebTokens` are the runtime-only pair chosen to validate the OIDC access token a client will send over the socket. They are first-party Microsoft (MIT) and are the same assemblies behind ASP.NET Core's JWT bearer middleware; we use them directly because the token arrives as a socket message rather than an HTTP `Authorization` header, so the middleware itself would never run. Both packages are released together and **must stay on the same version** (pinned at 8.22.0). See [microsoft-identitymodel.md](./microsoft-identitymodel.md).
+
+## Identity provider
+
+The login provider is a **service** decision, not a library one. After surveying hosted (Auth0, Clerk, WorkOS, Entra External ID, Cognito, Firebase) and self-hosted (Keycloak, Zitadel, Authentik, Logto, FusionAuth, Supabase, Ory) options and narrowing to **Zitadel vs Ory**, the project **adopted self-hosted Zitadel**: it ships the login UI, social connectors and account linking together, and the OIDC/JWKS validator above ports to it by changing issuer/audience. Accepted costs: a mandatory PostgreSQL service and an AGPL-3.0 core (self-hosting is unaffected). Ory is the documented fallback. Decision record: [identity-provider.md](./identity-provider.md).
 
 ## Frontend
 
