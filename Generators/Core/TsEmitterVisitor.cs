@@ -39,18 +39,6 @@ public sealed class TsEmitterVisitor : VisitorBase, IDisposable
         EmitBases();
     }
 
-    public override void Visit(TypesXmlRoot root)
-    {
-        if (root.Enums.All(e => e.Name != "ItemSlotId"))
-        {
-            root.Enums.Add(new XmlEnum("ItemSlotId")
-            {
-                Values = root.Skills.SelectMany(s => s.Slots).Select(s => s.Name).Distinct()
-                    .Select(n => new XmlEnumValue { Name = n }).ToList(),
-            });
-        }
-    }
-
     public override void Visit(XmlEnum xmlEnum) => _enums.Add(xmlEnum);
     public override void Visit(XmlDto xmlDto) => _dtos.Add(xmlDto);
     public override void Visit(XmlRequest xmlRequest) => _requests.Add(xmlRequest);

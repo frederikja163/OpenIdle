@@ -31,25 +31,7 @@ public sealed class CsEmitterVisitor : VisitorBase, IDisposable
         _textWriter = new ScopedTextWriter(writer);
     }
 
-    public override void Visit(TypesXmlRoot root)
-    {
-        if (root.Enums.All(e => e.Name != "ItemSlotId"))
-        {
-            root.Enums.Add(new XmlEnum("ItemSlotId")
-            {
-                Values = root.Skills.SelectMany(s => s.Slots).Select(s => s.Name).Distinct()
-                    .Select(n => new XmlEnumValue { Name = n }).ToList(),
-            });
-        }
-    }
-
-    public override void Visit(XmlEnum xmlEnum)
-    {
-        if (xmlEnum.Name == "ToolStat")
-            return;
-
-        EmitEnum(xmlEnum);
-    }
+    public override void Visit(XmlEnum xmlEnum) => EmitEnum(xmlEnum);
 
     public override void Visit(XmlDropTable xmlDropTable)
     {
