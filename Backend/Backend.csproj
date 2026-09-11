@@ -20,7 +20,8 @@
                         ReferenceOutputAssembly="false" />
       <ProjectReference Include="..\Generators\Core\Generator.Core.csproj"
                         OutputItemType="Analyzer"
-                        ReferenceOutputAssembly="false" />
+                        ReferenceOutputAssembly="false"
+                        Targets="GetAnalyzerTargetPaths" />
       <AdditionalFiles Include="..\types.xml" />
       <InternalsVisibleTo Include="OpenIdle.Tests" />
       <InternalsVisibleTo Include="OpenIdle.IntegrationTests" />
