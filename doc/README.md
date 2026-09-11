@@ -34,7 +34,7 @@ This is the entry point for all project documentation. It is written for **both*
 
 Every third-party dependency used or considered is documented in the library index at [`libraries/README.md`](./libraries/README.md). It is the authoritative list of what we depend on and why, and it supersedes this summary:
 
-- **Backend:** C#/.NET, ASP.NET Core (Minimal APIs + DI), EF Core + SQLite, the in-house **DTO XML contract** (`dto-xml-contract.md`), and CommandLineParser (dev-tooling only). Full decision tables in [`libraries/README.md`](./libraries/README.md#backend).
+- **Backend:** C#/.NET, ASP.NET Core (Minimal APIs + DI), EF Core + SQLite, the in-house **DTO XML contract** (`dto-xml-contract.md`), and CommandLineParser (dev-tooling only). Identity is decided but not yet wired: self-hosted **Zitadel** with the [Microsoft IdentityModel](./libraries/microsoft-identitymodel.md) JWT/OIDC validator — see [`libraries/identity-provider.md`](./libraries/identity-provider.md). Full decision tables in [`libraries/README.md`](./libraries/README.md#backend).
 - **Frontend:** Svelte, SvelteKit, Vite, Tailwind CSS, TypeScript, shadcn-svelte + bits-ui, ESLint, Prettier, Vitest, Playwright, Fontsource typefaces, and more — grouped into Framework/build, Styling, Components, Typefaces, Linting, Formatting, and Testing tables in [`libraries/README.md`](./libraries/README.md#frontend).
 - **Open items:** unresolved decisions that need attention before further work — the adapter placeholder, an unused `@internationalized/date`, the three substituted typefaces, and the not-yet-adopted `fast-xml-parser` (see [`libraries/README.md`](./libraries/README.md#open-items)).
 - **Standing notes:** security and maintenance constraints that apply repo-wide — the `eslint-config-prettier` CVE, TypeScript pinned at 6.x, the Rust-binary build chain, the shadcn-svelte supply-chain review, the bundle-weight budget, and the no-install-scripts rule (see [`libraries/README.md`](./libraries/README.md#standing-notes)).
@@ -50,6 +50,7 @@ For AI agents: find your task, read the listed documents (fully), then the sourc
 | Add a socket request/response/event payload | [`backend/dto-contract.md`](./backend/dto-contract.md), [`libraries/dto-xml-contract.md`](./libraries/dto-xml-contract.md) |
 | Add a socket endpoint handler | [`backend/socket-endpoints.md`](./backend/socket-endpoints.md), [`backend/dto-contract.md`](./backend/dto-contract.md) |
 | Add an HTTP endpoint | [`backend/http-endpoints.md`](./backend/http-endpoints.md) |
+| Choose or evaluate an identity/auth provider | [`libraries/identity-provider.md`](./libraries/identity-provider.md) |
 | Understand the socket request pipeline | [`backend/socket-endpoints.md`](./backend/socket-endpoints.md), [`backend/dto-contract.md`](./backend/dto-contract.md) |
 | Add/change an EF entity or migration | [`libraries/ef-core.md`](./libraries/ef-core.md) |
 | Add/evaluate/replace a third-party dependency | [`libraries/README.md`](./libraries/README.md), [`libraries/TEMPLATE.md`](./libraries/TEMPLATE.md) (via the `document-library` skill) |
