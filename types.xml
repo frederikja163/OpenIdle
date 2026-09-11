@@ -381,111 +381,111 @@
     <LevelRequirement skill="Crafting" count="41"/>
   </Activity>
 
-  <Dto name="Item">
+  <Dto name="ItemDto">
     <Property name="ProfileId" type="Guid"/>
     <Property name="ItemId" type="ItemId"/>
     <Property name="Count" type="Int"/>
   </Dto>
 
-  <Dto name="Profile">
+  <Dto name="ProfileDto">
     <Property name="Name" type="String" />
     <Property name="ProfileId" type="Guid" />
   </Dto>
 
-  <Dto name="Skill">
+  <Dto name="SkillDto">
     <Property name="ProfileId" type="Guid"/>
     <Property name="SkillId" type="SkillId"/>
     <Property name="Xp" type="Int"/>
     <Property name="Level" type="Int"/>
   </Dto>
 
-  <Dto name="User">
+  <Dto name="UserDto">
     <Property name="UserId" type="Guid" />
   </Dto>
 
-  <Dto name="Setting">
+  <Dto name="SettingDto">
     <Property name="Name" type="String" />
     <Property name="Value" type="String" />
   </Dto>
 
-  <Request name="SetUserSettings">
-    <Property name="Settings" type="Setting" multiple="true"/>
-    <Response/>
+  <Request name="SetUserSettingsRequest">
+    <Property name="Settings" type="SettingDto" multiple="true"/>
+    <Response name="SetUserSettingsResponse"/>
   </Request>
 
-  <Request name="GetUserSettings">
+  <Request name="GetUserSettingsRequest">
     <Property name="Settings" type="String" multiple="true" optional="true"/>
-    <Response>
-      <Property name="Settings" type="Setting" multiple="true"/>
+    <Response name="GetUserSettingsResponse">
+      <Property name="Settings" type="SettingDto" multiple="true"/>
     </Response>
   </Request>
 
-  <Request name="SetProfileSettings">
-    <Property name="Settings" type="Setting" multiple="true"/>
-    <Response/>
+  <Request name="SetProfileSettingsRequest">
+    <Property name="Settings" type="SettingDto" multiple="true"/>
+    <Response name="SetProfileSettingsResponse"/>
   </Request>
 
-  <Request name="GetProfileSettings">
+  <Request name="GetProfileSettingsRequest">
     <Property name="Settings" type="String" multiple="true" optional="true"/>
-    <Response>
-      <Property name="Settings" type="Setting" multiple="true"/>
+    <Response name="GetProfileSettingsResponse">
+      <Property name="Settings" type="SettingDto" multiple="true"/>
     </Response>
   </Request>
 
-  <Request name="CreateProfile">
+  <Request name="CreateProfileRequest">
     <Property name="Name" type="String" />
-    <Response />
+    <Response name="CreateProfileResponse" />
   </Request>
 
-  <Event name="ProfilesChanged">
-    <Property name="Profiles" type="Profile" multiple="true" />
+  <Event name="ProfilesChangedEvent">
+    <Property name="Profiles" type="ProfileDto" multiple="true" />
   </Event>
 
-  <Event name="ActivityEnded">
+  <Event name="ActivityEndedEvent">
     <Property name="ActivityId" type="ActivityId"/>
-    <Property name="Items" type="Item" multiple="true" />
-    <Property name="Skills" type="Skill" multiple="true" />
+    <Property name="Items" type="ItemDto" multiple="true" />
+    <Property name="Skills" type="SkillDto" multiple="true" />
   </Event>
 
-  <Request name="ListProfiles">
-    <Response>
-      <Property name="Profiles" type="Profile" multiple="true" />
+  <Request name="ListProfilesRequest">
+    <Response name="ListProfilesResponse">
+      <Property name="Profiles" type="ProfileDto" multiple="true" />
     </Response>
   </Request>
 
-  <Request name="LoginAsTestUser">
-    <Response />
+  <Request name="LoginAsTestUserRequest">
+    <Response name="LoginAsTestUserResponse" />
   </Request>
 
-  <Request name="SelectProfile">
+  <Request name="SelectProfileRequest">
     <Property name="ProfileId" type="Guid" />
-    <Response />
+    <Response name="SelectProfileResponse" />
   </Request>
 
-  <Request name="StartActivity">
+  <Request name="StartActivityRequest">
     <Property name="ActivityId" type="ActivityId"/>
-    <Response />
+    <Response name="StartActivityResponse" />
   </Request>
 
-  <Request name="StopActivity">
-    <Response />
+  <Request name="StopActivityRequest">
+    <Response name="StopActivityResponse" />
   </Request>
 
-  <Request name="GetSkills">
+  <Request name="GetSkillsRequest">
     <Property name="SkillIds" type="SkillId" multiple="true" optional="true"/>
-    <Response>
-      <Property name="Skills" type="Skill" multiple="true" />
+    <Response name="GetSkillsResponse">
+      <Property name="Skills" type="SkillDto" multiple="true" />
     </Response>
   </Request>
 
-  <Request name="GetItems">
+  <Request name="GetItemsRequest">
     <Property name="ItemIds" type="ItemId" multiple="true" optional="true"/>
-    <Response>
-      <Property name="Items" type="Item" multiple="true" />
+    <Response name="GetItemsResponse">
+      <Property name="Items" type="ItemDto" multiple="true" />
     </Response>
   </Request>
 
-  <Response name="Error">
+  <Response name="ErrorResponse">
     <Property name="Message" type="String" />
   </Response>
 </Types>
