@@ -51,8 +51,8 @@ public sealed class VersionHttpIntegrationTests : IDisposable
     }
 
     /// <summary>
-    /// The shipped configuration — an empty AllowedWsOrigins, in every environment —
-    /// lets any page open a socket, which is what supporting third-party clients needs.
+    /// The default configuration — an empty AllowedWsOrigins, as a local backend runs —
+    /// lets any page open a socket.
     /// </summary>
     [Test]
     [CancelAfter(30_000)]
@@ -67,8 +67,8 @@ public sealed class VersionHttpIntegrationTests : IDisposable
     }
 
     /// <summary>
-    /// AllowedWsOrigins is an opt-in abuse lever no environment sets. When it is set it
-    /// narrows the handshake only, and never what a browser may read over HTTP.
+    /// Each deployed environment sets AllowedWsOrigins to its own frontend. It narrows
+    /// the handshake only, and never what a browser may read over HTTP.
     /// </summary>
     [Test]
     [CancelAfter(30_000)]
