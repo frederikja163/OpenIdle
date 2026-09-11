@@ -10,7 +10,13 @@ public sealed class EntityToDtoTests
     [Test]
     public void Item_ToDto_MapsProperties()
     {
-        Profile profile = new() { Name = "ItemOwner", ProfileId = Guid.NewGuid() };
+        Profile profile = new()
+        {
+            Name = "ItemOwner",
+            ProfileId = Guid.NewGuid(),
+            CreationTime = DateTime.UtcNow,
+            LastActiveTime = DateTime.UtcNow
+        };
         Item item = new()
         {
             ProfileId = profile.ProfileId,
@@ -32,7 +38,13 @@ public sealed class EntityToDtoTests
     [Test]
     public void Skill_ToDto_MapsProperties()
     {
-        Profile profile = new() { Name = "SkillOwner", ProfileId = Guid.NewGuid() };
+        Profile profile = new()
+        {
+            Name = "SkillOwner",
+            ProfileId = Guid.NewGuid(),
+            CreationTime = DateTime.UtcNow,
+            LastActiveTime = DateTime.UtcNow
+        };
         Skill skill = new()
         {
             ProfileId = profile.ProfileId,
