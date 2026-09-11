@@ -1,8 +1,7 @@
 using System.IO;
 using System.Text;
-using System.Xml;
+using System.Xml.Serialization;
 using Generator.Core;
-using Parser = Generator.Core.Parser;
 
 namespace OpenIdle.Tests.Generators;
 
@@ -16,13 +15,9 @@ public sealed class TsEmitterTests
 {
     private const string Contract = """
         <Types>
-          <Enum name="SkillId">
-            <Value name="Mining"/>
-          </Enum>
-          <Enum name="ItemId">
-            <Value name="Rock"/>
-            <Value name="Stone"/>
-          </Enum>
+          <Skill name="Mining"/>
+          <Item name="Rock"/>
+          <Item name="Stone"/>
           <Activity name="Stone" time="2.5">
             <ItemCost item="Rock" cost="3"/>
             <ItemReward item="Stone" count="2"/>
@@ -75,16 +70,17 @@ public sealed class TsEmitterTests
 
     private static string Emit()
     {
-        XmlDocument document = new();
-        document.LoadXml(Contract);
+        using MemoryStream stream = new(Encoding.UTF8.GetBytes(Contract));
+        XmlSerializer serializer = new(typeof(TypesXmlRoot));
+        TypesXmlRoot root = (TypesXmlRoot)serializer.Deserialize(stream)!;
 
-        Parser parser = new();
-        parser.Parse(document.DocumentElement!);
+        AddEnumsVisitor enumsVisitor = new();
+        root.Accept(enumsVisitor);
 
         StringWriter writer = new(new StringBuilder());
-        using (TsEmitter emitter = new(writer))
+        using (TsEmitterVisitor emitter = new(writer))
         {
-            emitter.EmitDtos(parser.Model);
+            emitter.Emit(root);
         }
 
         return writer.ToString();
