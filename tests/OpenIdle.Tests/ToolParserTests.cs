@@ -2,28 +2,28 @@ using System.IO;
 using System.Text;
 using System.Xml.Serialization;
 using Generator.Core;
+using Generator.Core.Spec;
 
 namespace OpenIdle.Tests;
 
 [TestFixture]
 public sealed class ToolParserTests
 {
-    private static TypesXmlRoot Parse(string xml)
+    private static Root Parse(string xml)
     {
         byte[] bytes = Encoding.UTF8.GetBytes(xml);
         using MemoryStream stream = new(bytes);
-        XmlSerializer serializer = new(typeof(TypesXmlRoot));
-        TypesXmlRoot root = (TypesXmlRoot)serializer.Deserialize(stream)!;
+        XmlSerializer serializer = new(typeof(Root));
+        Root root = (Root)serializer.Deserialize(stream)!;
 
-        AddEnumsVisitor enumsVisitor = new();
-        root.Accept(enumsVisitor);
+        new VisitorPipeline(new AddEnumsVisitor(), new ValidationVisitor()).Visit(root);
         return root;
     }
 
     [Test]
     public void Parse_PopulatesItemStatsAndOrderedTags()
     {
-        TypesXmlRoot root = Parse("""
+        Root root = Parse("""
             <Types>
               <Item name="IronPickaxeHead">
                 <Tag name="Head"/>
@@ -34,7 +34,7 @@ public sealed class ToolParserTests
             </Types>
             """);
 
-        XmlItem item = root.Items.Single(i => i.Name == "IronPickaxeHead");
+        Item item = root.Items.Single(i => i.Name == "IronPickaxeHead");
         Assert.That(item.Name, Is.EqualTo("IronPickaxeHead"));
         Assert.That(item.Tags, Has.Count.EqualTo(2));
         Assert.That(item.Tags[0].Name, Is.EqualTo("Head"));
@@ -49,7 +49,7 @@ public sealed class ToolParserTests
     [Test]
     public void Parse_TagsRegisterIntoItemTagIdEnumDeduplicated()
     {
-        TypesXmlRoot root = Parse("""
+        Root root = Parse("""
             <Types>
               <Item name="Stone">
                 <Tag name="Ore"/>
@@ -64,7 +64,7 @@ public sealed class ToolParserTests
             </Types>
             """);
 
-        XmlEnum tagEnum = root.Enums.Single(e => e.Name == "ItemTagId");
+        Generator.Core.Spec.Enum tagEnum = root.Enums.Single(e => e.Name == "ItemTagId");
         Assert.That(tagEnum.Values.Select(v => v.Name), Is.EqualTo(new[] { "None", "Ore", "Head", "Iron" }));
         Assert.That(root.Items.Single(i => i.Name == "Stone").Tags[0].Name, Is.EqualTo("Ore"));
         Assert.That(root.Items.Single(i => i.Name == "BrokenRock").Tags[0].Name, Is.EqualTo("Ore"));
@@ -99,7 +99,7 @@ public sealed class ToolParserTests
     [Test]
     public void Parse_ItemRegistersIntoItemIdEnum()
     {
-        TypesXmlRoot root = Parse("""
+        Root root = Parse("""
             <Types>
               <Item name="OakHandle"/>
             </Types>
@@ -111,7 +111,7 @@ public sealed class ToolParserTests
     [Test]
     public void Parse_SkillWithSlots_CollectsSlotBindings()
     {
-        TypesXmlRoot root = Parse("""
+        Root root = Parse("""
             <Types>
               <Skill name="Mining">
                 <Slot name="Head" required="true">
@@ -124,7 +124,7 @@ public sealed class ToolParserTests
             </Types>
             """);
 
-        XmlSkill skill = root.Skills.Single(s => s.Name == "Mining");
+        Skill skill = root.Skills.Single(s => s.Name == "Mining");
         Assert.That(skill.Slots, Has.Count.EqualTo(2));
         Assert.That(skill.Slots[0].Name, Is.EqualTo("Head"));
         Assert.That(skill.Slots[0].AcceptedTag.Name, Is.EqualTo("Head"));
@@ -137,7 +137,7 @@ public sealed class ToolParserTests
     [Test]
     public void Parse_ItemSlotRegistersIntoItemSlotIdEnum()
     {
-        TypesXmlRoot root = Parse("""
+        Root root = Parse("""
             <Types>
               <Skill name="Mining">
                 <Slot name="Head" required="true">
@@ -165,7 +165,7 @@ public sealed class ToolParserTests
     [Test]
     public void Parse_SkillRegistersIntoSkillIdEnum()
     {
-        TypesXmlRoot root = Parse("""
+        Root root = Parse("""
             <Types>
               <Skill name="Mining"/>
               <Skill name="LumberJacking"/>
@@ -180,7 +180,7 @@ public sealed class ToolParserTests
     [Test]
     public void Parse_Activity_CollectsItemCosts()
     {
-        TypesXmlRoot root = Parse("""
+        Root root = Parse("""
             <Types>
               <Activity name="Stone" time="2.5">
                 <ItemCost item="Food" cost="1"/>
@@ -189,7 +189,7 @@ public sealed class ToolParserTests
             </Types>
             """);
 
-        XmlActivity activity = root.Activities.Single(a => a.Name == "Stone");
+        Activity activity = root.Activities.Single(a => a.Name == "Stone");
         Assert.That(activity.ItemCosts, Has.Count.EqualTo(2));
         Assert.That(activity.ItemCosts[0].Item, Is.EqualTo("Food"));
         Assert.That(activity.ItemCosts[0].Cost, Is.EqualTo(1));
@@ -200,7 +200,7 @@ public sealed class ToolParserTests
     [Test]
     public void Parse_Activity_DuplicateItemCostsAreAggregated()
     {
-        TypesXmlRoot root = Parse("""
+        Root root = Parse("""
             <Types>
               <Activity name="Stone" time="2.5">
                 <ItemCost item="Food" cost="1"/>
@@ -210,7 +210,7 @@ public sealed class ToolParserTests
             </Types>
             """);
 
-        XmlActivity activity = root.Activities.Single(a => a.Name == "Stone");
+        Activity activity = root.Activities.Single(a => a.Name == "Stone");
         Assert.That(activity.ItemCosts, Has.Count.EqualTo(2));
         Assert.That(activity.ItemCosts[0].Item, Is.EqualTo("Food"));
         Assert.That(activity.ItemCosts[0].Cost, Is.EqualTo(3));
@@ -233,7 +233,7 @@ public sealed class ToolParserTests
     [Test]
     public void Parse_ExplicitEnumIsStillSupported()
     {
-        TypesXmlRoot root = Parse("""
+        Root root = Parse("""
             <Types>
               <Enum name="Weather">
                 <Value name="Sunny"/>
@@ -242,7 +242,7 @@ public sealed class ToolParserTests
             </Types>
             """);
 
-        XmlEnum weather = root.Enums.Single(e => e.Name == "Weather");
+        Generator.Core.Spec.Enum weather = root.Enums.Single(e => e.Name == "Weather");
         Assert.That(weather.Values.Select(v => v.Name), Does.Contain("Sunny"));
         Assert.That(weather.Values.Select(v => v.Name), Does.Contain("Rainy"));
     }

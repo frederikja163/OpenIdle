@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Globalization;
 using System.IO;
 using System.Linq;
+using Generator.Core.Spec;
 
 namespace Generator.Core;
 
@@ -14,13 +15,13 @@ public sealed class TsEmitterVisitor : VisitorBase, IDisposable
     private readonly ScopedTextWriter _textWriter;
     private bool _firstBlock = true;
 
-    private readonly List<XmlEnum> _enums = new();
-    private readonly List<XmlDto> _dtos = new();
-    private readonly List<XmlRequest> _requests = new();
-    private readonly List<XmlEvent> _events = new();
-    private readonly List<XmlDropTable> _dropTables = new();
-    private readonly List<XmlActivity> _activities = new();
-    private readonly List<(string Name, List<XmlProperty> Properties)> _namedResponses = new();
+    private readonly List<Spec.Enum> _enums = new();
+    private readonly List<Dto> _dtos = new();
+    private readonly List<Request> _requests = new();
+    private readonly List<Event> _events = new();
+    private readonly List<DropTable> _dropTables = new();
+    private readonly List<Activity> _activities = new();
+    private readonly List<(string Name, List<Property> Properties)> _namedResponses = new();
 
     public TsEmitterVisitor(TextWriter writer)
     {
@@ -39,14 +40,14 @@ public sealed class TsEmitterVisitor : VisitorBase, IDisposable
         EmitBases();
     }
 
-    public override void Visit(XmlEnum xmlEnum) => _enums.Add(xmlEnum);
-    public override void Visit(XmlDto xmlDto) => _dtos.Add(xmlDto);
-    public override void Visit(XmlRequest xmlRequest) => _requests.Add(xmlRequest);
-    public override void Visit(XmlEvent xmlEvent) => _events.Add(xmlEvent);
-    public override void Visit(XmlDropTable xmlDropTable) => _dropTables.Add(xmlDropTable);
-    public override void Visit(XmlActivity xmlActivity) => _activities.Add(xmlActivity);
+    public override void Visit(Spec.Enum xmlEnum) => _enums.Add(xmlEnum);
+    public override void Visit(Dto xmlDto) => _dtos.Add(xmlDto);
+    public override void Visit(Request xmlRequest) => _requests.Add(xmlRequest);
+    public override void Visit(Event xmlEvent) => _events.Add(xmlEvent);
+    public override void Visit(DropTable xmlDropTable) => _dropTables.Add(xmlDropTable);
+    public override void Visit(Activity xmlActivity) => _activities.Add(xmlActivity);
 
-    public override void Visit(XmlResponse xmlResponse)
+    public override void Visit(Response xmlResponse)
     {
         if (xmlResponse.Name != null)
         {
@@ -54,7 +55,7 @@ public sealed class TsEmitterVisitor : VisitorBase, IDisposable
         }
     }
 
-    public void Emit(TypesXmlRoot root) => root.Accept(this);
+    public void Emit(Root root) => root.Accept(this);
 
     public void Dispose()
     {
@@ -104,7 +105,7 @@ public sealed class TsEmitterVisitor : VisitorBase, IDisposable
 
     private void EmitEnums()
     {
-        foreach (XmlEnum en in _enums)
+        foreach (Spec.Enum en in _enums)
         {
             Separate();
             List<string> members = en.Values.Select(v => Quote(v.Name)).Distinct().ToList();
@@ -114,27 +115,27 @@ public sealed class TsEmitterVisitor : VisitorBase, IDisposable
 
     private void EmitInterfaces()
     {
-        foreach (XmlDto dto in _dtos)
+        foreach (Dto dto in _dtos)
         {
             EmitInterface(dto.Name, "DtoBase", dto.Properties, isDto: true);
         }
 
-        foreach (XmlRequest request in _requests)
+        foreach (Request request in _requests)
         {
             EmitInterface(request.Name, "RequestBase", request.Properties, isDto: false);
         }
 
-        foreach (XmlEvent ev in _events)
+        foreach (Event ev in _events)
         {
             EmitInterface(ev.Name, "EventBase", ev.Properties, isDto: false);
         }
 
-        foreach ((string name, List<XmlProperty> properties) in _namedResponses)
+        foreach ((string name, List<Property> properties) in _namedResponses)
         {
             EmitInterface(name, "ResponseBase", properties, isDto: false);
         }
 
-        foreach (XmlRequest request in _requests)
+        foreach (Request request in _requests)
         {
             if (request.Response.Name == null)
             {
@@ -143,7 +144,7 @@ public sealed class TsEmitterVisitor : VisitorBase, IDisposable
         }
     }
 
-    private void EmitInterface(string name, string baseType, List<XmlProperty> properties, bool isDto)
+    private void EmitInterface(string name, string baseType, List<Property> properties, bool isDto)
     {
         Separate();
 
@@ -157,7 +158,7 @@ public sealed class TsEmitterVisitor : VisitorBase, IDisposable
         {
             using (Scope _ = _textWriter.Scope($"export interface {name}"))
             {
-                foreach (XmlProperty property in properties)
+                foreach (Property property in properties)
                 {
                     WriteProperty(property);
                 }
@@ -168,25 +169,25 @@ public sealed class TsEmitterVisitor : VisitorBase, IDisposable
         using (Scope _ = _textWriter.Scope($"export interface {name} extends {baseType}"))
         {
             _textWriter.WriteLine($"$type: {Quote(name)};");
-            foreach (XmlProperty property in properties)
+            foreach (Property property in properties)
             {
                 WriteProperty(property);
             }
         }
     }
 
-    private void WriteProperty(XmlProperty property)
+    private void WriteProperty(Property property)
     {
         _textWriter.WriteLine($"{PropertySignature(property)};");
     }
 
-    private string PropertySignature(XmlProperty property)
+    private string PropertySignature(Property property)
     {
         string optional = property.Optional ? "?" : "";
         return $"{property.Name.ToCamelCase()}{optional}: {GetPropertyType(property)}";
     }
 
-    private string GetPropertyType(XmlProperty property)
+    private string GetPropertyType(Property property)
     {
         string type = property.Type.ToLowerInvariant() switch
         {
@@ -205,7 +206,7 @@ public sealed class TsEmitterVisitor : VisitorBase, IDisposable
     private void EmitResponseUnion()
     {
         List<string> names = new();
-        foreach (XmlRequest request in _requests)
+        foreach (Request request in _requests)
         {
             if (request.Response.Name != null)
             {
@@ -240,7 +241,7 @@ public sealed class TsEmitterVisitor : VisitorBase, IDisposable
         {
             using (Scope _ = _textWriter.Scope("export type RequestMap =", ScopeStyle.Curly, ";"))
             {
-                foreach (XmlRequest request in _requests)
+                foreach (Request request in _requests)
                 {
                     WriteRequestEntry(request);
                 }
@@ -251,7 +252,7 @@ public sealed class TsEmitterVisitor : VisitorBase, IDisposable
         _textWriter.WriteLine("export type RequestType = keyof RequestMap;");
     }
 
-    private void WriteRequestEntry(XmlRequest request)
+    private void WriteRequestEntry(Request request)
     {
         string responseName = request.Response.Name ?? request.Name + "Response";
         string payload = ObjectType(request.Properties);
@@ -273,7 +274,7 @@ public sealed class TsEmitterVisitor : VisitorBase, IDisposable
             {
                 using (Scope __ = _textWriter.Scope("payload:", ScopeStyle.Curly, ";"))
                 {
-                    foreach (XmlProperty property in request.Properties)
+                    foreach (Property property in request.Properties)
                     {
                         WriteProperty(property);
                     }
@@ -294,7 +295,7 @@ public sealed class TsEmitterVisitor : VisitorBase, IDisposable
         {
             using (Scope _ = _textWriter.Scope("export type EventMap =", ScopeStyle.Curly, ";"))
             {
-                foreach (XmlEvent ev in _events)
+                foreach (Event ev in _events)
                 {
                     WriteEventEntry(ev);
                 }
@@ -309,7 +310,7 @@ public sealed class TsEmitterVisitor : VisitorBase, IDisposable
             "export type ServerEventOf<K extends EventType> = { $type: K } & EventBase & EventMap[K];");
     }
 
-    private void WriteEventEntry(XmlEvent ev)
+    private void WriteEventEntry(Event ev)
     {
         string flat = $"{ev.Name}: {ObjectType(ev.Properties)};";
         if (Fits(flat))
@@ -320,14 +321,14 @@ public sealed class TsEmitterVisitor : VisitorBase, IDisposable
 
         using (Scope _ = _textWriter.Scope($"{ev.Name}:", ScopeStyle.Curly, ";"))
         {
-            foreach (XmlProperty property in ev.Properties)
+            foreach (Property property in ev.Properties)
             {
                 WriteProperty(property);
             }
         }
     }
 
-    private string ObjectType(List<XmlProperty> properties)
+    private string ObjectType(List<Property> properties)
     {
         return properties.Count == 0
             ? "Record<string, never>"
@@ -388,7 +389,7 @@ public sealed class TsEmitterVisitor : VisitorBase, IDisposable
         {
             for (int i = 0; i < _dropTables.Count; i++)
             {
-                XmlDropTable table = _dropTables[i];
+                DropTable table = _dropTables[i];
                 string separator = i == _dropTables.Count - 1 ? "" : ",";
                 using (Scope __ = _textWriter.Scope($"{table.Name}:", ScopeStyle.Curly, separator))
                 {
@@ -416,7 +417,7 @@ public sealed class TsEmitterVisitor : VisitorBase, IDisposable
         {
             for (int i = 0; i < _activities.Count; i++)
             {
-                XmlActivity activity = _activities[i];
+                Activity activity = _activities[i];
                 string separator = i == _activities.Count - 1 ? "" : ",";
                 using (Scope __ = _textWriter.Scope($"{activity.Name}:", ScopeStyle.Curly, separator))
                 {
@@ -560,21 +561,21 @@ public sealed class TsEmitterVisitor : VisitorBase, IDisposable
         return _enums.Any(e => e.Name == name);
     }
 
-    private static string[] RewardMembers(XmlReward reward)
+    private static string[] RewardMembers(Reward reward)
     {
         return reward switch
         {
-            XmlItemReward item => new[]
+            ItemReward item => new[]
             {
                 "kind: 'item'", $"count: {item.Count}", $"weight: {WeightLiteral(item.Weight)}",
                 $"item: {Quote(item.Item)}",
             },
-            XmlTableReward table => new[]
+            TableReward table => new[]
             {
                 "kind: 'table'", $"count: {table.Count}", $"weight: {WeightLiteral(table.Weight)}",
                 $"table: {Quote(table.Table)}",
             },
-            XmlXpReward xp => new[]
+            XpReward xp => new[]
             {
                 "kind: 'xp'", $"count: {xp.Count}", $"weight: {WeightLiteral(xp.Weight)}",
                 $"skill: {Quote(xp.Skill)}",
@@ -583,12 +584,12 @@ public sealed class TsEmitterVisitor : VisitorBase, IDisposable
         };
     }
 
-    private static string[] RequirementMembers(XmlLevelRequirement requirement)
+    private static string[] RequirementMembers(LevelRequirement requirement)
     {
         return new[] { $"skill: {Quote(requirement.Skill)}", $"count: {requirement.Count}" };
     }
 
-    private static string[] CostMembers(XmlItemCost cost)
+    private static string[] CostMembers(ItemCost cost)
     {
         return new[] { $"item: {Quote(cost.Item)}", $"count: {cost.Cost}" };
     }
@@ -603,9 +604,9 @@ public sealed class TsEmitterVisitor : VisitorBase, IDisposable
         return $"'{value}'";
     }
 
-    private static List<XmlReward> Rewards(
-        List<XmlItemReward> items, List<XmlTableReward> tables, List<XmlXpReward> xps)
+    private static List<Reward> Rewards(
+        List<ItemReward> items, List<TableReward> tables, List<XpReward> xps)
     {
-        return items.Cast<XmlReward>().Concat(tables).Concat(xps).ToList();
+        return items.Cast<Reward>().Concat(tables).Concat(xps).ToList();
     }
 }

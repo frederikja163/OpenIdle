@@ -4,6 +4,7 @@ using System.Xml;
 using System.Xml.Serialization;
 using CommandLine;
 using Generator.Core;
+using Generator.Core.Spec;
 
 public enum Target
 {
@@ -41,7 +42,7 @@ public static class Program
 
     private static int Run(Options options)
     {
-        TypesXmlRoot root;
+        Root root;
         try
         {
             root = ParseContract(options.Input);
@@ -68,6 +69,11 @@ public static class Program
             output = CreateOutput(options.Output);
             Emit(options.Target, output, root);
         }
+        catch (ParserException ex)
+        {
+            Console.Error.WriteLine(ex.Message);
+            return 1;
+        }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
         {
             Console.Error.WriteLine(ex.Message);
@@ -87,11 +93,11 @@ public static class Program
         return 0;
     }
 
-    private static TypesXmlRoot ParseContract(string path)
+    private static Root ParseContract(string path)
     {
-        XmlSerializer serializer = new(typeof(TypesXmlRoot));
+        XmlSerializer serializer = new(typeof(Root));
         using FileStream stream = File.OpenRead(path);
-        return (TypesXmlRoot)serializer.Deserialize(stream)!;
+        return (Root)serializer.Deserialize(stream)!;
     }
 
     private static TextWriter CreateOutput(string? path)
@@ -101,10 +107,9 @@ public static class Program
             : new StreamWriter(path, append: false, new UTF8Encoding(encoderShouldEmitUTF8Identifier: false));
     }
 
-    private static void Emit(Target target, TextWriter writer, TypesXmlRoot root)
+    private static void Emit(Target target, TextWriter writer, Root root)
     {
-        AddEnumsVisitor enumsVisitor = new();
-        root.Accept(enumsVisitor);
+        new VisitorPipeline(new AddEnumsVisitor(), new ValidationVisitor()).Visit(root);
 
         switch (target)
         {

@@ -5,6 +5,7 @@ using System.Text;
 using System.Xml;
 using System.Xml.Serialization;
 using Generator.Core;
+using Generator.Core.Spec;
 using Microsoft.CodeAnalysis;
 using Microsoft.CodeAnalysis.Text;
 
@@ -51,13 +52,13 @@ public sealed class TypesGenerator : IIncrementalGenerator
                 return;
             }
 
-            TypesXmlRoot root;
+            Root root;
             try
             {
                 byte[] bytes = Encoding.UTF8.GetBytes(xml[0]);
                 using MemoryStream stream = new(bytes);
-                XmlSerializer serializer = new(typeof(TypesXmlRoot));
-                root = (TypesXmlRoot)serializer.Deserialize(stream)!;
+                XmlSerializer serializer = new(typeof(Root));
+                root = (Root)serializer.Deserialize(stream)!;
             }
             catch (InvalidOperationException ex) when (ex.InnerException is XmlException xmlEx)
             {
@@ -66,8 +67,16 @@ public sealed class TypesGenerator : IIncrementalGenerator
                 return;
             }
 
-            AddEnumsVisitor enumsVisitor = new();
-            root.Accept(enumsVisitor);
+            try
+            {
+                new VisitorPipeline(new AddEnumsVisitor(), new ValidationVisitor()).Visit(root);
+            }
+            catch (ParserException ex)
+            {
+                productionContext.ReportDiagnostic(
+                    Diagnostic.Create(ParseError, Location.None, ex.Message));
+                return;
+            }
 
             using StringWriter writer = new();
             using (CsEmitterVisitor csEmitter = new(writer))

@@ -2,6 +2,7 @@ using System.IO;
 using System.Text;
 using System.Xml.Serialization;
 using Generator.Core;
+using Generator.Core.Spec;
 
 namespace OpenIdle.Tests.Generators;
 
@@ -71,11 +72,10 @@ public sealed class TsEmitterTests
     private static string Emit()
     {
         using MemoryStream stream = new(Encoding.UTF8.GetBytes(Contract));
-        XmlSerializer serializer = new(typeof(TypesXmlRoot));
-        TypesXmlRoot root = (TypesXmlRoot)serializer.Deserialize(stream)!;
+        XmlSerializer serializer = new(typeof(Root));
+        Root root = (Root)serializer.Deserialize(stream)!;
 
-        AddEnumsVisitor enumsVisitor = new();
-        root.Accept(enumsVisitor);
+        new VisitorPipeline(new AddEnumsVisitor(), new ValidationVisitor()).Visit(root);
 
         StringWriter writer = new(new StringBuilder());
         using (TsEmitterVisitor emitter = new(writer))

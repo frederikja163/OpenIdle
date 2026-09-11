@@ -3,6 +3,7 @@ using System.Text;
 using System.Text.Json;
 using System.Xml.Serialization;
 using Generator.Core;
+using Generator.Core.Spec;
 
 namespace OpenIdle.Tests.Generators;
 
@@ -73,7 +74,7 @@ public sealed class JsonSchemaEmitterTests
     public void Emit_Request_CarriesItsNamedResponse()
     {
         JsonElement request = Requests().Single(r => r.GetProperty("Name").GetString() == "GetSkillsRequest");
-        JsonElement response = request.GetProperty("Response");
+        JsonElement response = request.GetProperty("Responses").EnumerateArray().Single();
 
         Assert.Multiple(() =>
         {
@@ -113,11 +114,10 @@ public sealed class JsonSchemaEmitterTests
     private static JsonElement Root()
     {
         using MemoryStream stream = new(Encoding.UTF8.GetBytes(Contract));
-        XmlSerializer serializer = new(typeof(TypesXmlRoot));
-        TypesXmlRoot root = (TypesXmlRoot)serializer.Deserialize(stream)!;
+        XmlSerializer serializer = new(typeof(Root));
+        Root root = (Root)serializer.Deserialize(stream)!;
 
-        AddEnumsVisitor enumsVisitor = new();
-        root.Accept(enumsVisitor);
+        new VisitorPipeline(new AddEnumsVisitor(), new ValidationVisitor()).Visit(root);
 
         using JsonDocument document = JsonDocument.Parse(JsonSchemaEmitter.Emit(root));
         return document.RootElement.Clone();

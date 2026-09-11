@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Globalization;
 using System.IO;
 using System.Linq;
+using Generator.Core.Spec;
 
 namespace Generator.Core;
 
@@ -12,7 +13,7 @@ public sealed class CsEmitterVisitor : VisitorBase, IDisposable
 
     private readonly ScopedTextWriter _textWriter;
     private readonly List<string> _allObjects = new();
-    private readonly List<(string name, List<XmlProperty> properties)> _inlineResponses = new();
+    private readonly List<(string name, List<Property> properties)> _inlineResponses = new();
     private Section _currentSection;
     private Scope? _classScope;
     private Scope? _methodScope;
@@ -31,27 +32,27 @@ public sealed class CsEmitterVisitor : VisitorBase, IDisposable
         _textWriter = new ScopedTextWriter(writer);
     }
 
-    public override void Visit(XmlEnum xmlEnum) => EmitEnum(xmlEnum);
+    public override void Visit(Spec.Enum xmlEnum) => EmitEnum(xmlEnum);
 
-    public override void Visit(XmlDropTable xmlDropTable)
+    public override void Visit(DropTable xmlDropTable)
     {
         EnsureSection(Section.DropTable, "public static class DropTableData", "public static void AddAll(DropTableService service)");
         EmitDropTable(xmlDropTable);
     }
 
-    public override void Visit(XmlActivity xmlActivity)
+    public override void Visit(Activity xmlActivity)
     {
         EnsureSection(Section.Activity, "public static class ActivityData", "public static void AddAll(ActivityService service)");
         EmitActivity(xmlActivity);
     }
 
-    public override void Visit(XmlItem xmlItem)
+    public override void Visit(Item xmlItem)
     {
         EnsureSection(Section.Tool, "public static class ToolData", "public static void AddAll(ToolService service)");
         EmitItem(xmlItem);
     }
 
-    public override void Visit(XmlSkill xmlSkill)
+    public override void Visit(Skill xmlSkill)
     {
         if (xmlSkill.Slots.Count == 0)
         {
@@ -62,13 +63,13 @@ public sealed class CsEmitterVisitor : VisitorBase, IDisposable
         EmitSkillSlots(xmlSkill);
     }
 
-    public override void Visit(XmlDto xmlDto)
+    public override void Visit(Dto xmlDto)
     {
         CloseSection();
         EmitObject(xmlDto.Name, "DtoBase", xmlDto.Properties);
     }
 
-    public override void Visit(XmlRequest xmlRequest)
+    public override void Visit(Request xmlRequest)
     {
         CloseSection();
         EmitObject(xmlRequest.Name, "RequestBase", xmlRequest.Properties);
@@ -79,7 +80,7 @@ public sealed class CsEmitterVisitor : VisitorBase, IDisposable
         }
     }
 
-    public override void Visit(XmlResponse xmlResponse)
+    public override void Visit(Response xmlResponse)
     {
         if (xmlResponse.Name != null)
         {
@@ -88,19 +89,19 @@ public sealed class CsEmitterVisitor : VisitorBase, IDisposable
         }
     }
 
-    public override void Visit(XmlEvent xmlEvent)
+    public override void Visit(Event xmlEvent)
     {
         CloseSection();
         EmitObject(xmlEvent.Name, "EventBase", xmlEvent.Properties);
     }
 
-    public void Emit(TypesXmlRoot root) => root.Accept(this);
+    public void Emit(Root root) => root.Accept(this);
 
     public void Dispose()
     {
         CloseSection();
 
-        foreach ((string name, List<XmlProperty> properties) in _inlineResponses)
+        foreach ((string name, List<Property> properties) in _inlineResponses)
         {
             EmitObject(name, "ResponseBase", properties);
         }
@@ -131,7 +132,7 @@ public sealed class CsEmitterVisitor : VisitorBase, IDisposable
         _currentSection = Section.None;
     }
 
-    private void EmitEnum(XmlEnum xmlEnum)
+    private void EmitEnum(Spec.Enum xmlEnum)
     {
         using (Scope _ = _textWriter.Scope($"public enum {xmlEnum.Name}"))
         {
@@ -142,9 +143,9 @@ public sealed class CsEmitterVisitor : VisitorBase, IDisposable
         }
     }
 
-    private void EmitDropTable(XmlDropTable dropTable)
+    private void EmitDropTable(DropTable dropTable)
     {
-        List<XmlReward> rewards = Rewards(dropTable.ItemRewards, dropTable.TableRewards, dropTable.XpRewards);
+        List<Reward> rewards = Rewards(dropTable.ItemRewards, dropTable.TableRewards, dropTable.XpRewards);
         _textWriter.Write($"service.AddDropTable(DropTableId.{dropTable.Name}, new DropTable(");
         if (rewards.Count > 0)
         {
@@ -161,7 +162,7 @@ public sealed class CsEmitterVisitor : VisitorBase, IDisposable
         _textWriter.WriteLine("));");
     }
 
-    private void EmitActivity(XmlActivity activity)
+    private void EmitActivity(Activity activity)
     {
         string rewards = string.Join(", ", Rewards(activity.ItemRewards, activity.TableReward, activity.XpRewards).Select(RewardExpression));
         string requirements = string.Join(", ", activity.LevelRequirements.Select(RequirementExpression));
@@ -170,7 +171,7 @@ public sealed class CsEmitterVisitor : VisitorBase, IDisposable
             $"service.AddActivity(ActivityId.{activity.Name}, new ActivityDefinition(time: {TimeLiteral(activity.Time)}, rewards: [{rewards}], requirements: [{requirements}], costs: [{costs}]));");
     }
 
-    private void EmitItem(XmlItem item)
+    private void EmitItem(Item item)
     {
         string tags = string.Join(", ", item.Tags.Select(tag => $"ItemTagId.{tag.Name}"));
         string stats = string.Join(", ", item.Stats.Select(ItemStatExpression));
@@ -178,18 +179,18 @@ public sealed class CsEmitterVisitor : VisitorBase, IDisposable
             $"service.AddItem(ItemId.{item.Name}, new ItemDefinition(tags: [{tags}], stats: [{stats}]));");
     }
 
-    private void EmitSkillSlots(XmlSkill skill)
+    private void EmitSkillSlots(Skill skill)
     {
         string slots = string.Join(", ", skill.Slots.Select(SlotExpression));
         _textWriter.WriteLine(
             $"service.AddSkillSlots(SkillId.{skill.Name}, [{slots}]);");
     }
 
-    private void EmitObject(string name, string baseType, List<XmlProperty> properties)
+    private void EmitObject(string name, string baseType, List<Property> properties)
     {
         using (Scope _ = _textWriter.Scope($"public sealed class {name} : {baseType}"))
         {
-            foreach (XmlProperty property in properties)
+            foreach (Property property in properties)
             {
                 EmitProperty(property);
             }
@@ -199,13 +200,13 @@ public sealed class CsEmitterVisitor : VisitorBase, IDisposable
         _allObjects.Add(name);
     }
 
-    private void EmitProperty(XmlProperty property, string setter = "init")
+    private void EmitProperty(Property property, string setter = "init")
     {
         _textWriter.WriteLine($"[JsonPropertyName(\"{property.Name.ToCamelCase()}\")]");
         _textWriter.WriteLine($"{GetPropertyModifiers(property)} {GetPropertyType(property)} {property.Name} {{ get; {setter}; }}");
     }
 
-    private static string GetPropertyModifiers(XmlProperty property)
+    private static string GetPropertyModifiers(Property property)
     {
         string str = "public";
         if (!property.Optional)
@@ -215,7 +216,7 @@ public sealed class CsEmitterVisitor : VisitorBase, IDisposable
         return str;
     }
 
-    private static string GetPropertyType(XmlProperty property)
+    private static string GetPropertyType(Property property)
     {
         string type = property.Type.ToLowerInvariant() switch
         {
@@ -233,27 +234,27 @@ public sealed class CsEmitterVisitor : VisitorBase, IDisposable
         return type;
     }
 
-    private static string RewardExpression(XmlReward reward) => reward switch
+    private static string RewardExpression(Reward reward) => reward switch
     {
-        XmlItemReward itemReward =>
+        ItemReward itemReward =>
             $"new ItemReward({itemReward.Count}, {WeightLiteral(itemReward.Weight)}, ItemId.{itemReward.Item})",
-        XmlTableReward tableReward =>
+        TableReward tableReward =>
             $"new TableReward({tableReward.Count}, {WeightLiteral(tableReward.Weight)}, DropTableId.{tableReward.Table})",
-        XmlXpReward xpReward =>
+        XpReward xpReward =>
             $"new XpReward({xpReward.Count}, {WeightLiteral(xpReward.Weight)}, SkillId.{xpReward.Skill})",
         _ => throw new NotSupportedException("Reward expressions should drop a table, an item or xp."),
     };
 
-    private static string RequirementExpression(XmlLevelRequirement requirement) =>
+    private static string RequirementExpression(LevelRequirement requirement) =>
         $"new LevelRequirement(SkillId.{requirement.Skill}, {requirement.Count})";
 
-    private static string ItemCostExpression(XmlItemCost cost) =>
+    private static string ItemCostExpression(ItemCost cost) =>
         $"new ItemCost({cost.Cost}, ItemId.{cost.Item})";
 
-    private static string ItemStatExpression(XmlItemStat stat) =>
+    private static string ItemStatExpression(ItemStat stat) =>
         $"new ItemStat(ToolStat.{stat.Name}, {stat.Value.ToString(CultureInfo.InvariantCulture)}f)";
 
-    private static string SlotExpression(XmlSlot slot) =>
+    private static string SlotExpression(Slot slot) =>
         $"new SlotBinding(ItemSlotId.{slot.Name}, ItemTagId.{slot.AcceptedTag.Name}, {slot.Required.ToString().ToLowerInvariant()})";
 
     private static string WeightLiteral(float? weight) =>
@@ -262,9 +263,9 @@ public sealed class CsEmitterVisitor : VisitorBase, IDisposable
     private static string TimeLiteral(float time) =>
         time.ToString(CultureInfo.InvariantCulture) + "f";
 
-    private static List<XmlReward> Rewards(
-        List<XmlItemReward> items, List<XmlTableReward> tables, List<XmlXpReward> xps) =>
-        items.Cast<XmlReward>().Concat(tables).Concat(xps).ToList();
+    private static List<Reward> Rewards(
+        List<ItemReward> items, List<TableReward> tables, List<XpReward> xps) =>
+        items.Cast<Reward>().Concat(tables).Concat(xps).ToList();
 
     private void EmitBaseClasses()
     {
@@ -281,20 +282,20 @@ public sealed class CsEmitterVisitor : VisitorBase, IDisposable
 
         using (Scope _ = _textWriter.Scope("public abstract class RequestBase : DtoBase"))
         {
-            EmitProperty(new XmlProperty { Name = "RequestId", Type = "int", Optional = true }, "set");
+            EmitProperty(new Property { Name = "RequestId", Type = "int", Optional = true }, "set");
         }
         _textWriter.WriteLine();
 
         using (Scope _ = _textWriter.Scope("public abstract class ResponseBase : DtoBase"))
         {
-            EmitProperty(new XmlProperty { Name = "RequestId", Type = "int", Optional = true }, "set");
+            EmitProperty(new Property { Name = "RequestId", Type = "int", Optional = true }, "set");
         }
         _textWriter.WriteLine();
 
         using (Scope _ = _textWriter.Scope("public abstract class EventBase : DtoBase"))
         {
-            EmitProperty(new XmlProperty { Name = "EventId", Type = "int", Optional = true }, "set");
-            EmitProperty(new XmlProperty { Name = "Timestamp", Type = "timestamp", Optional = true }, "set");
+            EmitProperty(new Property { Name = "EventId", Type = "int", Optional = true }, "set");
+            EmitProperty(new Property { Name = "Timestamp", Type = "timestamp", Optional = true }, "set");
         }
         _textWriter.WriteLine();
     }
