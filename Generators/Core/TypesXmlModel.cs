@@ -62,7 +62,15 @@ public sealed class XmlEnum() : INode
 
     public void AddValue(string value)
     {
-        Values.Add(new XmlEnumValue(){Name = value});
+        foreach (XmlEnumValue existing in Values)
+        {
+            if (existing.Name == value)
+            {
+                return;
+            }
+        }
+
+        Values.Add(new XmlEnumValue { Name = value });
     }
     
     public void Accept(IVisitor visitor)

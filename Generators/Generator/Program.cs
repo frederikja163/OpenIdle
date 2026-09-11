@@ -10,6 +10,7 @@ public enum Target
     Cs,
     Ts,
     TsSchema,
+    Json,
 }
 
 public static class Program
@@ -28,7 +29,7 @@ public static class Program
         [Option('o', "output", HelpText = "Path to write the generated output to. Defaults to stdout.")]
         public string? Output { get; set; }
 
-        [Option('t', "target", Required = true, HelpText = "Which emitter to run: Cs, Ts, or TsSchema.")]
+        [Option('t', "target", Required = true, HelpText = "Which emitter to run: Cs, Ts, TsSchema, or Json.")]
         public Target Target { get; set; }
     }
 
@@ -121,6 +122,9 @@ public static class Program
                 break;
             case Target.TsSchema:
                 Console.Error.WriteLine("TsSchema emitter has not been ported to the visitor pattern yet.");
+                break;
+            case Target.Json:
+                writer.Write(JsonSchemaEmitter.Emit(root));
                 break;
         }
     }
