@@ -110,6 +110,16 @@ public sealed class ValidationVisitor : IVisitor
         {
             throw new ParserException($"Activity '{xmlActivity.Name}' time must be greater than zero.");
         }
+
+        HashSet<string> costedItems = new();
+        foreach (ItemCost cost in xmlActivity.ItemCosts)
+        {
+            if (!costedItems.Add(cost.Item))
+            {
+                throw new ParserException(
+                    $"Activity '{xmlActivity.Name}' declares more than one cost for item '{cost.Item}'.");
+            }
+        }
     }
 
     public void Visit(LevelRequirement xmlLevelRequirement)

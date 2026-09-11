@@ -198,24 +198,16 @@ public sealed class ToolParserTests
     }
 
     [Test]
-    public void Parse_Activity_DuplicateItemCostsAreAggregated()
+    public void Parse_Activity_DuplicateItemCosts_Throws()
     {
-        Root root = Parse("""
+        Assert.Throws<ParserException>(() => Parse("""
             <Types>
               <Activity name="Stone" time="2.5">
                 <ItemCost item="Food" cost="1"/>
                 <ItemCost item="Food" cost="2"/>
-                <ItemCost item="Wood" cost="3"/>
               </Activity>
             </Types>
-            """);
-
-        Activity activity = root.Activities.Single(a => a.Name == "Stone");
-        Assert.That(activity.ItemCosts, Has.Count.EqualTo(2));
-        Assert.That(activity.ItemCosts[0].Item, Is.EqualTo("Food"));
-        Assert.That(activity.ItemCosts[0].Cost, Is.EqualTo(3));
-        Assert.That(activity.ItemCosts[1].Item, Is.EqualTo("Wood"));
-        Assert.That(activity.ItemCosts[1].Cost, Is.EqualTo(3));
+            """));
     }
 
     [Test]
