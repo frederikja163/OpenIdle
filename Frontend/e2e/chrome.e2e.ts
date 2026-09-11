@@ -1,5 +1,13 @@
 import { expect, test } from '@playwright/test';
-import { logIn, LOGIN_URL, respondToRequests, THORIN, WS_ROUTE } from './support';
+import {
+	DAY_MS,
+	logIn,
+	LOGIN_URL,
+	respondToRequests,
+	type StubProfile,
+	THORIN,
+	WS_ROUTE
+} from './support';
 
 // Runs against `bun run build && bun run preview` (see playwright.config.ts), so
 // this is the production build rather than the dev server — which is the whole
@@ -192,6 +200,47 @@ test('deleting a profile asks first, and confirming does nothing yet', async ({ 
 	await page.getByRole('dialog').getByRole('button', { name: 'Delete' }).click();
 	await expect(page.getByRole('dialog')).toBeHidden();
 	await expect(page.getByText('Thorin')).toBeVisible();
+});
+
+test('a card reads the profile status the server sent', async ({ page }) => {
+	// The three fixtures live in this test rather than beside THORIN: a second
+	// profile anywhere else would put a second "Load" button in the document and
+	// make the reconnect test's getByRole a strict-mode violation.
+	const running: StubProfile = {
+		name: 'Balin',
+		profileId: 'p2',
+		totalLevel: 27,
+		creationTime: Date.now() - 90 * DAY_MS,
+		activity: 'MineTin'
+	};
+	const idle: StubProfile = {
+		name: 'Dwalin',
+		profileId: 'p3',
+		totalLevel: 4,
+		creationTime: Date.now()
+	};
+	await page.routeWebSocket(WS_ROUTE, (ws) =>
+		ws.onMessage(respondToRequests(ws, [THORIN, running, idle]))
+	);
+
+	await logIn(page);
+
+	// The panel carries no role of its own, so its data-slot is the handle — the
+	// same reason the delete test above reaches for it.
+	const card = (name: string) => page.locator('[data-slot="card"]', { hasText: name });
+
+	// Sentence case in the DOM: oi-label-sm applies the uppercase in CSS, so the
+	// text and the accessible name stay as they were written.
+	await expect(card('Balin').locator('[data-slot="badge"]')).toHaveText('Mine tin');
+	await expect(card('Balin').getByText('Active now')).toBeVisible();
+
+	// Online but idle: no activity to name, so the badge only reports presence.
+	await expect(card('Dwalin').locator('[data-slot="badge"]')).toHaveText('Online');
+
+	// Offline, and no badge even though the profile still carries the activity it
+	// dropped out of: the accent is for a running action, not a remembered one.
+	await expect(card('Thorin').locator('[data-slot="badge"]')).toHaveCount(0);
+	await expect(card('Thorin').getByText('Last played 3 days ago')).toBeVisible();
 });
 
 test('the Debug button opens the protocol console and Back returns to the app', async ({

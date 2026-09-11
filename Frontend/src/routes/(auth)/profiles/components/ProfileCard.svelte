@@ -1,27 +1,34 @@
 <script lang="ts">
+	import CalendarPlus from '@lucide/svelte/icons/calendar-plus';
 	import ChevronsUp from '@lucide/svelte/icons/chevrons-up';
-	import Coins from '@lucide/svelte/icons/coins';
 	import Play from '@lucide/svelte/icons/play';
-	import Timer from '@lucide/svelte/icons/timer';
 	import Trash2 from '@lucide/svelte/icons/trash-2';
-	import Meter from '$lib/components/core/Meter.svelte';
+	import UserRound from '@lucide/svelte/icons/user-round';
 	import StatPill from '$lib/components/game/StatPill.svelte';
+	import Column from '$lib/components/layout/Column.svelte';
 	import Row from '$lib/components/layout/Row.svelte';
 	import { Badge } from '$lib/components/ui/badge';
 	import { Button } from '$lib/components/ui/button';
 	import * as Card from '$lib/components/ui/card';
 	import * as Dialog from '$lib/components/ui/dialog';
-	import type { Profile } from '../data';
+	import { formatDate, formatTimeAgo, formatWireName } from '$lib/utils/formatUtils';
+	import { cn } from '$lib/utils/stylingUtils';
+	import type { ProfileDto } from '$lib/ws/protocol';
 
 	/*
-	 * One save-slot panel from the design system's profiles template: identity
-	 * row with avatar tile and Active badge, stat pills, an inset skill-meter
-	 * well, then Resume/Load and Delete. Selecting is raised to the page, which
-	 * owns the navigation that follows it; Delete asks for confirmation but has
-	 * no backend message behind it yet.
+	 * One save-slot panel from the design system's profiles template: identity row
+	 * with avatar tile and status badge, stat pills, then Resume/Load and Delete.
+	 * Selecting is raised to the page, which owns the navigation that follows it;
+	 * Delete asks for confirmation but has no backend message behind it yet.
+	 *
+	 * The badge and the button deliberately read different facts. The badge is the
+	 * server's: a profile is online when any connection anywhere has it selected.
+	 * `selected` is this socket's, and the socket never reports it back.
 	 */
 	interface Props {
-		profile: Profile;
+		profile: ProfileDto;
+		/** Selected on this connection — client-side knowledge the socket never reports. */
+		selected: boolean;
 		onSelect: () => void;
 		/** This card's select is in flight. */
 		selecting?: boolean;
@@ -29,54 +36,87 @@
 		disabled?: boolean;
 	}
 
-	let { profile, onSelect, selecting = false, disabled = false }: Props = $props();
+	let { profile, selected, onSelect, selecting = false, disabled = false }: Props = $props();
+
+	// The backend sends no lastActive at all while the profile is online, because
+	// ToDto passes null and SocketJsonSerializer omits nulls rather than writing
+	// them. So the absence is the whole signal; there is no null to also check.
+	const online = $derived(profile.lastActive === undefined);
+	const lastPlayed = $derived(formatTimeAgo(profile.lastActive));
+	// Idle arrives spelled two ways: the column is nullable, and the generated
+	// ActivityId carries a synthetic 'None' the contract never clears to.
+	const activity = $derived(
+		profile.activity && profile.activity !== 'None' ? formatWireName(profile.activity) : null
+	);
+	const created = $derived(formatDate(profile.creationTime));
 </script>
 
 <Card.Root>
 	<Row class="items-center gap-(--sp-5) px-(--card-spacing)">
+		<!--
+			One neutral mark for every profile: nothing on the DTO distinguishes them,
+			and an icon picked per card would be decoration dressed as data. The tone
+			carries the real fact instead — colours.css reserves the accent for the
+			running action and for selection, so an idle profile does not spend it.
+		-->
 		<Row
-			class="size-11 shrink-0 items-center justify-center rounded-md border border-verdant-400/25 bg-verdant-400/10 text-text-accent"
+			class={cn(
+				'size-11 shrink-0 items-center justify-center rounded-md border',
+				online
+					? 'border-verdant-400/25 bg-verdant-400/10 text-text-accent'
+					: 'border-transparent bg-action-quiet text-text-faint'
+			)}
 		>
-			<profile.icon size={22} />
+			<UserRound size={22} />
 		</Row>
-		<div class="grid min-w-0 gap-(--sp-1)">
+		<Column class="min-w-0 gap-(--sp-1)">
 			<p class="oi-display-sm truncate text-text-strong">{profile.name}</p>
-			<p class="oi-body-sm text-text-muted">Last played {profile.lastPlayed}</p>
-		</div>
-		{#if profile.active}
-			<Badge variant="accent" class="ml-auto">Active</Badge>
+			<!--
+				Nothing at all when the timestamp is the migration's backfill: the row
+				predates the column, so "last played" is genuinely unknown rather than
+				long ago, and it corrects itself the next time the profile connects.
+			-->
+			{#if online}
+				<p class="oi-body-sm text-text-muted">Active now</p>
+			{:else if lastPlayed}
+				<p class="oi-body-sm text-text-muted">Last played {lastPlayed}</p>
+			{/if}
+		</Column>
+		<!--
+			Both badges are gated on being online, because an activity outlives the
+			connection that started it: Profile.ActivityId is a column, and only
+			ClearActivityAsync empties it, so a player who disconnects mid-activity
+			leaves one set. Spending the accent — which colours.css reserves for the
+			running action — on a profile that stopped running it would be a lie.
+		-->
+		{#if online && activity}
+			<Badge variant="accent" class="ml-auto self-start">{activity}</Badge>
+		{:else if online}
+			<Badge variant="neutral" class="ml-auto self-start">Online</Badge>
 		{/if}
 	</Row>
 
 	<Row class="flex-wrap gap-(--gap-stack) px-(--card-spacing)">
 		<StatPill icon={ChevronsUp} label="Total level" value={profile.totalLevel} tone="xp" />
-		<StatPill icon={Coins} label="Gold" value={profile.gold} />
-		<StatPill icon={Timer} label="Playtime" value={profile.playtime} />
+		{#if created}
+			<StatPill icon={CalendarPlus} label="Created" value={created} />
+		{/if}
 	</Row>
 
-	<div
-		class="mx-(--card-spacing) grid gap-(--gap-stack) rounded-md bg-surface-inset px-(--sp-5) py-(--pad-card) shadow-(--inset-well)"
-	>
-		{#each profile.skills as skill (skill.name)}
-			<div class="grid grid-cols-[110px_1fr] items-center gap-(--gap-grid)">
-				<Row class="oi-body-sm items-center gap-(--sp-3) text-text-body">
-					<skill.icon size={13} />
-					{skill.name}
-				</Row>
-				<Meter value={skill.pct} tone="skill" size="sm" label="{skill.name} progress" />
-			</div>
-		{/each}
-	</div>
-
-	<Card.Footer class="mt-(--sp-1) flex-wrap gap-(--gap-stack)">
+	<!--
+		mt-auto, not a fixed margin: Card.Root is a flex column, so when the grid
+		stretches this card to the row height the surplus collects below the last
+		child. Without it the buttons strand themselves mid-card.
+	-->
+	<Card.Footer class="mt-auto flex-wrap gap-(--gap-stack)">
 		<Button
-			variant={profile.active ? 'primary' : 'secondary'}
+			variant={selected ? 'primary' : 'secondary'}
 			{disabled}
 			aria-busy={selecting}
 			onclick={onSelect}
 		>
 			<Play />
-			{selecting ? 'Loading…' : profile.active ? 'Resume' : 'Load'}
+			{selecting ? 'Loading…' : selected ? 'Resume' : 'Load'}
 		</Button>
 		<!--
 			Dialog.Root renders no element of its own, so the trigger Button is still
