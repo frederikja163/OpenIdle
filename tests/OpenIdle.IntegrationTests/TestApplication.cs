@@ -28,6 +28,11 @@ public sealed class TestApplication : IDisposable
     /// </param>
     public TestApplication(params string[] args)
     {
+        if (!args.Any(a => a.StartsWith("--Auth:AllowTestLogin", StringComparison.OrdinalIgnoreCase)))
+        {
+            args = [.. args, "--Auth:AllowTestLogin=true"];
+        }
+
         _dbPath = Path.Combine(Path.GetTempPath(), $"openidle-it-{Guid.NewGuid():N}.db");
 
         WebApplication? app = null;

@@ -4,11 +4,12 @@ using System.Threading.Tasks;
 using Backend.Attributes;
 using Backend.Services;
 using Backend.Dtos;
+using Microsoft.Extensions.Options;
 
 namespace Backend.Controllers;
 
 [SocketController]
-public sealed class AuthController(UserService userService, ProfileService profileService) : SocketControllerBase
+public sealed class AuthController(IOptions<AuthOptions> authOptions, UserService userService, ProfileService profileService) : SocketControllerBase
 {
     private async Task<ProfileDto[]> GetProfiles(UserId userId)
     {
@@ -32,6 +33,10 @@ public sealed class AuthController(UserService userService, ProfileService profi
     [Request]
     public async Task LoginAsTestUser(LoginAsTestUserRequest request)
     {
+        if (!authOptions.Value.AllowTestLogin)
+        {
+            throw new BackendException("Test user login is not allowed on this server");
+        }
         if (Socket.UserId is not null)
         {
             throw new BackendException("Already logged in.");
