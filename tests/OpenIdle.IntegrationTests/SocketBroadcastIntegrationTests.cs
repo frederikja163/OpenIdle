@@ -32,6 +32,18 @@ public sealed class SocketBroadcastIntegrationTests : IDisposable
 
     [Test]
     [CancelAfter(30_000)]
+    public async Task Login_WhenAuthIsNotConfigured_ReturnsError(CancellationToken ct)
+    {
+        using TestSocketClient socket = await _app.ConnectAsync(ct).ConfigureAwait(false);
+
+        await socket.SendAsync(new LoginRequest { RequestId = 5, AccessToken = "not-a-real-token" }, ct).ConfigureAwait(false);
+
+        ErrorResponse response = await ReceiveUntilAsync<ErrorResponse>(socket, ct);
+        Assert.That(response.Message, Is.Not.Empty);
+    }
+
+    [Test]
+    [CancelAfter(30_000)]
     public async Task UnknownRequestType_ReturnsErrorResponse(CancellationToken ct)
     {
         using TestSocketClient socket = await _app.ConnectAsync(ct).ConfigureAwait(false);

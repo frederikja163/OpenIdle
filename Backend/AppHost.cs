@@ -25,6 +25,7 @@ internal static class AppHost
         builder.Services.AddSocketControllers();
         builder.Services.Configure<AuthOptions>(builder.Configuration.GetSection("Auth"));
         builder.Services.AddCors(options => options.AddDefaultPolicy(policy => policy.AllowAnyOrigin()));
+        builder.Services.AddSingleton<TokenValidationService>();
         builder.Services.AddSingleton<UserService>();
         builder.Services.AddSingleton<ProfileService>();
         builder.Services.AddSingleton<SettingsService>();

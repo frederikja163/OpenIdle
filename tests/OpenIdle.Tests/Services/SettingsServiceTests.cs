@@ -183,7 +183,7 @@ public sealed class SettingsServiceTests : IDisposable
     private async Task<User> SeedUserAsync()
     {
         await using GameDbContext db = await _db.Factory.CreateDbContextAsync();
-        var user = new User { UserId = Guid.NewGuid() };
+        var user = new User { UserId = Guid.NewGuid(), Subject = Guid.NewGuid().ToString() };
         db.Users.Add(user);
         await db.SaveChangesAsync();
         return user;
