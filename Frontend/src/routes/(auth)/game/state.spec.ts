@@ -4,9 +4,14 @@ vi.mock('$lib/ws/client', async () => (await import('$lib/state/test-support')).
 
 const { gameState } = await import('$lib/state/game.svelte');
 const { resetSessionState } = await import('$lib/state/session.svelte');
+const { levelCurveState } = await import('$lib/state/level-curve.svelte');
 const { BoardState } = await import('./state.svelte');
 
 const PROFILE = '11111111-1111-1111-1111-111111111111';
+
+// The backend's cumulative table, cut off after level 3; the board only looks
+// boundaries up in it.
+const LEVELS = [0, 895, 1906, 3049];
 
 /*
  * The board is a projection of the game store, so every case here sets the
@@ -16,6 +21,7 @@ const PROFILE = '11111111-1111-1111-1111-111111111111';
 describe('BoardState', () => {
 	beforeEach(() => {
 		resetSessionState();
+		levelCurveState.levels = LEVELS;
 	});
 
 	it('dresses the skills with the level curve and the catalog', () => {

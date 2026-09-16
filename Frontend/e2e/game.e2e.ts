@@ -27,6 +27,17 @@ const FRESH_WORLD: World = {
 	items: []
 };
 
+// The backend's cumulative XP table (index = level, plus one past the cap),
+// which the board fetches over HTTP rather than deriving. Real values, so the
+// XP meters below read the same numbers the backend would report.
+const LEVELS = [
+	0, 895, 1906, 3049, 4340, 5799, 7448, 9311, 11417, 13796, 16485, 19523, 22956, 26835, 31219,
+	36173, 41771, 48096, 55244, 63321, 72448, 82761, 94415, 107584, 122465, 139280, 158281, 179753,
+	204016, 231433, 262414, 297423, 336983, 381686, 432200, 489281, 553782, 626668, 709030, 802099,
+	907267, 1026106, 1160395, 1312141, 1483614, 1677379, 1896333, 2143751, 2423333, 2739261, 3096260,
+	3499669
+];
+
 interface Backend {
 	started: string[];
 	stops: number;
@@ -125,6 +136,9 @@ async function signIn(
 		socket = ws;
 		ws.onMessage(respond(ws, worlds, profiles, backend, refuseStart));
 	});
+	// The XP table is plumbing fetched over HTTP, so it is answered here rather
+	// than on the socket. The glob matches whichever API base the client derives.
+	await page.route('**/levels', (route) => route.fulfill({ json: LEVELS }));
 	await logIn(page);
 	return backend;
 }
