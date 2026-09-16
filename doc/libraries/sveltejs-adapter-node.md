@@ -40,7 +40,7 @@ This is a deliberate, scoped exception to the constraint recorded in [SvelteKit]
 
 It holds no game state, reads no database, and does not talk to the C# backend at all — the browser still dials the socket directly. There are no `+page.server.ts` files, no form actions, and no remote functions, and there should continue to be none. The authoritative state still lives in exactly one place.
 
-The concrete win is that `Frontend/Dockerfile` produces **one** image that `deploy/docker-compose.dev.yml` and `deploy/docker-compose.prod.yml` run with different environment variables, and that `PUBLIC_ALLOW_WS_OVERRIDE` — the switch that makes the `?ws=` override inert in production — is a property of the *container* rather than of the build. See [deployment](../deployment.md).
+The concrete win is that `Frontend/Dockerfile` produces **one** image that the dev and prod services in `deploy/docker-compose.yml` run with different environment variables, and that `PUBLIC_ALLOW_WS_OVERRIDE` — the switch that makes the `?ws=` override inert in production — is a property of the *container* rather than of the build. See [deployment](../deployment.md).
 
 ### Pros
 

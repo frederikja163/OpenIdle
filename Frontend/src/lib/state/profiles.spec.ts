@@ -1,4 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
+import type { ProfileDto } from '$lib/ws/protocol';
 
 vi.mock('$lib/ws/client', async () => (await import('$lib/state/test-support')).clientModule);
 
@@ -20,10 +21,28 @@ const {
 const { forgetSessionIntent, resetSessionState, sessionIntent } =
 	await import('$lib/state/session.svelte');
 
-const THORIN = { name: 'Thorin', profileId: '11111111-1111-1111-1111-111111111111' };
-const BALIN = { name: 'Balin', profileId: '22222222-2222-2222-2222-222222222222' };
+// Typed against the real DTO rather than shaped by hand, so a contract that
+// grows another required property fails here instead of shipping a fixture the
+// backend would never send. A static `import type` is erased before the
+// vi.mock hoisting above can be disturbed by it.
+const THORIN: ProfileDto = {
+	name: 'Thorin',
+	profileId: '11111111-1111-1111-1111-111111111111',
+	totalLevel: 13,
+	creationTime: 1_757_000_000_000,
+	lastActive: 1_757_086_400_000
+};
+// Online and mid-activity: the backend omits lastActive entirely for a profile
+// that any live connection has selected.
+const BALIN: ProfileDto = {
+	name: 'Balin',
+	profileId: '22222222-2222-2222-2222-222222222222',
+	totalLevel: 0,
+	creationTime: 1_757_000_000_000,
+	activity: 'MineTin'
+};
 
-function listResponse(profiles: (typeof THORIN)[]) {
+function listResponse(profiles: ProfileDto[]) {
 	return { $type: 'ListProfilesResponse', requestId: 1, profiles };
 }
 

@@ -15,11 +15,18 @@ public sealed class AuthController(
     IOptions<AuthOptions> authOptions,
     UserService userService,
     ProfileService profileService,
+    SkillService skillService,
     TokenValidationService tokenValidationService) : SocketControllerBase
 {
     private async Task<ProfileDto[]> GetProfiles(UserId userId)
     {
-        return (await profileService.GetProfilesAsync(userId)).Select(p => p.ToDto()).ToArray();
+        return await Task.WhenAll((await profileService.GetProfilesAsync(userId)).Select(GetDto));
+
+        async Task<ProfileDto> GetDto(Profile profile)
+        {
+            Skill[] skills = await skillService.GetSkillsAsync(profile.ProfileId);
+            return profile.ToDto(skills.Sum(s => s.Level), SocketRegistry.IsProfileOnline(profile.ProfileId));
+        }
     }
     
     [Request]

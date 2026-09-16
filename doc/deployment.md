@@ -14,7 +14,7 @@ These are the constraints the whole design exists to satisfy:
 
 These describe **the frontends we ship**, and they are enforced outbound only: the frontend decides which backend to dial, in `Frontend/src/lib/ws/ws-url.ts`, via `PUBLIC_WS_URL` for the socket and `PUBLIC_API_URL` for the backend's HTTP side (see [Build info](#build-info)). Production ships without `PUBLIC_ALLOW_WS_OVERRIDE`, so a `?ws=` link is inert there and a prod *user* cannot be redirected at another backend.
 
-Inbound there is no equivalent rule, deliberately. **Every backend accepts a connection from any origin, on both the socket and the HTTP side.** OpenIdle is meant to be driven by clients we do not ship — other browser frontends, mobile apps, bots — so the backend does not ask who is calling. A backend can be narrowed to a list of origins if it is being abused (see [The origin allowlist](#the-origin-allowlist)), but no environment does.
+Inbound the rule is looser, deliberately. **A deployed backend accepts a browser socket only from its own frontend** (the dev one also from a local `bun run dev` on `http://localhost:5173`), via [the origin allowlist](#the-origin-allowlist). That filter only sees browsers: clients that send no `Origin` header — mobile apps, bots, scripts — connect either way, and the HTTP side answers any origin. OpenIdle is meant to be driven by clients we do not ship, so the backend does not ask who is calling. A backend run locally leaves the allowlist unset and accepts a socket from anywhere.
 
 ## Images
 
@@ -109,15 +109,24 @@ Anything unset is skipped with a notice rather than failing the run, so the pipe
 
 ## Running a host
 
-`deploy/docker-compose.dev.yml` and `deploy/docker-compose.prod.yml` describe the two environments. Copy the relevant one plus `deploy/.env.example` (as `.env`) to the host:
+`deploy/docker-compose.yml` is the whole deployment, as one stack: the dev and prod backend and frontend, and Zitadel (OIDC auth) with its login UI. Everything that varies per host is a variable, and `deploy/.env.example` lists them all with what each one feeds:
+
+| Variable | What it is |
+|---|---|
+| `OPENIDLE_DEV_FRONTEND_HOST`, `OPENIDLE_PROD_FRONTEND_HOST` | Public hostname of each frontend: its `ORIGIN`, and its backend's `AllowedWsOrigins__0` |
+| `OPENIDLE_DEV_BACKEND_HOST`, `OPENIDLE_PROD_BACKEND_HOST` | Public hostname of each backend: its frontend dials `wss://<host>/ws` |
+| `OPENIDLE_ZITADEL_HOST` | Zitadel's public domain |
+| `OPENIDLE_ZITADEL_MASTERKEY`, `OPENIDLE_ZITADEL_DB_PASSWORD`, `OPENIDLE_ZITADEL_ADMIN_PASSWORD` | Zitadel's secrets; `.env.example` gives the constraints and how to generate each |
+
+All of them are bare hostnames or secrets; the compose file adds the `https://`/`wss://` schemes. It refuses to start while any is unset, and because Compose interpolates the whole file, that holds even when bringing up a single service.
+
+In Portainer, create the stack from `deploy/docker-compose.yml` and load `.env.example` under *Environment variables → Load variables from .env file*, then fill in the secrets. Without Portainer, copy both files to the host, rename `.env.example` to `.env` (gitignored), fill it in and run:
 
 ```sh
-docker compose -f docker-compose.dev.yml up -d
+docker compose up -d
 ```
 
-If backend and frontend are separate machines, put the same files on both and bring up only the service that belongs there — `docker compose -f docker-compose.dev.yml up -d backend`.
-
-TLS and public hostnames are the reverse proxy's job. The containers speak plain HTTP on 8080 (backend) and 3000 (frontend).
+TLS and public hostnames are the reverse proxy's job. No host ports are published: every service joins the external `stack_default` network, which must already exist and is shared with the reverse proxy and the `postgres` container Zitadel uses. The proxy reaches each container by name there, over plain HTTP on 8080 (backends) and 3000 (frontends). The Zitadel services carry their own proxy notes in the compose file.
 
 ### Configuration matrix
 
@@ -128,10 +137,11 @@ TLS and public hostnames are the reverse proxy's job. The containers speak plain
 | `PUBLIC_API_URL` | — | prod backend `https://…` (optional, see [Build info](#build-info)) | — | dev backend `https://…` (optional) |
 | `PUBLIC_ALLOW_WS_OVERRIDE` | — | **unset** | — | `true` |
 | `ORIGIN` | — | prod frontend origin | — | dev frontend origin |
-| `AllowedWsOrigins__0` | **unset** | — | **unset** | — |
+| `AllowedWsOrigins__0` | prod frontend origin | — | dev frontend origin | — |
+| `AllowedWsOrigins__1` | **unset** | — | `http://localhost:5173` | — |
 | volume | `/data` | — | `/data` | — |
 
-Both backends leave `AllowedWsOrigins` unset, so both accept a socket from anywhere. On dev that is also what lets a developer run `bun run dev` locally against it, whose port varies.
+Each backend accepts a browser socket from its own frontend only. Dev adds `http://localhost:5173`, which is what lets a developer run `bun run dev` locally against it — so that has to be the port Vite serves on.
 
 ### The database
 
@@ -153,25 +163,25 @@ https://dev.openidle.example/login?ws=ws://localhost:5066/ws
 
 The value is remembered in `localStorage` under `openidle:ws-url`, so it survives reloads and need only be typed once. `?ws=` with no value — or `?ws=reset` — clears it and hands the client back to its own backend. Anything that is not a `ws://` or `wss://` URL is ignored with a console warning rather than breaking the client, and any override already stored stays in force. The version footer follows the override too: it asks `http://localhost:5066/version`, derived from the override, rather than the deployment's `PUBLIC_API_URL`.
 
-This works because every backend, local or deployed, accepts a socket from any origin.
+This works because a backend run locally leaves `AllowedWsOrigins` unset, so it accepts the dev frontend's origin like any other.
 
 **Browser caveat.** An `https://` page opening `ws://localhost` is mixed content. Chrome permits it, because localhost counts as a potentially-trustworthy origin; Firefox and Safari block it. If the socket refuses to open there, run the frontend locally instead and use the previous section.
 
-**The `?ws=` override does not work against production.** The prod frontend ships without `PUBLIC_ALLOW_WS_OVERRIDE`, so the parameter is read by nothing. The prod *backend* will still accept the socket — it accepts any origin — so point a locally built frontend at it if you need to.
+**The `?ws=` override does not work against production.** The prod frontend ships without `PUBLIC_ALLOW_WS_OVERRIDE`, so the parameter is read by nothing. Nor can a locally run frontend be pointed at the prod *backend* instead: its allowlist names the prod frontend alone, so a browser on any other origin gets a 403. A client that sends no `Origin` header — a script, a bot — still connects.
 
 ## The origin allowlist
 
 `AllowedWsOrigins` is bound in `Backend/Extensions/WebApplicationBuilderExtensions.cs` and passed to `UseWebSockets`. As environment variables it is an indexed array: `AllowedWsOrigins__0`, `AllowedWsOrigins__1`, and so on.
 
-**It is unset everywhere, and should stay that way.** Empty means unrestricted — ASP.NET Core's behaviour with no options at all — which is what a game meant to be played through clients we do not ship requires. The backend logs which mode it is in at startup. Set it only to shed abuse: if a site starts driving a backend through its visitors' browsers, adding that deployment's own frontend as `AllowedWsOrigins__0` and restarting cuts the traffic off. Take it back out afterwards.
+**Each deployed backend sets it to its own frontend** (see the [configuration matrix](#configuration-matrix)), so no other site can drive it through its visitors' browsers. Empty — the default in `appsettings.json` and the `Backend/Dockerfile`, and so what a local `dotnet run` gets — means unrestricted, ASP.NET Core's behaviour with no options at all. The backend logs which mode it is in at startup.
 
-Three properties are worth knowing before reaching for it:
+Three properties are worth knowing about it:
 
 - **It is a lever, not a security boundary.** Only requests carrying an `Origin` header are filtered. Browsers always send one; a mobile app, a script or a bot need not, and connects either way. So the allowlist shuts out third-party *browser* clients while stopping no determined caller at all.
 - **It is not CORS, and CORS would not do this.** A WebSocket handshake is not subject to the browser's same-origin policy, so `AddCors` has no effect on it. The HTTP endpoints (`/health`, `/version`) carry a permissive CORS policy on purpose: they are public and hold nothing a visitor's browser could be tricked into leaking (see [Build info](#build-info)).
-- **It does not stand in for authentication.** The usual reason to gate a socket handshake is cross-site WebSocket hijacking, and that attack needs an *ambient* credential — a cookie the browser attaches to a handshake from any page. The backend has none: `Backend/Controllers/AuthController.cs` signs a socket in with `LoginAsTestUser`, a placeholder. Real auth must therefore be token-based — a credential the client sends as a socket message, held in origin-scoped storage — which no other page can read and which works identically for a native client. Adopt cookie auth and this allowlist stops being optional.
+- **It does not stand in for authentication.** The usual reason to gate a socket handshake is cross-site WebSocket hijacking, and that attack needs an *ambient* credential — a cookie the browser attaches to a handshake from any page. The backend has none: `Backend/Controllers/AuthController.cs` signs a socket in with `LoginAsTestUser`, a placeholder. Real auth must therefore be token-based — a credential the client sends as a socket message, held in origin-scoped storage — which no other page can read and which works identically for a native client. Adopt cookie auth and this allowlist stops being an abuse lever and becomes a security control.
 
-A rejected handshake gets **403**. To check a deployment that has set the allowlist:
+A rejected handshake gets **403**. To check a deployment:
 
 ```sh
 curl -i -H "Origin: https://evil.example" \
