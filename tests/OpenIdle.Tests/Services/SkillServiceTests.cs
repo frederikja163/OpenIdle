@@ -57,7 +57,7 @@ public sealed class SkillServiceTests : IDisposable
         Skill[] skills = await service.GetSkillsAsync(profile.ProfileId);
 
         Assert.That(skills.Select(s => s.SkillId), Is.EqualTo(Enum.GetValues<SkillId>().Except([SkillId.None])));
-        Assert.That(skills.All(s => s.Level == 1));
+        Assert.That(skills.All(s => s.Level == 0));
         Assert.That(skills.All(s => s.Xp == 0));
     }
 
@@ -84,7 +84,7 @@ public sealed class SkillServiceTests : IDisposable
     public async Task AddSkillsAsync_IncrementsExistingSkillXp()
     {
         Profile profile = await SeedProfileAsync();
-        await SeedSkillAsync(profile, SkillId.Mining, xp: 5, level: 1);
+        await SeedSkillAsync(profile, SkillId.Mining, xp: 5, level: 0);
 
         SkillService service = new(_db.Factory);
         await service.AddSkillsAsync(profile.ProfileId, new[] { new XpReward(10, null, SkillId.Mining) });
@@ -94,7 +94,7 @@ public sealed class SkillServiceTests : IDisposable
         Assert.Multiple(() =>
         {
             Assert.That(stored.Xp, Is.EqualTo(15));
-            Assert.That(stored.Level, Is.EqualTo(1));
+            Assert.That(stored.Level, Is.EqualTo(0));
         });
     }
 

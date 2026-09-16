@@ -19,19 +19,19 @@ describe('BoardState', () => {
 	});
 
 	it('dresses the skills with the level curve and the catalog', () => {
-		gameState.skills = { Mining: { profileId: PROFILE, skillId: 'Mining', xp: 895, level: 2 } };
+		gameState.skills = { Mining: { profileId: PROFILE, skillId: 'Mining', xp: 895, level: 1 } };
 		const board = new BoardState();
 
 		expect(board.skills[0]).toMatchObject({
 			id: 'Mining',
 			name: 'Mining',
-			level: 2,
+			level: 1,
 			xp: 0,
 			xpMax: 1011
 		});
-		// A skill the server has no row for yet starts at the bottom of level 1.
-		expect(board.skills[1]).toMatchObject({ id: 'LumberJacking', level: 1, xp: 0, xpMax: 895 });
-		expect(board.totalLevel).toBe(4);
+		// A skill the server has no row for yet starts at the bottom of level 0.
+		expect(board.skills[1]).toMatchObject({ id: 'LumberJacking', level: 0, xp: 0, xpMax: 895 });
+		expect(board.totalLevel).toBe(1);
 	});
 
 	it('lists only the items actually held, in catalog order', () => {

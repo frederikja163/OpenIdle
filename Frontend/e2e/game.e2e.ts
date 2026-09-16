@@ -16,13 +16,13 @@ interface World {
 	items: { itemId: string; count: number }[];
 }
 
-// Mining sits 5 xp into level 2 (895 opens it; level 3 is 1011 further), the
+// Mining sits 5 xp into level 1 (895 opens it; level 2 is 1011 further), the
 // other skills are fresh, and the pack is empty.
 const FRESH_WORLD: World = {
 	skills: [
-		{ skillId: 'Mining', xp: 900, level: 2 },
-		{ skillId: 'LumberJacking', xp: 0, level: 1 },
-		{ skillId: 'Crafting', xp: 0, level: 1 }
+		{ skillId: 'Mining', xp: 900, level: 1 },
+		{ skillId: 'LumberJacking', xp: 0, level: 0 },
+		{ skillId: 'Crafting', xp: 0, level: 0 }
 	],
 	items: []
 };
@@ -296,7 +296,7 @@ test('loading another profile replaces the board rather than keeping the last on
 		{
 			[THORIN.profileId]: { ...FRESH_WORLD, items: [{ itemId: 'Tin', count: 3 }] },
 			[BALIN.profileId]: {
-				skills: [{ skillId: 'Mining', xp: 0, level: 1 }],
+				skills: [{ skillId: 'Mining', xp: 0, level: 0 }],
 				items: [{ itemId: 'Oak', count: 7 }]
 			}
 		},
@@ -359,17 +359,17 @@ test('the pack can be sorted by count and searched by name', async ({ page }) =>
 // snapped because something else forced a style recalculation first would pass
 // this too, which is why Meter.svelte forces one itself rather than hoping.
 test('a level-up snaps the xp meter back instead of rewinding it', async ({ page }) => {
-	// Mining sits six xp short of level 3 (1906 opens it), so the payout granting
+	// Mining sits six xp short of level 2 (1906 opens it), so the payout granting
 	// it takes the bar from all but full to nearly empty.
 	const backend = await openBoard(page, {
 		...FRESH_WORLD,
-		skills: [{ skillId: 'Mining', xp: 1900, level: 2 }]
+		skills: [{ skillId: 'Mining', xp: 1900, level: 1 }]
 	});
 	await expect(page.getByText('1005/1011 XP')).toBeVisible();
 	await watchMeters(page, 'Mining experience');
 
 	payout(backend.socket(), 'MineTin', {
-		skills: [{ skillId: 'Mining', xp: 1950, level: 3 }],
+		skills: [{ skillId: 'Mining', xp: 1950, level: 2 }],
 		items: []
 	});
 
@@ -382,7 +382,7 @@ test('a level-up snaps the xp meter back instead of rewinding it', async ({ page
 	// ...and the transition is still there for the rises it exists for.
 	await forgetMeterTransitions(page);
 	payout(backend.socket(), 'MineTin', {
-		skills: [{ skillId: 'Mining', xp: 2500, level: 3 }],
+		skills: [{ skillId: 'Mining', xp: 2500, level: 2 }],
 		items: []
 	});
 
@@ -404,7 +404,7 @@ test('starting an action asks the backend and its payout lands on the board', as
 	expect(backend.stops).toBe(0);
 
 	payout(backend.socket(), 'MineTin', {
-		skills: [{ skillId: 'Mining', xp: 1100, level: 2 }],
+		skills: [{ skillId: 'Mining', xp: 1100, level: 1 }],
 		items: [{ itemId: 'Tin', count: 2 }]
 	});
 
@@ -434,7 +434,7 @@ test('the card stop button appears on hover and stops the action', async ({ page
 	// cursor on the button across a payout and it has to stay revealed.
 	await stop.hover();
 	payout(backend.socket(), 'MineTin', {
-		skills: [{ skillId: 'Mining', xp: 1100, level: 2 }],
+		skills: [{ skillId: 'Mining', xp: 1100, level: 1 }],
 		items: [{ itemId: 'Tin', count: 2 }]
 	});
 	await expect(page.getByText('+200 XP')).toBeVisible();
@@ -460,7 +460,7 @@ test('the header stop button stops the action', async ({ page }) => {
 test('switching actions stops the running one first', async ({ page }) => {
 	const backend = await openBoard(page, {
 		...FRESH_WORLD,
-		skills: [{ skillId: 'Mining', xp: 40000, level: 16 }]
+		skills: [{ skillId: 'Mining', xp: 40000, level: 15 }]
 	});
 	await tinCard(page).click();
 	await expect(headerStop(page)).toBeVisible();
@@ -480,10 +480,10 @@ test('switching actions stops the running one first', async ({ page }) => {
 test('a level-locked action refuses the click', async ({ page }) => {
 	await openBoard(page);
 
-	// Copper unlocks at 11 and Mining starts at 2.
+	// Copper unlocks at 10 and Mining starts at 1.
 	const copper = page.getByRole('button', { name: /Mine Copper Ore/ });
 	await expect(copper).toBeDisabled();
-	await expect(copper).toContainText('Unlocks at level 11');
+	await expect(copper).toContainText('Unlocks at level 10');
 });
 
 test('an action short on materials refuses the click', async ({ page }) => {
@@ -509,7 +509,7 @@ test('a refused start is reported on the board', async ({ page }) => {
 test('a start the board can already tell would be refused costs no round trip', async ({
 	page
 }) => {
-	// Mining is level 2 and copper opens at 11, so the card is locked — but the
+	// Mining is level 1 and copper opens at 10, so the card is locked — but the
 	// same refusal has to hold for a start that reaches the store another way.
 	const backend = await openBoard(page);
 

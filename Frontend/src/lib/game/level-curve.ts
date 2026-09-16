@@ -5,7 +5,7 @@
  */
 export const MAX_LEVEL = 50;
 
-/** XP for level 2. Each later level adds BASE * R^(L-2). */
+/** XP to go from level 0 to level 1. Each later level-up multiplies the last by R. */
 const BASE = 895;
 /** Per-level growth rate. */
 const R = 1.13;
@@ -27,16 +27,16 @@ function roundHalfEven(value: number): number {
 	return floor % 2 === 0 ? floor : floor + 1;
 }
 
-/** The per-level cost the backend sums: round(BASE * R^(L-1)). */
+/** The per-level cost the backend sums: round(BASE * R^L) for L -> L+1. */
 function levelCost(level: number): number {
-	return roundHalfEven(BASE * Math.pow(R, level - 1));
+	return roundHalfEven(BASE * Math.pow(R, level));
 }
 
-/** XP_FOR_LEVEL[L - 1] is the cumulative XP needed to be level L; level 1 is 0. */
+/** XP_FOR_LEVEL[L] is the cumulative XP needed to be level L; level 0 is 0. */
 const XP_FOR_LEVEL: number[] = [];
 {
 	let cumulative = 0;
-	for (let level = 1; level <= MAX_LEVEL; level++) {
+	for (let level = 0; level <= MAX_LEVEL; level++) {
 		XP_FOR_LEVEL.push(cumulative);
 		cumulative += levelCost(level);
 	}
@@ -44,16 +44,16 @@ const XP_FOR_LEVEL: number[] = [];
 
 /** Cumulative XP needed to be `level`. */
 export function xpForLevel(level: number): number {
-	if (level < 1) {
+	if (level < 0) {
 		return 0;
 	}
 	if (level <= MAX_LEVEL) {
-		return XP_FOR_LEVEL[level - 1];
+		return XP_FOR_LEVEL[level];
 	}
 	// Past the configured cap the backend keeps the same geometric per-level
 	// cost, so this does too — including summing from R^(MaxLevel) onwards.
-	let xp = XP_FOR_LEVEL[MAX_LEVEL - 1];
-	for (let l = MAX_LEVEL + 1; l <= level; l++) {
+	let xp = XP_FOR_LEVEL[MAX_LEVEL];
+	for (let l = MAX_LEVEL; l < level; l++) {
 		xp += levelCost(l);
 		if (xp >= INT32_MAX) {
 			return INT32_MAX;
@@ -62,10 +62,10 @@ export function xpForLevel(level: number): number {
 	return Math.min(xp, INT32_MAX);
 }
 
-/** The level a player with `xp` has reached, 1 to MAX_LEVEL. */
+/** The level a player with `xp` has reached, 0 to MAX_LEVEL. */
 export function levelFromXp(xp: number): number {
 	let low = 0;
-	let high = MAX_LEVEL - 1;
+	let high = MAX_LEVEL;
 	while (low < high) {
 		const mid = low + Math.floor((high - low + 1) / 2);
 		if (xp >= XP_FOR_LEVEL[mid]) {
@@ -74,7 +74,7 @@ export function levelFromXp(xp: number): number {
 			high = mid - 1;
 		}
 	}
-	return XP_FOR_LEVEL[low] <= xp ? low + 1 : 1;
+	return low;
 }
 
 export interface LevelProgress {

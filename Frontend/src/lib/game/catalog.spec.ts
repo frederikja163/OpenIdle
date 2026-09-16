@@ -20,13 +20,13 @@ describe('toGameAction', () => {
 			xp: 200,
 			qty: 2
 		});
-		// Level 1 opens it, which is no gate at all.
+		// Level 0 opens it, which is no gate at all.
 		expect(toGameAction('MineTin').requirements).toEqual([]);
 	});
 
 	it('carries the level gates it is declared with', () => {
 		expect(toGameAction('MineSteel')).toMatchObject({
-			requirements: [{ skill: 'Mining', level: 41 }],
+			requirements: [{ skill: 'Mining', level: 40 }],
 			ms: 28000
 		});
 	});

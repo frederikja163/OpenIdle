@@ -6,12 +6,13 @@ namespace OpenIdle.Tests;
 [TestFixture]
 public sealed class LevelCurveTests
 {
-    [TestCase(1, 0)]
-    [TestCase(2, 895)]
-    [TestCase(15, 31219)]
-    [TestCase(25, 122465)]
-    [TestCase(30, 231433)]
-    [TestCase(50, 2739261)]
+    [TestCase(0, 0)]
+    [TestCase(1, 895)]
+    [TestCase(14, 31219)]
+    [TestCase(24, 122465)]
+    [TestCase(29, 231433)]
+    [TestCase(49, 2739261)]
+    [TestCase(50, 3096260)]
     public void XpForLevel_ReturnsCurveRequirement(int level, int expectedXp)
     {
         Assert.That(LevelCurve.XpForLevel(level), Is.EqualTo(expectedXp));
@@ -23,11 +24,11 @@ public sealed class LevelCurveTests
         Assert.That(LevelCurve.XpForLevel(int.MaxValue), Is.EqualTo(int.MaxValue));
     }
 
-    [TestCase(0, 1)]
-    [TestCase(894, 1)]
-    [TestCase(895, 2)]
-    [TestCase(2739260, 49)]
-    [TestCase(2739261, 50)]
+    [TestCase(0, 0)]
+    [TestCase(894, 0)]
+    [TestCase(895, 1)]
+    [TestCase(2739260, 48)]
+    [TestCase(2739261, 49)]
     [TestCase(int.MaxValue, 50)]
     public void LevelFromXp_MapsXpToLevel(int xp, int expectedLevel)
     {

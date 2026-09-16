@@ -50,7 +50,7 @@ export interface GameAction {
 	xp: number;
 	/** How many of the item one completion yields, before any bonus drop. */
 	qty: number;
-	/** Every level gate the action carries. Level 1 gates nothing and is omitted. */
+	/** Every level gate the action carries. Level 0 gates nothing and is omitted. */
 	requirements: SkillRequirement[];
 	inputs?: GameActionInput[];
 }

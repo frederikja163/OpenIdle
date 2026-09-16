@@ -26,7 +26,7 @@ export class BoardState {
 	skills = $derived<Skill[]>(
 		SKILL_ORDER.map((id) => {
 			const dto = gameState.skills[id];
-			const progress = levelProgress(dto?.xp ?? 0, dto?.level ?? 1);
+			const progress = levelProgress(dto?.xp ?? 0, dto?.level ?? 0);
 			return { id, ...SKILLS[id], level: progress.level, xp: progress.into, xpMax: progress.span };
 		})
 	);
