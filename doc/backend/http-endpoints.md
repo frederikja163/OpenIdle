@@ -91,7 +91,7 @@ The `http` launch profile serves `http://localhost:5066` ([`Backend/Properties/l
 4. Return `IActionResult` helpers (`Ok`, `NotFound`, `BadRequest`, ...).
 5. Never register the controller — only its services, in `AppHost.cs`.
 6. Everything tied to game state goes through the socket, not HTTP; use HTTP for plumbing (handshake, health, the static XP curve, static-ish concerns). `GET /levels` is the worked example of the latter: it returns `LevelCurve`'s cumulative XP per level as a plain JSON array and nothing per-player, so the client fetches it once instead of re-deriving the curve.
-7. **HTTP endpoints are public.** The default CORS policy answers any origin, because the HTTP side is meant to be a publicly reachable API and a frontend on another origin could not read a cross-origin `fetch` without it. The socket is open to any origin too (see [`../deployment.md`](../deployment.md)), so neither side identifies its caller: never put anything origin- or session-sensitive on HTTP, and note that rule 6 keeps game state on the socket but does not by itself protect it.
+7. **HTTP endpoints are public.** The default CORS policy answers any origin, because the HTTP side is meant to be a publicly reachable API and a frontend on another origin could not read a cross-origin `fetch` without it. The socket's origin allowlist only filters browsers — a client without an `Origin` header connects regardless (see [`../deployment.md`](../deployment.md)) — so neither side identifies its caller: never put anything origin- or session-sensitive on HTTP, and note that rule 6 keeps game state on the socket but does not by itself protect it.
 
 ## 4. Related documents
 

@@ -49,7 +49,7 @@ RUN apt-get update \
 #
 # AllowedWsOrigins is deliberately NOT defaulted here: empty means "any origin",
 # which is right for local development and wrong for every deployed environment,
-# so each one states its own (see deploy/docker-compose.*.yml).
+# so each one states its own (see deploy/docker-compose.yml).
 ENV ASPNETCORE_URLS=http://+:8080 \
     ConnectionStrings__Default="Data Source=/data/openidle.db"
 

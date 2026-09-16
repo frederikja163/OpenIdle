@@ -16,12 +16,40 @@ export const WS_ROUTE = /\/ws$/;
 // protected route there, so assert on the pathname plus optional query.
 export const LOGIN_URL = /\/login(\?.*)?$/;
 
+export const DAY_MS = 24 * 60 * 60 * 1000;
+
+/**
+ * ProfileDto as the socket carries it. This file sits outside the SvelteKit
+ * tsconfig's include, so `$lib` does not resolve here and the shape is restated
+ * rather than imported.
+ *
+ * Timestamps are Unix epoch milliseconds, and `lastActive` is absent — not null
+ * — for a profile the backend considers online, which is what drives the card's
+ * badge and its subtitle.
+ */
 export interface StubProfile {
 	name: string;
 	profileId: string;
+	totalLevel: number;
+	creationTime: number;
+	lastActive?: number;
+	activity?: string;
 }
 
-export const THORIN: StubProfile = { name: 'Thorin', profileId: 'p1' };
+// Relative to now rather than a fixed instant, so "3 days ago" stays true for
+// the life of the suite instead of rotting into "2 years ago".
+//
+// Offline, but still carrying the activity it disconnected in the middle of:
+// Profile.ActivityId is a column that outlives the connection, so this pairing
+// is a real state the backend sends and not just a contrived fixture.
+export const THORIN: StubProfile = {
+	name: 'Thorin',
+	profileId: 'p1',
+	totalLevel: 13,
+	creationTime: Date.now() - 30 * DAY_MS,
+	lastActive: Date.now() - 3 * DAY_MS,
+	activity: 'MineIron'
+};
 
 /** The response named after the request, which is all most frames need. */
 export function bareResponse(ws: WebSocketRoute, type: string, requestId: number): void {

@@ -16,7 +16,7 @@
 		"format": "prettier --write .",
 		"gen:dto": "dotnet run -v q --project ../Generators/Generator -- -i ../types.xml -t Ts -o src/lib/ws/dto.generated.ts",
 		"gen:schema": "dotnet run -v q --project ../Generators/Generator -- -i ../types.xml -t TsSchema -o src/lib/debug/protocol.generated.ts",
-		"test:unit": "vitest",
+		"test:unit": "bun run generate && vitest",
 		"test": "bun run test:unit -- --run && bun run test:e2e",
 		"test:e2e": "playwright test",
 		"test:e2e:setup": "playwright install chromium"
