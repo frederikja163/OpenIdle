@@ -86,7 +86,8 @@ public sealed class ProfileService
 
         await using GameDbContext dbContext = await _dbContextFactory.CreateDbContextAsync();
 
-        User user = new() { UserId = userId };
+        User user = await dbContext.Users.FirstOrDefaultAsync(u => u.UserId == userId)
+                    ?? throw new BackendException("User does not exist.");
         Profile profile = new Profile()
         {
             ProfileId = Guid.NewGuid(),
@@ -95,7 +96,6 @@ public sealed class ProfileService
             LastActiveTime =  DateTime.UtcNow,
         };
 
-        dbContext.Attach(user);
         profile.Users.Add(user);
         dbContext.Profiles.Add(profile);
         try
