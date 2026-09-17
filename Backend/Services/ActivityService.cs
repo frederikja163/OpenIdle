@@ -178,6 +178,11 @@ public sealed class ActivityService
         {
             _activitySchedulerService.RemoveEvent(profileId);
             await _profileService.ClearActivityAsync(profileId);
+            await _socketRegistry.SendToProfileAsync(profileId, new ActivityStoppedEvent()
+            {
+                ActivityId = activityId,
+                Reason = ActivityStopReason.OutOfItems,
+            });
             return;
         }
 
@@ -217,6 +222,12 @@ public sealed class ActivityService
         }
 
         return true;
+    }
+
+    internal async Task<bool> IsDoingActivityAsync(ProfileId profileId, ActivityId activityId)
+    {
+        Profile profile = await _profileService.GetProfileAsync(profileId);
+        return profile.ActivityId == activityId;
     }
 
     internal async Task<Profile> StartActivityAsync(ProfileId profileId, ActivityId activityId, DateTime? startTime = null)
@@ -260,10 +271,15 @@ public sealed class ActivityService
         _activitySchedulerService.StartEvent(
             new ProfileActivityCompletion(this, profileId, activityId, duration), startedAt);
 
+        await _socketRegistry.SendToProfileAsync(profileId, new ActivityStartedEvent()
+        {
+            ActivityId = activityId,
+            StartTime = new DateTimeOffset(DateTime.SpecifyKind(startedAt, DateTimeKind.Utc)).ToUnixTimeMilliseconds(),
+        });
         return profile;
     }
 
-    internal async Task StopActivityAsync(ProfileId profileId)
+    internal async Task StopActivityAsync(ProfileId profileId, ActivityStopReason reason)
     {
         Profile profile = await _profileService.GetProfileAsync(profileId);
 
@@ -275,6 +291,12 @@ public sealed class ActivityService
         _activitySchedulerService.RemoveEvent(profileId);
 
         await _profileService.ClearActivityAsync(profileId);
+
+        await _socketRegistry.SendToProfileAsync(profileId, new ActivityStoppedEvent()
+        {
+            ActivityId = profile.ActivityId.Value,
+            Reason = reason,
+        });
     }
 
     internal async Task ResolveActivityAsync(ProfileId profileId, RewardCollection rewardCollection)
@@ -358,9 +380,14 @@ internal sealed class ProfileActivityCompletion(
 {
     public override async Task Complete(DateTime endTime)
     {
+        if (!await activityService.IsDoingActivityAsync(ProfileId, activityId))
+        {
+            return;
+        }
+
         if (!await activityService.CanAffordActivityAsync(ProfileId, activityId))
         {
-            await activityService.StopActivityAsync(ProfileId);
+            await activityService.StopActivityAsync(ProfileId, ActivityStopReason.OutOfItems);
             return;
         }
 

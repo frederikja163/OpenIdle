@@ -21,6 +21,8 @@ public sealed class FakeWebSocket : WebSocket
 
     public string? FirstSentText => _sent.Count == 0 ? null : Encoding.UTF8.GetString(_sent[0].Bytes);
 
+    public IReadOnlyList<string> SentTexts => _sent.Select(sent => Encoding.UTF8.GetString(sent.Bytes)).ToArray();
+
     public int SendAttempts => _sent.Count;
 
     public void ThrowOnNextSend()

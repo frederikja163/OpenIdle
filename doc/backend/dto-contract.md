@@ -277,6 +277,28 @@ Server→client event carrying the resulting inventory and skill state (the `Act
 
 Sending the full resulting `items`/`skills` (rather than the small reward deltas) means the client always converges on total state even if an individual reward is lost.
 
+The `ActivityStartedEvent` is sent when a profile starts an activity. Its `startTime` is the Unix epoch-milliseconds anchor the completion cycle is measured from, so a client can draw elapsed progress without trusting its own clock:
+
+```json
+{
+  "$type": "ActivityStartedEvent",
+  "eventId": 2,
+  "activityId": "Stone",
+  "startTime": 1760000000000
+}
+```
+
+A running activity ends in one of two ways. Completing a cycle does **not** stop it — the activity is rescheduled and each completion pays out an `ActivityEndedEvent`. It stops only when a client asks or its costs run out, which sends an `ActivityStoppedEvent` whose `reason` is the `ActivityStopReason` value `Requested` or `OutOfItems`:
+
+```json
+{
+  "$type": "ActivityStoppedEvent",
+  "eventId": 3,
+  "activityId": "Stone",
+  "reason": "OutOfItems"
+}
+```
+
 Sending an unknown `$type` fails deserialization; `Backend/Socket.cs` converts any message-handling exception into an `ErrorResponse` (`{ "$type": "ErrorResponse", "message": "..." }`).
 
 ## 6. Generation mechanics

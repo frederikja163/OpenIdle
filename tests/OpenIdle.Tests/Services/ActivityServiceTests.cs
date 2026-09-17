@@ -48,6 +48,27 @@ public sealed class ActivityServiceTests : IDisposable
     }
 
     [Test]
+    public async Task StartActivityAsync_SendsStartedEventWithStartTime()
+    {
+        Profile profile = await SeedProfileAsync();
+        await SeedSkillAsync(profile, SkillId.Mining, xp: 0, level: 1);
+        (ActivityService service, SocketRegistryService socketRegistry, _, _) = CreateServiceWithInternals();
+        AddMineTinActivity(service);
+        FakeWebSocket webSocket = await RegisterSocket(socketRegistry, profile.ProfileId);
+
+        DateTime anchor = DateTime.UtcNow.AddSeconds(-5);
+        await service.StartActivityAsync(profile.ProfileId, ActivityId.MineTin, anchor);
+
+        long expected = new DateTimeOffset(anchor).ToUnixTimeMilliseconds();
+        string started = webSocket.SentTexts.Single(text => text.Contains("ActivityStartedEvent"));
+        Assert.Multiple(() =>
+        {
+            Assert.That(started, Does.Contain("\"activityId\":\"MineTin\""));
+            Assert.That(started, Does.Contain($"\"startTime\":{expected}"));
+        });
+    }
+
+    [Test]
     public async Task StartActivityAsync_UnknownActivity_ThrowsBackendException()
     {
         Profile profile = await SeedProfileAsync();
@@ -238,6 +259,47 @@ public sealed class ActivityServiceTests : IDisposable
     }
 
     [Test]
+    public async Task Completion_WhenFoodRunsOut_SendsStoppedEventWithOutOfItemsReason()
+    {
+        Profile profile = await SeedProfileAsync();
+        await SeedItemAsync(profile, ItemId.Cedar, 1);
+        (ActivityService service, SocketRegistryService socketRegistry, _, _) = CreateServiceWithInternals();
+        service.AddActivity(ActivityId.MineTin, new ActivityDefinition(
+            time: 10f,
+            rewards: [new ItemReward(4, null, ItemId.Tin)],
+            requirements: [],
+            costs: [new ItemCost(1, ItemId.Cedar)]));
+        FakeWebSocket webSocket = await RegisterSocket(socketRegistry, profile.ProfileId);
+        await service.StartActivityAsync(profile.ProfileId, ActivityId.MineTin, DateTime.UtcNow);
+
+        ProfileActivityCompletion completion = new(service, profile.ProfileId, ActivityId.MineTin, TimeSpan.FromSeconds(10));
+        await completion.Complete(DateTime.UtcNow);
+        await completion.Complete(DateTime.UtcNow);
+
+        string stopped = webSocket.SentTexts.Single(text => text.Contains("ActivityStoppedEvent"));
+        Assert.That(stopped, Does.Contain("\"reason\":\"OutOfItems\""));
+    }
+
+    [Test]
+    public async Task Completion_AfterActivityStopped_DoesNotGrantRewards()
+    {
+        Profile profile = await SeedProfileAsync();
+        (ActivityService service, _, _, _) = CreateServiceWithInternals();
+        service.AddActivity(ActivityId.MineTin, new ActivityDefinition(
+            time: 10f,
+            rewards: [new ItemReward(4, null, ItemId.Tin)],
+            requirements: []));
+        await service.StartActivityAsync(profile.ProfileId, ActivityId.MineTin, DateTime.UtcNow);
+
+        await service.StopActivityAsync(profile.ProfileId, ActivityStopReason.Requested);
+
+        ProfileActivityCompletion completion = new(service, profile.ProfileId, ActivityId.MineTin, TimeSpan.FromSeconds(10));
+        await completion.Complete(DateTime.UtcNow);
+
+        Assert.That(await GetItemsAsync(profile.ProfileId), Is.Empty);
+    }
+
+    [Test]
     public async Task StopActivityAsync_ClearsActivityAndRemovesScheduledEvent()
     {
         Profile profile = await SeedProfileAsync();
@@ -246,7 +308,7 @@ public sealed class ActivityServiceTests : IDisposable
         AddMineTinActivity(service, time: 10f);
 
         await service.StartActivityAsync(profile.ProfileId, ActivityId.MineTin, DateTime.UtcNow.AddSeconds(-100));
-        await service.StopActivityAsync(profile.ProfileId);
+        await service.StopActivityAsync(profile.ProfileId, ActivityStopReason.Requested);
 
         await scheduler.NextEvent();
 
@@ -262,13 +324,33 @@ public sealed class ActivityServiceTests : IDisposable
     }
 
     [Test]
+    public async Task StopActivityAsync_SendsStoppedEventWithRequestedReason()
+    {
+        Profile profile = await SeedProfileAsync();
+        await SeedSkillAsync(profile, SkillId.Mining, xp: 0, level: 1);
+        (ActivityService service, SocketRegistryService socketRegistry, _, _) = CreateServiceWithInternals();
+        AddMineTinActivity(service, time: 10f);
+        FakeWebSocket webSocket = await RegisterSocket(socketRegistry, profile.ProfileId);
+        await service.StartActivityAsync(profile.ProfileId, ActivityId.MineTin, DateTime.UtcNow);
+
+        await service.StopActivityAsync(profile.ProfileId, ActivityStopReason.Requested);
+
+        string stopped = webSocket.SentTexts.Single(text => text.Contains("ActivityStoppedEvent"));
+        Assert.Multiple(() =>
+        {
+            Assert.That(stopped, Does.Contain("\"activityId\":\"MineTin\""));
+            Assert.That(stopped, Does.Contain("\"reason\":\"Requested\""));
+        });
+    }
+
+    [Test]
     public async Task StopActivityAsync_NotDoingActivity_ThrowsBackendException()
     {
         Profile profile = await SeedProfileAsync();
         (ActivityService service, _) = CreateService();
 
         BackendException? exception = Assert.ThrowsAsync<BackendException>(
-            () => service.StopActivityAsync(profile.ProfileId));
+            () => service.StopActivityAsync(profile.ProfileId, ActivityStopReason.Requested));
 
         Assert.That(exception?.Message, Does.Contain("not doing an activity"));
     }
@@ -522,6 +604,26 @@ public sealed class ActivityServiceTests : IDisposable
     }
 
     [Test]
+    public async Task Reschedule_WhenFoodRunsOut_SendsStoppedEventWithOutOfItemsReason()
+    {
+        Profile profile = await SeedProfileAsync();
+        await SeedItemAsync(profile, ItemId.Cedar, 2);
+        await SeedSkillAsync(profile, SkillId.Mining, xp: 0, level: 1);
+        (ActivityService service, SocketRegistryService socketRegistry, _, _) = CreateServiceWithInternals();
+        service.AddActivity(ActivityId.MineTin, new ActivityDefinition(
+            time: 10f,
+            rewards: [new ItemReward(4, null, ItemId.Tin)],
+            requirements: [new LevelRequirement(SkillId.Mining, 1)],
+            costs: [new ItemCost(1, ItemId.Cedar)]));
+        await service.StartActivityAsync(profile.ProfileId, ActivityId.MineTin, DateTime.UtcNow.AddSeconds(-100));
+
+        FakeWebSocket webSocket = await RegisterSocket(socketRegistry, profile.ProfileId);
+
+        string stopped = webSocket.SentTexts.Single(text => text.Contains("ActivityStoppedEvent"));
+        Assert.That(stopped, Does.Contain("\"reason\":\"OutOfItems\""));
+    }
+
+    [Test]
     public void ItemCost_NegativeCount_ThrowsArgumentOutOfRangeException()
     {
         Assert.That(() => new ItemCost(-1, ItemId.Cedar), Throws.TypeOf<ArgumentOutOfRangeException>());
@@ -543,7 +645,7 @@ public sealed class ActivityServiceTests : IDisposable
 
         RewardCollection rewards = new();
         await service.ResolveActivityAsync(profile.ProfileId, rewards);
-        await service.StopActivityAsync(profile.ProfileId);
+        await service.StopActivityAsync(profile.ProfileId, ActivityStopReason.Requested);
         await service.ResolveRewardCollection(rewards, profile.ProfileId, DateTime.UtcNow, ActivityId.MineTin);
 
         await Assert.MultipleAsync(async () =>
@@ -575,9 +677,9 @@ public sealed class ActivityServiceTests : IDisposable
 
         await scheduler.NextEvent();
 
-        Assert.That(webSocket.FirstSentText, Does.Contain("ActivityEndedEvent"));
-        Assert.That(webSocket.FirstSentText, Does.Contain("\"itemId\":\"Cedar\",\"count\":0"));
-        Assert.That(webSocket.FirstSentText, Does.Contain("\"itemId\":\"Tin\",\"count\":4"));
+        string ended = webSocket.SentTexts.Single(text => text.Contains("ActivityEndedEvent"));
+        Assert.That(ended, Does.Contain("\"itemId\":\"Cedar\",\"count\":0"));
+        Assert.That(ended, Does.Contain("\"itemId\":\"Tin\",\"count\":4"));
         Item[] items = await GetItemsAsync(profile.ProfileId);
         Assert.That(items, Has.Length.EqualTo(1));
         Assert.That(items.Single().ItemId, Is.EqualTo(ItemId.Tin));
@@ -644,7 +746,7 @@ public sealed class ActivityServiceTests : IDisposable
         await service.OnProfileOffline(this, new ProfileOfflineEventArgs(profile.ProfileId));
         await service.OnProfileOnline(this, new ProfileOnlineEventArgs(profile.ProfileId));
 
-        Assert.That(webSocket.FirstSentText, Does.Contain("ActivityEndedEvent"));
+        Assert.That(webSocket.SentTexts, Has.Some.Contains("ActivityEndedEvent"));
         Item item = (await GetItemsAsync(profile.ProfileId)).Single();
         Assert.That(item.Count, Is.EqualTo(40));
     }
