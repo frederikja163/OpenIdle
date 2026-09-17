@@ -251,6 +251,11 @@ export function schemaUrl(apiUrl: string): string {
 	return `${stripTrailingSlash(apiUrl)}/schema`;
 }
 
+/** The backend's `GET /levels`, under whichever API base it is reached at. */
+export function levelsUrl(apiUrl: string): string {
+	return `${stripTrailingSlash(apiUrl)}/levels`;
+}
+
 function stripTrailingSlash(url: string): string {
 	return url.replace(/\/+$/, '');
 }

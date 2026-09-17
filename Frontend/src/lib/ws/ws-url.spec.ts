@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import {
 	apiUrlFromWsUrl,
 	DEFAULT_WS_URL,
+	levelsUrl,
 	schemaUrl,
 	selectApiUrl,
 	selectWsUrl,
@@ -256,5 +257,16 @@ describe('schemaUrl', () => {
 
 	it('tolerates a base that already ends in a slash', () => {
 		expect(schemaUrl('http://localhost:5066/')).toBe('http://localhost:5066/schema');
+	});
+});
+
+describe('levelsUrl', () => {
+	it('appends /levels to the API base', () => {
+		expect(levelsUrl('http://localhost:5066')).toBe('http://localhost:5066/levels');
+		expect(levelsUrl('https://openidle.example/api')).toBe('https://openidle.example/api/levels');
+	});
+
+	it('tolerates a base that already ends in a slash', () => {
+		expect(levelsUrl('http://localhost:5066/')).toBe('http://localhost:5066/levels');
 	});
 });

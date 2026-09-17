@@ -1,5 +1,6 @@
 import { getWsClient } from '$lib/ws/client';
 import { applyActivityEnded } from './game.svelte';
+import { ensureLevelCurve } from './level-curve.svelte';
 import { loadProfiles, profilesState, replayProfileSelection } from './profiles.svelte';
 import { connectionState, resetSessionState } from './session.svelte';
 import { replayLogin } from './user.svelte';
@@ -26,15 +27,21 @@ export function wireSession(): void {
 	wired = true;
 	const client = getWsClient();
 
+	// Static plumbing fetched off the socket, started now so the curve is in
+	// hand long before a profile loads and an XP bar needs it.
+	void ensureLevelCurve();
+
 	// The session ends with the connection; a reconnect replays it from
 	// sessionIntent rather than from whatever the stores were left holding.
 	client.onClose(resetSessionState);
 	client.onStatus((status) => {
 		connectionState.status = status;
 		// A newly opened socket may have reached a redeployed backend, so the
-		// footer's value is re-asked once per connection.
+		// footer's value is re-asked once per connection — and the curve is
+		// re-checked in case the pacing was retuned behind the same address.
 		if (status === 'open') {
 			void loadBackendVersion();
+			void ensureLevelCurve();
 		}
 	});
 

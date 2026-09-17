@@ -24,7 +24,7 @@ public sealed class SocketJsonSerializerTests
     {
         string json = Serialize(new GetSkillsResponse()
         {
-            Skills = [new SkillDto() { ProfileId = Guid.NewGuid(), SkillId = SkillId.Mining, Xp = 10, Level = 1 }],
+            Skills = [new SkillDto() { ProfileId = Guid.NewGuid(), SkillId = SkillId.Mining, Xp = 10, Level = 0 }],
         });
 
         Assert.That(json, Does.Contain("\"skillId\":\"Mining\""));
@@ -48,7 +48,7 @@ public sealed class SocketJsonSerializerTests
     {
         string json = Serialize(new GetSkillsResponse()
         {
-            Skills = [new SkillDto() { ProfileId = Guid.NewGuid(), SkillId = SkillId.Mining, Xp = 0, Level = 1 }],
+            Skills = [new SkillDto() { ProfileId = Guid.NewGuid(), SkillId = SkillId.Mining, Xp = 0, Level = 0 }],
         });
 
         Assert.That(json, Does.Contain("\"xp\":0"));
