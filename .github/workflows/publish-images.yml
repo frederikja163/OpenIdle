@@ -47,7 +47,7 @@ jobs:
         include:
           # Both contexts are the repository root on purpose. The backend needs
           # Generators/ and ../types.xml (Backend.csproj pulls them in); the
-          # frontend image regenerates protocol.generated.ts from types.xml in a
+          # frontend image regenerates dto.generated.ts from types.xml in a
           # .NET generator stage, so it needs ../Generators and ../types.xml too.
           # See Backend/Dockerfile and Frontend/Dockerfile.
           - name: backend

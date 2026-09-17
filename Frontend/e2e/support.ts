@@ -51,6 +51,47 @@ export const THORIN: StubProfile = {
 	activity: 'MineIron'
 };
 
+/**
+ * The protocol contract as the backend's `GET /schema` carries it: the parsed
+ * types.xml, PascalCase, with the type tokens still unresolved. Restated here
+ * for the same reason as StubProfile — `$lib` does not resolve outside the
+ * SvelteKit tsconfig — and kept in the wire shape on purpose, so a console test
+ * exercises the mapping in the production build rather than around it.
+ *
+ * Two requests, because the console's request count is worth asserting, and one
+ * of them carries an enum-typed array so the dropdown and the array controls
+ * both render.
+ */
+export const STUB_SCHEMA = {
+	Enums: [{ Name: 'SkillId', Values: [{ Name: 'None' }, { Name: 'Mining' }] }],
+	Dtos: [],
+	Requests: [
+		{
+			Name: 'LoginAsTestUserRequest',
+			Properties: [],
+			Responses: [{ Name: 'LoginAsTestUserResponse', Properties: [] }]
+		},
+		{
+			Name: 'GetSkillsRequest',
+			Properties: [{ Name: 'SkillIds', Type: 'SkillId', Multiple: true, Optional: false }],
+			Responses: [{ Name: 'GetSkillsResponse', Properties: [] }]
+		}
+	],
+	Events: [],
+	Responses: [],
+	Items: [],
+	Skills: [],
+	DropTables: [],
+	Activities: []
+};
+
+/** Makes the pointed-at backend serve STUB_SCHEMA, wherever it is asked for. */
+export async function stubSchema(page: Page): Promise<void> {
+	await page.route('**/schema', (route) =>
+		route.fulfill({ contentType: 'application/json', body: JSON.stringify(STUB_SCHEMA) })
+	);
+}
+
 /** The response named after the request, which is all most frames need. */
 export function bareResponse(ws: WebSocketRoute, type: string, requestId: number): void {
 	ws.send(JSON.stringify({ $type: `${type.replace('Request', '')}Response`, requestId }));

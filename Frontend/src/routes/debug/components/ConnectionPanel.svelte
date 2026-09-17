@@ -3,6 +3,7 @@
 	import Row from '$lib/components/layout/Row.svelte';
 	import { Button } from '$lib/components/ui/button';
 	import { Input } from '$lib/components/ui/input';
+	import { ensureProtocolSchema, schemaState } from '$lib/debug/schema.svelte';
 	import { connectionState } from '$lib/state/session.svelte';
 	import { logout } from '$lib/state/user.svelte';
 	import { ensureBackendVersion } from '$lib/state/version.svelte';
@@ -46,8 +47,11 @@
 		setWsUrl(url);
 		overridden = true;
 		// The footer would otherwise keep the old backend's build until a socket
-		// opens; the new address can be asked over HTTP right away.
+		// opens; the new address can be asked over HTTP right away. The contract
+		// likewise: it belongs to the backend, so it is re-asked after setWsUrl,
+		// which is what getApiUrl derives the new address from.
 		void ensureBackendVersion();
+		void ensureProtocolSchema();
 	}
 
 	function reset(): void {
@@ -57,7 +61,16 @@
 		url = getWsUrl();
 		overridden = false;
 		void ensureBackendVersion();
+		void ensureProtocolSchema();
 	}
+
+	const contract = $derived(
+		schemaState.status === 'loaded'
+			? 'loaded'
+			: schemaState.status === 'failed'
+				? 'unavailable'
+				: '…'
+	);
 </script>
 
 <Column class="gap-(--sp-6)">
@@ -87,15 +100,18 @@
 	{/if}
 
 	<!--
-		The catalogue is compiled in, not fetched, so it describes the repository's contract
-		rather than whatever the connected backend was built from. Said on screen because
-		nothing can detect the mismatch: a request this page offers may simply not exist on
-		the other end, and the reply to that is an error like any other.
+		The catalogue is fetched from the backend above rather than compiled in, so it is
+		that backend's own contract and the two cannot disagree. Said on screen because it
+		is the counterpart to the address: changing one changes the other, and a contract
+		that failed to load is why the request form below would be empty.
+
+		The console can therefore no longer offer a request the backend has never heard of —
+		the frame editor still can, by hand.
 	-->
 	<Row class="flex-wrap items-center gap-(--sp-5)">
 		<span class="oi-label-sm text-text-muted">Contract</span>
 		<span class="oi-body-sm text-text-faint">
-			types.xml, compiled in at build time — a backend built from another revision may not match it
+			GET /schema on this backend — <span class="oi-num-sm">{contract}</span>
 		</span>
 	</Row>
 </Column>

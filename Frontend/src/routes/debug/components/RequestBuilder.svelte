@@ -3,24 +3,26 @@
 	import Row from '$lib/components/layout/Row.svelte';
 	import { Button } from '$lib/components/ui/button';
 	import { buildPayload, createFields, PayloadError, type FieldNode } from '$lib/debug/formModel';
-	import { PROTOCOL, type SchemaRequest } from '$lib/debug/schema';
+	import { loadProtocolSchema, schemaState } from '$lib/debug/schema.svelte';
+	import type { ProtocolSchema, SchemaRequest } from '$lib/debug/schema';
 	import { getWsClient } from '$lib/ws/client';
 	import { MAX_MESSAGE_BYTES } from '$lib/ws/protocol';
 	import PropertyField from './PropertyField.svelte';
 	import Select from './Select.svelte';
 
 	/*
-	 * The catalogue is imported rather than taken as a prop: it is emitted from types.xml at
-	 * build time, so it is a module constant, complete on the first render and never
-	 * replaced. Threading it through props would only make it look like state that changes —
-	 * and would have to be drilled down through PropertyField's recursion as well.
+	 * The catalogue is fetched from the backend, so it arrives after the first render and is
+	 * replaced whenever the app is pointed somewhere else. This component owns the guard on
+	 * it: everything below only renders once there is one, which is what lets PropertyField
+	 * take a plain ProtocolSchema rather than a nullable one.
 	 */
-	const requests = [...PROTOCOL.requests].sort((a, b) => a.typeName.localeCompare(b.typeName));
-
-	let selectedType = $state(requests[0]?.typeName ?? '');
-	let fields = $state<FieldNode[]>(
-		requests[0] ? createFields(requests[0].properties, PROTOCOL) : []
+	const protocol = $derived(schemaState.protocol);
+	const requests = $derived(
+		protocol ? [...protocol.requests].sort((a, b) => a.typeName.localeCompare(b.typeName)) : []
 	);
+
+	let selectedType = $state('');
+	let fields = $state<FieldNode[]>([]);
 	let draft = $state('');
 	/**
 	 * The id this frame will go out under. Taken from the client rather than
@@ -50,12 +52,32 @@
 
 	function choose(typeName: string): void {
 		selectedType = typeName;
-		const request = PROTOCOL.requests.find((candidate) => candidate.typeName === typeName);
-		fields = request ? createFields(request.properties, PROTOCOL) : [];
+		const request = protocol?.requests.find((candidate) => candidate.typeName === typeName);
+		fields = request && protocol ? createFields(request.properties, protocol) : [];
 		edited = false;
 		result = null;
 		render();
 	}
+
+	/*
+	 * Which catalogue the form was built from. Tracked by identity, and deliberately
+	 * not $state: a fetch replaces the property objects the field nodes hold, so nodes
+	 * built from the previous one would describe a contract that is no longer on
+	 * screen. Keeps the chosen request across the rebuild when the new catalogue still
+	 * declares it, which is the common case of asking the same backend twice.
+	 */
+	let builtFrom: ProtocolSchema | null = null;
+	$effect(() => {
+		if (!protocol || protocol === builtFrom) {
+			return;
+		}
+		builtFrom = protocol;
+		choose(
+			requests.some((request) => request.typeName === selectedType)
+				? selectedType
+				: (requests[0]?.typeName ?? '')
+		);
+	});
 
 	/** Redraws the JSON from the form, unless the JSON has been taken over by hand. */
 	function render(): void {
@@ -129,25 +151,40 @@
 </script>
 
 <Column class="gap-(--sp-6)">
-	<Row class="items-center gap-(--sp-5)">
+	<Row class="flex-wrap items-center gap-(--sp-5)">
 		<span class="oi-label-md text-text-strong">Request</span>
-		<Select
-			class="max-w-[24rem]"
-			value={selectedType}
-			onchange={(event) => choose(event.currentTarget.value)}
-		>
-			{#each requests as request (request.typeName)}
-				<option value={request.typeName}>{request.typeName}</option>
-			{/each}
-		</Select>
+		{#if protocol}
+			<Select
+				class="max-w-[24rem]"
+				value={selectedType}
+				onchange={(event) => choose(event.currentTarget.value)}
+			>
+				{#each requests as request (request.typeName)}
+					<option value={request.typeName}>{request.typeName}</option>
+				{/each}
+			</Select>
+		{:else if schemaState.status === 'failed'}
+			<!-- The retry sits here rather than in the header or the Backend panel: this is
+			     the control that is unusable, so it is where the way out belongs. -->
+			<span role="alert" class="oi-body-sm text-text-danger">
+				{schemaState.error ?? 'The backend did not answer with its contract.'}
+			</span>
+			<Button size="sm" onclick={() => void loadProtocolSchema()}>Retry</Button>
+		{:else}
+			<span class="oi-body-sm text-text-faint">reading the contract from the backend…</span>
+		{/if}
 	</Row>
 
-	{#if selected}
+	{#if protocol && requests.length === 0}
+		<span class="oi-body-sm text-text-faint">This backend's contract declares no requests.</span>
+	{/if}
+
+	{#if selected && protocol}
 		<span class="oi-body-sm text-text-faint">→ {responseShape(selected)}</span>
 
 		<Column class="gap-(--sp-6) rounded-md border border-line-soft bg-surface-card p-(--pad-card)">
 			{#each fields as field (field.property.name)}
-				<PropertyField {field} />
+				<PropertyField {field} schema={protocol} />
 			{:else}
 				<span class="oi-body-sm text-text-faint">This request carries no properties.</span>
 			{/each}
