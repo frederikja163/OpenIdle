@@ -54,7 +54,7 @@ The in-house alternative is a few hundred lines — discovery fetch, a JWKS cach
 
 ### Undo risk — low
 
-The integration is scoped to a single validation service, one options type and one config section, so replacing the library later means reimplementing one method; nothing else in the codebase needs to reference the IdentityModel types. The version is pinned at 8.22.0 in the header and will be applied in `Backend.csproj` when the integration lands.
+The integration is scoped to a single validation service, one options type and one config section, so replacing the library later means reimplementing one method; nothing else in the codebase needs to reference the IdentityModel types. Both packages are pinned at 8.22.0 in `Backend.csproj`.
 
 ### Security risk — low
 

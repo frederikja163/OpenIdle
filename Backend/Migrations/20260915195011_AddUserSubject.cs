@@ -17,10 +17,18 @@ namespace Backend.Migrations
                 nullable: false,
                 defaultValue: "");
 
-            // Accounts that predate external identities are all the shared debug account
-            // (see UserService.TestUserSubject); give the row that subject so its profiles
-            // stay reachable through LoginAsTestUser and the unique index can be created.
-            migrationBuilder.Sql("UPDATE \"Users\" SET \"Subject\" = 'openidle-test-user' WHERE \"Subject\" = '';");
+            // Keep one legacy account reachable through LoginAsTestUser, while assigning
+            // every other account a stable, distinct subject before creating the unique index.
+            migrationBuilder.Sql(
+                """
+                UPDATE "Users"
+                SET "Subject" = CASE
+                    WHEN "UserId" = (SELECT MIN("UserId") FROM "Users")
+                        THEN 'openidle-test-user'
+                    ELSE 'openidle-legacy-user-' || "UserId"
+                END
+                WHERE "Subject" = '';
+                """);
 
             migrationBuilder.CreateIndex(
                 name: "IX_Users_Subject",

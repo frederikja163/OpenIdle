@@ -117,7 +117,7 @@ public sealed class TokenValidationServiceTests
         TokenValidationService service = CreateService(key);
 
         Assert.ThrowsAsync<BackendException>(() =>
-            service.ValidateAsync(CreateToken(key, expires: DateTime.UtcNow.AddMinutes(-5)), CancellationToken.None));
+            service.ValidateAsync(CreateToken(key, expires: DateTime.UtcNow.AddSeconds(-5)), CancellationToken.None));
     }
 
     [Test]
