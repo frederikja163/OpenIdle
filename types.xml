@@ -193,31 +193,31 @@
   <Activity name="MineTin" time="8">
     <ItemReward item="Tin" count="2"/>
     <XpReward skill="Mining" count="200"/>
-    <LevelRequirement skill="Mining" count="1"/>
+    <LevelRequirement skill="Mining" count="0"/>
     <TableReward table="TinBonusTable" count="1"/>
   </Activity>
   <Activity name="MineCopper" time="13">
     <ItemReward item="Copper" count="2"/>
     <XpReward skill="Mining" count="234"/>
-    <LevelRequirement skill="Mining" count="11"/>
+    <LevelRequirement skill="Mining" count="10"/>
     <TableReward table="CopperBonusTable" count="1"/>
   </Activity>
   <Activity name="MineBronze" time="18">
     <ItemReward item="Bronze" count="2"/>
     <XpReward skill="Mining" count="274"/>
-    <LevelRequirement skill="Mining" count="21"/>
+    <LevelRequirement skill="Mining" count="20"/>
     <TableReward table="BronzeBonusTable" count="1"/>
   </Activity>
   <Activity name="MineIron" time="23">
     <ItemReward item="Iron" count="2"/>
     <XpReward skill="Mining" count="320"/>
-    <LevelRequirement skill="Mining" count="31"/>
+    <LevelRequirement skill="Mining" count="30"/>
     <TableReward table="IronBonusTable" count="1"/>
   </Activity>
   <Activity name="MineSteel" time="28">
     <ItemReward item="Steel" count="2"/>
     <XpReward skill="Mining" count="375"/>
-    <LevelRequirement skill="Mining" count="41"/>
+    <LevelRequirement skill="Mining" count="40"/>
     <TableReward table="SteelBonusTable" count="1"/>
   </Activity>
 
@@ -225,31 +225,31 @@
   <Activity name="ChopBalsa" time="8">
     <ItemReward item="Balsa" count="2"/>
     <XpReward skill="LumberJacking" count="200"/>
-    <LevelRequirement skill="LumberJacking" count="1"/>
+    <LevelRequirement skill="LumberJacking" count="0"/>
     <TableReward table="BalsaBonusTable" count="1"/>
   </Activity>
   <Activity name="ChopPine" time="13">
     <ItemReward item="Pine" count="2"/>
     <XpReward skill="LumberJacking" count="234"/>
-    <LevelRequirement skill="LumberJacking" count="11"/>
+    <LevelRequirement skill="LumberJacking" count="10"/>
     <TableReward table="PineBonusTable" count="1"/>
   </Activity>
   <Activity name="ChopCedar" time="18">
     <ItemReward item="Cedar" count="2"/>
     <XpReward skill="LumberJacking" count="274"/>
-    <LevelRequirement skill="LumberJacking" count="21"/>
+    <LevelRequirement skill="LumberJacking" count="20"/>
     <TableReward table="CedarBonusTable" count="1"/>
   </Activity>
   <Activity name="ChopCherry" time="23">
     <ItemReward item="Cherry" count="2"/>
     <XpReward skill="LumberJacking" count="320"/>
-    <LevelRequirement skill="LumberJacking" count="31"/>
+    <LevelRequirement skill="LumberJacking" count="30"/>
     <TableReward table="CherryBonusTable" count="1"/>
   </Activity>
   <Activity name="ChopOak" time="28">
     <ItemReward item="Oak" count="2"/>
     <XpReward skill="LumberJacking" count="375"/>
-    <LevelRequirement skill="LumberJacking" count="41"/>
+    <LevelRequirement skill="LumberJacking" count="40"/>
     <TableReward table="OakBonusTable" count="1"/>
   </Activity>
 
@@ -258,31 +258,31 @@
     <ItemCost item="Balsa" cost="1"/>
     <ItemReward item="BalsaHandle" count="10"/>
     <XpReward skill="Crafting" count="200"/>
-    <LevelRequirement skill="Crafting" count="1"/>
+    <LevelRequirement skill="Crafting" count="0"/>
   </Activity>
   <Activity name="CraftPineHandle" time="13">
     <ItemCost item="Pine" cost="1"/>
     <ItemReward item="PineHandle" count="10"/>
     <XpReward skill="Crafting" count="234"/>
-    <LevelRequirement skill="Crafting" count="11"/>
+    <LevelRequirement skill="Crafting" count="10"/>
   </Activity>
   <Activity name="CraftCedarHandle" time="18">
     <ItemCost item="Cedar" cost="1"/>
     <ItemReward item="CedarHandle" count="10"/>
     <XpReward skill="Crafting" count="274"/>
-    <LevelRequirement skill="Crafting" count="21"/>
+    <LevelRequirement skill="Crafting" count="20"/>
   </Activity>
   <Activity name="CraftCherryHandle" time="23">
     <ItemCost item="Cherry" cost="1"/>
     <ItemReward item="CherryHandle" count="10"/>
     <XpReward skill="Crafting" count="320"/>
-    <LevelRequirement skill="Crafting" count="31"/>
+    <LevelRequirement skill="Crafting" count="30"/>
   </Activity>
   <Activity name="CraftOakHandle" time="28">
     <ItemCost item="Oak" cost="1"/>
     <ItemReward item="OakHandle" count="10"/>
     <XpReward skill="Crafting" count="375"/>
-    <LevelRequirement skill="Crafting" count="41"/>
+    <LevelRequirement skill="Crafting" count="40"/>
   </Activity>
 
   <!-- Activities - Crafting: Hammer Heads -->
@@ -290,31 +290,31 @@
     <ItemCost item="Tin" cost="1"/>
     <ItemReward item="TinHammerHead" count="10"/>
     <XpReward skill="Crafting" count="200"/>
-    <LevelRequirement skill="Crafting" count="1"/>
+    <LevelRequirement skill="Crafting" count="0"/>
   </Activity>
   <Activity name="CraftCopperHammerHead" time="13">
     <ItemCost item="Copper" cost="1"/>
     <ItemReward item="CopperHammerHead" count="10"/>
     <XpReward skill="Crafting" count="234"/>
-    <LevelRequirement skill="Crafting" count="11"/>
+    <LevelRequirement skill="Crafting" count="10"/>
   </Activity>
   <Activity name="CraftBronzeHammerHead" time="18">
     <ItemCost item="Bronze" cost="1"/>
     <ItemReward item="BronzeHammerHead" count="10"/>
     <XpReward skill="Crafting" count="274"/>
-    <LevelRequirement skill="Crafting" count="21"/>
+    <LevelRequirement skill="Crafting" count="20"/>
   </Activity>
   <Activity name="CraftIronHammerHead" time="23">
     <ItemCost item="Iron" cost="1"/>
     <ItemReward item="IronHammerHead" count="10"/>
     <XpReward skill="Crafting" count="320"/>
-    <LevelRequirement skill="Crafting" count="31"/>
+    <LevelRequirement skill="Crafting" count="30"/>
   </Activity>
   <Activity name="CraftSteelHammerHead" time="28">
     <ItemCost item="Steel" cost="1"/>
     <ItemReward item="SteelHammerHead" count="10"/>
     <XpReward skill="Crafting" count="375"/>
-    <LevelRequirement skill="Crafting" count="41"/>
+    <LevelRequirement skill="Crafting" count="40"/>
   </Activity>
 
   <!-- Activities - Crafting: Pickaxe Heads -->
@@ -322,31 +322,31 @@
     <ItemCost item="Tin" cost="1"/>
     <ItemReward item="TinPickaxeHead" count="10"/>
     <XpReward skill="Crafting" count="200"/>
-    <LevelRequirement skill="Crafting" count="1"/>
+    <LevelRequirement skill="Crafting" count="0"/>
   </Activity>
   <Activity name="CraftCopperPickaxeHead" time="13">
     <ItemCost item="Copper" cost="1"/>
     <ItemReward item="CopperPickaxeHead" count="10"/>
     <XpReward skill="Crafting" count="234"/>
-    <LevelRequirement skill="Crafting" count="11"/>
+    <LevelRequirement skill="Crafting" count="10"/>
   </Activity>
   <Activity name="CraftBronzePickaxeHead" time="18">
     <ItemCost item="Bronze" cost="1"/>
     <ItemReward item="BronzePickaxeHead" count="10"/>
     <XpReward skill="Crafting" count="274"/>
-    <LevelRequirement skill="Crafting" count="21"/>
+    <LevelRequirement skill="Crafting" count="20"/>
   </Activity>
   <Activity name="CraftIronPickaxeHead" time="23">
     <ItemCost item="Iron" cost="1"/>
     <ItemReward item="IronPickaxeHead" count="10"/>
     <XpReward skill="Crafting" count="320"/>
-    <LevelRequirement skill="Crafting" count="31"/>
+    <LevelRequirement skill="Crafting" count="30"/>
   </Activity>
   <Activity name="CraftSteelPickaxeHead" time="28">
     <ItemCost item="Steel" cost="1"/>
     <ItemReward item="SteelPickaxeHead" count="10"/>
     <XpReward skill="Crafting" count="375"/>
-    <LevelRequirement skill="Crafting" count="41"/>
+    <LevelRequirement skill="Crafting" count="40"/>
   </Activity>
 
   <!-- Activities - Crafting: Axe Heads -->
@@ -354,31 +354,31 @@
     <ItemCost item="Tin" cost="1"/>
     <ItemReward item="TinAxeHead" count="10"/>
     <XpReward skill="Crafting" count="200"/>
-    <LevelRequirement skill="Crafting" count="1"/>
+    <LevelRequirement skill="Crafting" count="0"/>
   </Activity>
   <Activity name="CraftCopperAxeHead" time="13">
     <ItemCost item="Copper" cost="1"/>
     <ItemReward item="CopperAxeHead" count="10"/>
     <XpReward skill="Crafting" count="234"/>
-    <LevelRequirement skill="Crafting" count="11"/>
+    <LevelRequirement skill="Crafting" count="10"/>
   </Activity>
   <Activity name="CraftBronzeAxeHead" time="18">
     <ItemCost item="Bronze" cost="1"/>
     <ItemReward item="BronzeAxeHead" count="10"/>
     <XpReward skill="Crafting" count="274"/>
-    <LevelRequirement skill="Crafting" count="21"/>
+    <LevelRequirement skill="Crafting" count="20"/>
   </Activity>
   <Activity name="CraftIronAxeHead" time="23">
     <ItemCost item="Iron" cost="1"/>
     <ItemReward item="IronAxeHead" count="10"/>
     <XpReward skill="Crafting" count="320"/>
-    <LevelRequirement skill="Crafting" count="31"/>
+    <LevelRequirement skill="Crafting" count="30"/>
   </Activity>
   <Activity name="CraftSteelAxeHead" time="28">
     <ItemCost item="Steel" cost="1"/>
     <ItemReward item="SteelAxeHead" count="10"/>
     <XpReward skill="Crafting" count="375"/>
-    <LevelRequirement skill="Crafting" count="41"/>
+    <LevelRequirement skill="Crafting" count="40"/>
   </Activity>
 
   <Dto name="Item">

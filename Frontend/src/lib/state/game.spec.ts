@@ -317,11 +317,11 @@ describe('startActivity', () => {
 	});
 
 	it('surfaces a level refusal verbatim', async () => {
-		request.mockRejectedValue(new Error("Activity 'MineCopper' requires Mining level 11."));
+		request.mockRejectedValue(new Error("Activity 'MineCopper' requires Mining level 10."));
 
 		await expect(startActivity('MineCopper')).resolves.toBe(false);
 
-		expect(gameState.actionError).toBe("Activity 'MineCopper' requires Mining level 11.");
+		expect(gameState.actionError).toBe("Activity 'MineCopper' requires Mining level 10.");
 		expect(gameState.running).toBeNull();
 		expect(gameState.pending).toBeNull();
 	});
@@ -349,7 +349,7 @@ describe('startActivity', () => {
 		await expect(startActivity('MineCopper')).resolves.toBe(false);
 
 		expect(request).not.toHaveBeenCalled();
-		expect(gameState.actionError).toBe("Activity 'MineCopper' requires Mining level 11.");
+		expect(gameState.actionError).toBe("Activity 'MineCopper' requires Mining level 10.");
 		expect(gameState.running?.activityId).toBe('MineTin');
 	});
 

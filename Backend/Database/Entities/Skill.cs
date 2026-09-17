@@ -9,7 +9,7 @@ public sealed class Skill
     public Profile? Profile { get; init; }
     public required SkillId SkillId { get; init; }
     public int Xp { get; set; } = 0;
-    public int Level { get; set; } = 1;
+    public int Level { get; set; } = 0;
 
     public SkillDto ToDto()
     {

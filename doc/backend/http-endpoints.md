@@ -1,6 +1,6 @@
 # HTTP controller endpoints
 
-The backend exposes two plain HTTP routes today — `GET /health` ([`Backend/Controllers/Http/HealthController.cs`](../../Backend/Controllers/Http/HealthController.cs)) and `GET /version` ([`Backend/Controllers/Http/VersionController.cs`](../../Backend/Controllers/Http/VersionController.cs)) — plus the WebSocket handshake at `GET /ws`. The frontend image mirrors both as SvelteKit server routes (`Frontend/src/routes/health/+server.ts`, `Frontend/src/routes/version/+server.ts`). Everything else the client needs goes over that socket via [socket endpoints](./socket-endpoints.md). When you do need a plain HTTP endpoint, it is a standard ASP.NET Core MVC controller — this page records the house pattern.
+The backend exposes three plain HTTP routes today — `GET /health` ([`Backend/Controllers/Http/HealthController.cs`](../../Backend/Controllers/Http/HealthController.cs)), `GET /version` ([`Backend/Controllers/Http/VersionController.cs`](../../Backend/Controllers/Http/VersionController.cs)) and `GET /levels` ([`Backend/Controllers/Http/LevelController.cs`](../../Backend/Controllers/Http/LevelController.cs)) — plus the WebSocket handshake at `GET /ws`. The frontend image mirrors `health` and `version` as SvelteKit server routes (`Frontend/src/routes/health/+server.ts`, `Frontend/src/routes/version/+server.ts`). Everything else the client needs goes over that socket via [socket endpoints](./socket-endpoints.md). When you do need a plain HTTP endpoint, it is a standard ASP.NET Core MVC controller — this page records the house pattern.
 
 ## Quick reference
 
@@ -90,7 +90,7 @@ The `http` launch profile serves `http://localhost:5066` ([`Backend/Properties/l
 3. Put a route attribute on each action (`[HttpGet("...")]`, `[HttpPost("...")]`, ...). Prefer the literal `/path` form.
 4. Return `IActionResult` helpers (`Ok`, `NotFound`, `BadRequest`, ...).
 5. Never register the controller — only its services, in `AppHost.cs`.
-6. Everything tied to game state goes through the socket, not HTTP; use HTTP for plumbing (handshake, health, static-ish concerns).
+6. Everything tied to game state goes through the socket, not HTTP; use HTTP for plumbing (handshake, health, the static XP curve, static-ish concerns). `GET /levels` is the worked example of the latter: it returns `LevelCurve`'s cumulative XP per level as a plain JSON array and nothing per-player, so the client fetches it once instead of re-deriving the curve.
 7. **HTTP endpoints are public.** The default CORS policy answers any origin, because the HTTP side is meant to be a publicly reachable API and a frontend on another origin could not read a cross-origin `fetch` without it. The socket's origin allowlist only filters browsers — a client without an `Origin` header connects regardless (see [`../deployment.md`](../deployment.md)) — so neither side identifies its caller: never put anything origin- or session-sensitive on HTTP, and note that rule 6 keeps game state on the socket but does not by itself protect it.
 
 ## 4. Related documents
