@@ -4,9 +4,14 @@ vi.mock('$lib/ws/client', async () => (await import('$lib/state/test-support')).
 
 const { gameState } = await import('$lib/state/game.svelte');
 const { resetSessionState } = await import('$lib/state/session.svelte');
+const { levelCurveState } = await import('$lib/state/level-curve.svelte');
 const { BoardState } = await import('./state.svelte');
 
 const PROFILE = '11111111-1111-1111-1111-111111111111';
+
+// The backend's cumulative table, cut off after level 3; the board only looks
+// boundaries up in it.
+const LEVELS = [0, 895, 1906, 3049];
 
 /*
  * The board is a projection of the game store, so every case here sets the
@@ -16,22 +21,23 @@ const PROFILE = '11111111-1111-1111-1111-111111111111';
 describe('BoardState', () => {
 	beforeEach(() => {
 		resetSessionState();
+		levelCurveState.levels = LEVELS;
 	});
 
 	it('dresses the skills with the level curve and the catalog', () => {
-		gameState.skills = { Mining: { profileId: PROFILE, skillId: 'Mining', xp: 895, level: 2 } };
+		gameState.skills = { Mining: { profileId: PROFILE, skillId: 'Mining', xp: 895, level: 1 } };
 		const board = new BoardState();
 
 		expect(board.skills[0]).toMatchObject({
 			id: 'Mining',
 			name: 'Mining',
-			level: 2,
+			level: 1,
 			xp: 0,
 			xpMax: 1011
 		});
-		// A skill the server has no row for yet starts at the bottom of level 1.
-		expect(board.skills[1]).toMatchObject({ id: 'LumberJacking', level: 1, xp: 0, xpMax: 895 });
-		expect(board.totalLevel).toBe(4);
+		// A skill the server has no row for yet starts at the bottom of level 0.
+		expect(board.skills[1]).toMatchObject({ id: 'LumberJacking', level: 0, xp: 0, xpMax: 895 });
+		expect(board.totalLevel).toBe(1);
 	});
 
 	it('lists only the items actually held, in catalog order', () => {

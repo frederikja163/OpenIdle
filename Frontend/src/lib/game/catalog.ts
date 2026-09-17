@@ -138,10 +138,10 @@ export function toGameAction(name: ActivityName): GameAction {
 	const art = ITEMS[primary.item];
 	// Every gate the activity declares, not only the one on the skill it trains:
 	// the backend checks them all, so a card that read just its own skill would
-	// look runnable and be refused on every click. Level 1 gates nothing.
+	// look runnable and be refused on every click. Level 0 gates nothing.
 	const requirements: SkillRequirement[] = [];
 	for (const requirement of definition.requirements) {
-		if (requirement.skill !== 'None' && requirement.count > 1) {
+		if (requirement.skill !== 'None' && requirement.count > 0) {
 			requirements.push({ skill: requirement.skill, level: requirement.count });
 		}
 	}
@@ -215,7 +215,7 @@ export interface UnmetRequirement extends SkillRequirement {
 /**
  * Mirrors StartActivityAsync's requirement loop: every level gate the profile
  * falls short of, in the order the contract declares them. A skill with no row
- * yet counts as level 1, which is what the backend creates one at.
+ * yet counts as level 0, which is what the backend creates one at.
  */
 export function unmetRequirements(
 	activityId: ActivityId,
@@ -229,7 +229,7 @@ export function unmetRequirements(
 		if (requirement.skill === 'None') {
 			continue;
 		}
-		const have = levels[requirement.skill] ?? 1;
+		const have = levels[requirement.skill] ?? 0;
 		if (have < requirement.count) {
 			unmet.push({ skill: requirement.skill, level: requirement.count, have });
 		}

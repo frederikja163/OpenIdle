@@ -5,16 +5,16 @@ namespace Backend;
 /// <summary>
 /// Static tuning for the level-up and activity pacing curves.
 ///
-/// Source of truth: the "Pacing Lab" tool output committed as the final 1-&gt;50 configuration.
+/// Source of truth: the "Pacing Lab" tool output committed as the final 0-&gt;50 configuration.
 /// The tuning/analysis tools themselves live under <c>tools/</c> and stay out of the shipped game;
 /// this file is the only thing the opensourced backend depends on.
 /// </summary>
 public static class LevelCurve
 {
-    /// <summary>The shape of the XP curve (<c>geom</c> = each level costs base&middot;r^(L-2) more than the last).</summary>
+    /// <summary>The shape of the XP curve (<c>geom</c> = each level-up costs <see cref="R"/> times the previous one).</summary>
     public const string Model = "geom";
 
-    /// <summary>XP for level 2. Each later level adds <see cref="Base"/> * <see cref="R"/>^(L-2).</summary>
+    /// <summary>XP to go from level 0 to level 1. Each later level-up multiplies the last by <see cref="R"/>.</summary>
     public const double Base = 895;
 
     /// <summary>Per-level growth rate.</summary>
@@ -52,19 +52,19 @@ public static class LevelCurve
 
     /// <summary>
     /// The per-level XP cost shape is geometric: going from level L to L+1 costs
-    /// <c>round(Base * R^(L-1))</c>. The cumulative requirement (level 1 = 0) is the running sum,
+    /// <c>round(Base * R^L)</c>. The cumulative requirement (level 0 = 0) is the running sum,
     /// computed lazily and cached below.
     /// </summary>
     private static readonly int[] XpForLevelTable = ComputeXpForLevelTable();
 
     private static int[] ComputeXpForLevelTable()
     {
-        int[] table = new int[MaxLevel];
+        int[] table = new int[MaxLevel + 1];
         long cumulative = 0;
-        for (int level = 1; level <= MaxLevel; level++)
+        for (int level = 0; level <= MaxLevel; level++)
         {
-            table[level - 1] = (int)cumulative;
-            cumulative += (long)Math.Round(Base * Math.Pow(R, level - 1));
+            table[level] = (int)cumulative;
+            cumulative += (long)Math.Round(Base * Math.Pow(R, level));
         }
 
         return table;
@@ -73,21 +73,21 @@ public static class LevelCurve
     /// <summary>Returns the cumulative XP needed to <em>be</em> level <paramref name="level"/>.</summary>
     public static int XpForLevel(int level)
     {
-        if (level < 1)
+        if (level < 0)
         {
             return 0;
         }
 
         if (level <= MaxLevel)
         {
-            return XpForLevelTable[level - 1];
+            return XpForLevelTable[level];
         }
 
         // Past the configured cap, keep the same geometric per-level cost.
         long xp = XpForLevelTable[^1];
-        for (int L = MaxLevel + 1; L <= level; L++)
+        for (int L = MaxLevel; L < level; L++)
         {
-            xp += (long)Math.Round(Base * Math.Pow(R, L - 1));
+            xp += (long)Math.Round(Base * Math.Pow(R, L));
             if (xp >= int.MaxValue)
             {
                 return int.MaxValue;
@@ -97,13 +97,13 @@ public static class LevelCurve
         return (int)Math.Min(xp, int.MaxValue);
     }
 
-    /// <summary>Returns the level a player with <paramref name="xp"/> earned has reached (1..<see cref="MaxLevel"/>).</summary>
+    /// <summary>Returns the level a player with <paramref name="xp"/> earned has reached (0..<see cref="MaxLevel"/>).</summary>
     public static int LevelFromXp(int xp)
     {
         // The XP-for-level table is non-decreasing, so binary search for the highest level
         // whose cumulative requirement the player has met.
         int low = 0;
-        int high = MaxLevel - 1;
+        int high = MaxLevel;
         while (low < high)
         {
             int mid = low + (high - low + 1) / 2;
@@ -117,6 +117,6 @@ public static class LevelCurve
             }
         }
 
-        return XpForLevelTable[low] <= xp ? low + 1 : 1;
+        return low;
     }
 }

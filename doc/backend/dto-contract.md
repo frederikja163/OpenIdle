@@ -270,7 +270,7 @@ Server→client event carrying the resulting inventory and skill state (the `Act
     { "profileId": "2efd7f6a-...", "itemId": "Stone", "count": 4 }
   ],
   "skills": [
-    { "profileId": "2efd7f6a-...", "skillId": "Mining", "xp": 10, "level": 1 }
+    { "profileId": "2efd7f6a-...", "skillId": "Mining", "xp": 10, "level": 0 }
   ]
 }
 ```

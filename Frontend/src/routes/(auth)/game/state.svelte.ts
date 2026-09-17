@@ -2,6 +2,7 @@ import { actionById, INVENTORY_ORDER, ITEMS, SKILL_ORDER, SKILLS } from '$lib/ga
 import { levelProgress } from '$lib/game/level-curve';
 import type { GameAction, InventoryItem, PlayableSkillId, Skill } from '$lib/game/types';
 import { gameState } from '$lib/state/game.svelte';
+import { levelCurveState } from '$lib/state/level-curve.svelte';
 
 /*
  * The board's view of the game store: the server's totals dressed for the
@@ -26,7 +27,7 @@ export class BoardState {
 	skills = $derived<Skill[]>(
 		SKILL_ORDER.map((id) => {
 			const dto = gameState.skills[id];
-			const progress = levelProgress(dto?.xp ?? 0, dto?.level ?? 1);
+			const progress = levelProgress(levelCurveState.levels, dto?.xp ?? 0, dto?.level ?? 0);
 			return { id, ...SKILLS[id], level: progress.level, xp: progress.into, xpMax: progress.span };
 		})
 	);
