@@ -57,11 +57,16 @@ Leave out anything the table already says — file counts, line counts, which di
 ## 4. Build the table
 
 Run this from the repository root. It buckets every changed file into one area, and the
-total reconciles with `git diff --shortstat`, so a row that looks wrong is a mapping to fix
-rather than a number to edit by hand:
+total reconciles with `git diff --shortstat --no-renames`, so a row that looks wrong is a
+mapping to fix rather than a number to edit by hand.
+
+`--no-renames` is load-bearing: with rename detection `--numstat` prints the path as
+`{old => new}/file`, which has spaces in it, so `$3` stops being a path and the file lands
+in `other`. Listing each side separately also puts a file moved between areas on the right
+two rows — removed from where it left, added where it arrived.
 
 ```shell
-git diff --numstat "$(git merge-base origin/main HEAD)"..HEAD | awk '
+git diff --numstat --no-renames "$(git merge-base origin/main HEAD)"..HEAD | awk '
 {
   add = $1; del = $2; f = $3
   if (add == "-") { add = 0; del = 0 }   # binary file
