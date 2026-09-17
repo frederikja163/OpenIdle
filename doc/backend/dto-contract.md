@@ -6,7 +6,7 @@ The socket protocol's data shapes are defined once, in one XML file, and generat
 
 - **Single source of truth:** [`types.xml`](../../types.xml) at the repository root.
 - **C# DTOs are generated at build time** by a Roslyn source generator into the `Backend.Dtos` namespace (`Dto.g.cs`). Never write a DTO class by hand.
-- **TypeScript is generated on demand** by a CLI tool, in two flavours: `-t Ts` for interfaces, `-t TsSchema` for a runtime description of the contract (see [Generation mechanics](#6-generation-mechanics)).
+- **TypeScript is generated on demand** by a CLI tool: `-t Ts` for the interfaces. Anything that needs the contract at *runtime* fetches it from the backend instead — `-t Json` is the same contract as JSON, which the backend hosts at `GET /schema` (see [Generation mechanics](#6-generation-mechanics)).
 - **Workflow to add a request/response/event:** edit `types.xml`, rebuild, done (C#). For the frontend, also run the CLI to regenerate the `.ts` (the output is git-ignored).
 - **Naming:** the emitters append suffixes — `name="Foo"` becomes `FooDto`, `FooRequest`, `FooResponse`, or `FooEvent`. Do **not** write the suffix in the XML name.
 - **Every `<Request>` must contain exactly one `<Response>`** child (possibly empty).
@@ -160,7 +160,7 @@ cd Frontend; bun run gen:dto   # or, from the repo root:
 dotnet run --project Generators\Generator -- -i types.xml -t Ts -o Frontend\src\lib\ws\dto.generated.ts
 ```
 
-The TS emitters run on demand rather than as part of `vite build` itself. `Frontend/package.json`'s `generate` script runs both of them — `gen:dto` (target `Ts`, the interfaces) and `gen:schema` (target `TsSchema`, the debug console's runtime description) — and `dev`, `build` and `check` all start with `generate`, so simply starting the frontend regenerates both files: a contract edit cannot go unnoticed, and **a .NET SDK is a hard prerequisite for frontend work**. `Frontend/Dockerfile` does the same inside a short .NET stage, from its own commit's `types.xml`, because the Bun image has no dotnet. Target `Cs` prints the same output the source generator produces, useful for review:
+The TS emitter runs on demand rather than as part of `vite build` itself. `Frontend/package.json`'s `generate` script runs it (`gen:dto`, target `Ts`), and `dev`, `build` and `check` all start with `generate`, so simply starting the frontend regenerates the file: a contract edit cannot go unnoticed, and **a .NET SDK is a hard prerequisite for frontend work**. `Frontend/Dockerfile` does the same inside a short .NET stage, from its own commit's `types.xml`, because the Bun image has no dotnet. Target `Cs` prints the same output the source generator produces, useful for review:
 
 ```powershell
 dotnet run --project Generators\Generator -- -i types.xml -t Cs
@@ -282,15 +282,9 @@ Sending an unknown `$type` fails deserialization; `Backend/Socket.cs` converts a
 ## 6. Generation mechanics
 
 - **C# (build time):** `Generators/Backend/TypesGenerator.cs` is an `IIncrementalGenerator` wired into [`Backend/Backend.csproj`](../../Backend/Backend.csproj) (lines 17-24) as an analyzer. It finds `types.xml` via `AdditionalFiles`, runs the same `Parser` + `CsEmitter` as the CLI, and emits `Dto.g.cs`. Diagnostics `DTC001` (missing file) and `DTC002` (invalid XML) fail the build.
-- **TypeScript (on demand):** `Generators/Generator/Program.cs` is a `CommandLineParser` console app. Flags: `-i|--input` (required), `-t|--target Cs|Ts|TsSchema` (required), `-o|--output` (default stdout).
-- **`-t TsSchema`** (`Generators/Core/TsSchemaEmitter.cs`) emits the contract as a *value* rather than as declarations — an object naming every request, its properties (wire name, kind, `multiple`, `optional`) and its response, plus every DTO and enum. TypeScript types are erased at compile time, so anything that has to reason about the protocol at runtime needs this instead of `-t Ts`. The frontend's protocol console (`Frontend/src/routes/debug/`) builds its request forms from it, and `Frontend/package.json`'s `generate` script — which `dev`, `build` and `check` all depend on — keeps the output current:
-
-  ```powershell
-  cd Frontend; bun run generate
-  ```
-
-  The emitted file annotates itself with a hand-written `ProtocolSchema` interface it imports, so a change to the emitter that the consumer does not expect fails `bun run check` rather than the page.
-- The parser, model, and emitters all live in `Generators/Core/` and are shared between the two consumers.
+- **TypeScript (on demand):** `Generators/Generator/Program.cs` is a `CommandLineParser` console app. Flags: `-i|--input` (required), `-t|--target Cs|Ts|Json` (required), `-o|--output` (default stdout).
+- **`-t Json`** (`Generators/Core/JsonSchemaEmitter.cs`) serializes the parsed contract as JSON — the XML tree as the visitors leave it, so PascalCase names, type attributes still carrying their token, and the synthesized enums and implicit `None` members already in place. TypeScript types are erased at compile time, so anything that has to reason about the protocol at runtime needs this rather than `-t Ts`, and it is **not generated into the frontend**: the backend hosts it at `GET /schema` (`Backend/Controllers/Http/SchemaController.cs`, base64-inlined into the build by the same source generator), and the frontend's protocol console (`Frontend/src/routes/debug/`) fetches it from whichever backend it is pointed at and maps it onto its own model in `Frontend/src/lib/debug/specToSchema.ts`. That way the console describes the backend under test rather than the revision its bundle was built from. The mapping restates a few of the emitters' naming rules — the camelCase wire name, the type-token table, the name of an anonymous response — and `Frontend/src/lib/debug/specToSchema.spec.ts` is what catches a change to them.
+- The visitors, spec model, and emitters all live in `Generators/Core/` and are shared between the consumers.
 
 ## 7. Rules & constraints
 
@@ -327,9 +321,12 @@ dotnet build Backend\Backend.csproj
 # 2. Generated C# looks right
 dotnet run --project Generators\Generator -- -i types.xml -t Cs
 
-# 3. Both TypeScript emitters run, and their output typechecks
-#    (`generate` runs gen:dto and gen:schema; both outputs are git-ignored)
+# 3. The TypeScript emitter runs, and its output typechecks
+#    (`generate` runs gen:dto; its output is git-ignored)
 cd Frontend; bun run check; bun run test:unit -- --run
+
+# 4. The hosted contract still serializes
+dotnet run --project Generators\Generator -- -i types.xml -t Json
 ```
 
 ## 10. Related documents
