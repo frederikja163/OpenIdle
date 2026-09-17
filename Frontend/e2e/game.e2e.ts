@@ -185,8 +185,22 @@ async function watchMeters(page: Page, label: string): Promise<void> {
 		)) {
 			const fill = meter.firstElementChild;
 			if (fill instanceof HTMLElement) {
+				/*
+				 * Only a transition that moves the width the meter *declared*, which is
+				 * the only thing a change in value touches.
+				 *
+				 * A fill is sized in percent, so its pixel width also moves when the
+				 * panel around it finishes laying out — 99.4% of a track still being
+				 * measured is a couple of pixels, and of a drawn one the whole bar.
+				 * That animates like any other width change while the declared width
+				 * sits still, and on a machine slow enough to lay out late it lands
+				 * after this watcher is installed, where it reads as a rewind the meter
+				 * never did.
+				 */
+				let declared = fill.style.width;
 				fill.addEventListener('transitionstart', (event) => {
-					if (event.propertyName === 'width') {
+					if (event.propertyName === 'width' && fill.style.width !== declared) {
+						declared = fill.style.width;
 						fill.dataset.widthTransition = 'ran';
 					}
 				});
