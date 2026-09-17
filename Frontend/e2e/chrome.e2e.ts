@@ -4,6 +4,7 @@ import {
 	logIn,
 	LOGIN_URL,
 	respondToRequests,
+	stubSchema,
 	type StubProfile,
 	THORIN,
 	WS_ROUTE
@@ -26,7 +27,9 @@ import {
 // reach out without a login: it fetches the backend's build over HTTP (GET
 // /version under PUBLIC_API_URL, or next to an overridden /ws), so a test
 // without a stub sees a failed fetch and a footer reading "unavailable" —
-// harmless to a test that never looks at it.
+// harmless to a test that never looks at it. /debug asks the same backend for
+// its protocol contract (GET /schema) on the same terms; stubSchema in
+// ./support.ts is what answers it.
 
 // The build the stubbed backend claims: 2026-09-04 22:13:20 UTC. Distinct from
 // the frontend's own (playwright.config.ts) so the footer's two halves cannot
@@ -246,6 +249,7 @@ test('a card reads the profile status the server sent', async ({ page }) => {
 test('the Debug button opens the protocol console and Back returns to the app', async ({
 	page
 }) => {
+	await stubSchema(page);
 	await page.routeWebSocket(WS_ROUTE, (ws) => ws.onMessage(respondToRequests(ws, [THORIN])));
 
 	await logIn(page);
@@ -254,10 +258,41 @@ test('the Debug button opens the protocol console and Back returns to the app', 
 	await expect(page).toHaveURL(/\/debug$/);
 	await expect(page.getByRole('heading', { level: 1, name: 'Protocol console' })).toBeVisible();
 
+	// The catalogue is the backend's own, fetched from GET /schema and mapped in
+	// the browser, so this is what proves the console is built from the contract
+	// the stub served rather than from anything compiled into the bundle.
+	await expect(page.getByText('2 requests')).toBeVisible();
+	await expect(page.getByRole('combobox').first()).toHaveValue('GetSkillsRequest');
+	await expect(page.getByText('→ GetSkillsResponse (no payload)')).toBeVisible();
+
+	// And that the mapping survives into the controls: SkillIds is an array of a
+	// declared enum, so adding an entry must offer that enum's members — which
+	// only a property mapped to kind 'enum' does.
+	await page.getByRole('button', { name: 'add SkillIds' }).click();
+	await expect(page.getByRole('option', { name: 'Mining' })).toBeAttached();
+
 	// Client-side navigation keeps the singleton socket logged in, so the return
 	// does not bounce to /login.
 	await page.getByRole('link', { name: 'Back to app' }).click();
 	await expect(page).toHaveURL(/\/profiles$/);
+});
+
+test('the protocol console says so when the backend will not describe itself', async ({ page }) => {
+	// What pointing the console at a backend built before /schema existed looks
+	// like: no catalogue, so no form — and a way back once it is reachable.
+	await page.route('**/schema', (route) => route.fulfill({ status: 404, body: 'Not Found' }));
+
+	await page.goto('/debug');
+
+	await expect(page.getByText('contract unavailable')).toBeVisible();
+	await expect(page.getByRole('alert')).toContainText('404');
+
+	await page.unroute('**/schema');
+	await stubSchema(page);
+	await page.getByRole('button', { name: 'Retry' }).click();
+
+	await expect(page.getByText('2 requests')).toBeVisible();
+	await expect(page.getByRole('combobox').first()).toHaveValue('GetSkillsRequest');
 });
 
 test('the version footer names this build and the pointed-at backend build', async ({ page }) => {
@@ -305,6 +340,9 @@ test('the frontend reports its own build at /version, like the backend', async (
 });
 
 test('the traffic filter remembers which kinds are hidden across reloads', async ({ page }) => {
+	// Not what this test is about, but an unanswered /schema would leave the
+	// console reporting a failure beside the thing being toggled.
+	await stubSchema(page);
 	await page.goto('/debug');
 
 	// The toggle is a badge whose text oi-label-sm uppercases in CSS only, so

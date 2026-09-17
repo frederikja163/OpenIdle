@@ -1,7 +1,7 @@
 # Build context is the repository root, like the backend image:
 #   docker build -f Frontend/Dockerfile -t openidle-frontend .
 #
-# The root context exists for a reason: the frontend's protocol schema is
+# The root context exists for a reason: the frontend's protocol interfaces are
 # regenerated inside the image from the same commit's ../types.xml, and the
 # generator lives in ../Generators. The Bun Alpine stage has no dotnet, so a
 # short .NET SDK stage produces the TS file first. The generated file is
@@ -14,20 +14,17 @@
 # doc/libraries/sveltejs-adapter-node.md.
 
 # The .NET stage: build the generator CLI once and run it against types.xml for
-# both TS targets — Ts for the src/lib/ws/dto.generated.ts interfaces the whole
-# protocol module re-exports, TsSchema for the value src/lib/debug needs. The
-# root .dockerignore keeps bins, objs, node_modules and local state out of the
-# COPY.
+# the Ts target — the src/lib/ws/dto.generated.ts interfaces the whole protocol
+# module re-exports. The debug console's runtime catalogue is not generated here
+# any more; it is fetched from the backend's GET /schema at runtime. The root
+# .dockerignore keeps bins, objs, node_modules and local state out of the COPY.
 FROM mcr.microsoft.com/dotnet/sdk:10.0 AS generate
 WORKDIR /src
 COPY . .
 RUN mkdir -p /out \
     && dotnet run --project Generators/Generator/Generator.csproj \
         --configuration Release -- \
-        -i types.xml -t Ts -o /out/dto.generated.ts \
-    && dotnet run --project Generators/Generator/Generator.csproj \
-        --configuration Release -- \
-        -i types.xml -t TsSchema -o /out/protocol.generated.ts
+        -i types.xml -t Ts -o /out/dto.generated.ts
 
 FROM oven/bun:1.3.10-alpine AS build
 WORKDIR /app
@@ -39,10 +36,9 @@ COPY Frontend/package.json Frontend/bun.lock ./
 RUN bun install --frozen-lockfile
 
 COPY Frontend/ ./
-# Overlay the freshly generated files over any local copy that slipped past
+# Overlay the freshly generated file over any local copy that slipped past
 # .dockerignore, so the image always builds from its own commit's types.xml.
 COPY --from=generate /out/dto.generated.ts ./src/lib/ws/dto.generated.ts
-COPY --from=generate /out/protocol.generated.ts ./src/lib/debug/protocol.generated.ts
 
 # Build provenance for the version footer: CI passes the published commit and
 # its committer date (unix seconds) as build-args, and vite.config.ts inlines

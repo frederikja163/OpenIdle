@@ -4,7 +4,7 @@
 	import { Button } from '$lib/components/ui/button';
 	import { Input } from '$lib/components/ui/input';
 	import { addEntry, type EntryNode, type FieldNode } from '$lib/debug/formModel';
-	import { PROTOCOL, type SchemaProperty } from '$lib/debug/schema';
+	import type { ProtocolSchema, SchemaProperty } from '$lib/debug/schema';
 	import { profilesState } from '$lib/state/profiles.svelte';
 	import Select from './Select.svelte';
 	import Self from './PropertyField.svelte';
@@ -12,12 +12,18 @@
 	/*
 	 * One row of the generated request form. Recursive, because a property may name
 	 * a DTO whose own properties need the same treatment.
+	 *
+	 * The catalogue comes in as a prop rather than being read from the module that
+	 * fetched it: it is state now — it arrives after the first render and is replaced
+	 * when the app is pointed at another backend — and RequestBuilder already guards
+	 * on it, so taking it here is what lets this component treat it as always present.
 	 */
 	interface Props {
 		field: FieldNode;
+		schema: ProtocolSchema;
 	}
 
-	let { field }: Props = $props();
+	let { field, schema }: Props = $props();
 
 	const property = $derived(field.property);
 
@@ -87,7 +93,7 @@
 {#snippet scalar(entry: EntryNode & { kind: 'scalar' })}
 	{#if property.kind === 'enum'}
 		<Select bind:value={entry.value}>
-			{#each PROTOCOL.enums[property.typeName]?.values ?? [] as member (member)}
+			{#each schema.enums[property.typeName]?.values ?? [] as member (member)}
 				<option value={member}>{member}</option>
 			{/each}
 		</Select>
@@ -137,7 +143,7 @@
 		     in the form the way it is in the JSON beside it. -->
 		<Column class="gap-(--sp-5) border-l border-line-soft pl-(--sp-6)">
 			{#each entry.fields as nested (nested.property.name)}
-				<Self field={nested} />
+				<Self field={nested} {schema} />
 			{/each}
 		</Column>
 	{:else}
@@ -179,7 +185,7 @@
 				<span class="oi-body-sm text-text-faint">empty array</span>
 			{/each}
 			<Row>
-				<Button size="sm" onclick={() => addEntry(field, PROTOCOL)}>add {property.name}</Button>
+				<Button size="sm" onclick={() => addEntry(field, schema)}>add {property.name}</Button>
 			</Row>
 		</Column>
 	{:else}

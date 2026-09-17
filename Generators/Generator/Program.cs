@@ -1,14 +1,16 @@
-﻿using System.Text;
+﻿using System.IO;
+using System.Text;
 using System.Xml;
+using System.Xml.Serialization;
 using CommandLine;
 using Generator.Core;
-using DtoParser = Generator.Core.Parser;
+using Generator.Core.Spec;
 
 public enum Target
 {
     Cs,
     Ts,
-    TsSchema,
+    Json,
 }
 
 public static class Program
@@ -27,7 +29,7 @@ public static class Program
         [Option('o', "output", HelpText = "Path to write the generated output to. Defaults to stdout.")]
         public string? Output { get; set; }
 
-        [Option('t', "target", Required = true, HelpText = "Which emitter to run: Cs, Ts, or TsSchema.")]
+        [Option('t', "target", Required = true, HelpText = "Which emitter to run: Cs, Ts, or Json.")]
         public Target Target { get; set; }
     }
 
@@ -39,24 +41,19 @@ public static class Program
 
     private static int Run(Options options)
     {
-        DtoModel model;
+        Root root;
         try
         {
-            model = ParseContract(options.Input);
+            root = ParseContract(options.Input);
         }
         catch (FileNotFoundException)
         {
             Console.Error.WriteLine($"DTO contract file not found: {options.Input}");
             return 1;
         }
-        catch (ParserException ex)
+        catch (InvalidOperationException ex) when (ex.InnerException is XmlException xmlEx)
         {
-            Console.Error.WriteLine(ex.Message);
-            return 1;
-        }
-        catch (XmlException ex)
-        {
-            Console.Error.WriteLine($"Invalid XML: {ex.Message}");
+            Console.Error.WriteLine($"Invalid XML: {xmlEx.Message}");
             return 1;
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
@@ -69,7 +66,12 @@ public static class Program
         try
         {
             output = CreateOutput(options.Output);
-            Emit(options.Target, output, model);
+            Emit(options.Target, output, root);
+        }
+        catch (ParserException ex)
+        {
+            Console.Error.WriteLine(ex.Message);
+            return 1;
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
         {
@@ -90,12 +92,11 @@ public static class Program
         return 0;
     }
 
-    private static DtoModel ParseContract(string path)
+    private static Root ParseContract(string path)
     {
-        DtoParser parser = new();
+        XmlSerializer serializer = new(typeof(Root));
         using FileStream stream = File.OpenRead(path);
-        parser.Parse(stream);
-        return parser.Model;
+        return (Root)serializer.Deserialize(stream)!;
     }
 
     private static TextWriter CreateOutput(string? path)
@@ -105,20 +106,27 @@ public static class Program
             : new StreamWriter(path, append: false, new UTF8Encoding(encoderShouldEmitUTF8Identifier: false));
     }
 
-    private static void Emit(Target target, TextWriter writer, DtoModel model)
+    private static void Emit(Target target, TextWriter writer, Root root)
     {
-        using IDtoEmitter emitter = CreateEmitter(target, writer);
-        emitter.EmitDtos(model);
-    }
+        new VisitorPipeline(new AddEnumsVisitor(), new ValidationVisitor()).Visit(root);
 
-    private static IDtoEmitter CreateEmitter(Target target, TextWriter writer)
-    {
-        return target switch
+        switch (target)
         {
-            Target.Cs => new CsEmitter(writer),
-            Target.Ts => new TsEmitter(writer),
-            Target.TsSchema => new TsSchemaEmitter(writer),
-            _ => throw new ArgumentOutOfRangeException(nameof(target)),
-        };
+            case Target.Cs:
+                using (CsEmitterVisitor csEmitter = new(writer))
+                {
+                    csEmitter.Emit(root);
+                }
+                break;
+            case Target.Ts:
+                using (TsEmitterVisitor tsEmitter = new(writer))
+                {
+                    tsEmitter.Emit(root);
+                }
+                break;
+            case Target.Json:
+                writer.Write(JsonSchemaEmitter.Emit(root));
+                break;
+        }
     }
 }

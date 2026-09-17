@@ -1,10 +1,11 @@
 /*
  * The shape of the protocol contract, as the debug console consumes it.
  *
- * The data itself is generated from types.xml by Generators/Core/TsSchemaEmitter.cs — see
- * `bun run generate`. These interfaces are hand-written and the generated file imports them
- * to annotate its export, so the two are checked against each other by `bun run check`: an
- * emitter that stops matching this file fails the build rather than the page.
+ * The data itself is fetched from the backend's `GET /schema`, which hosts the contract it
+ * was built from, and mapped onto these interfaces by ./specToSchema — so the catalogue
+ * describes the backend under test rather than the revision this bundle was built from.
+ * That mapping restates a handful of the generator's naming rules in TypeScript; the
+ * trade-off, and why it is now the cheaper side, is argued there.
  *
  * The names and casing here are the generator's, not this file's invention:
  *  - `typeName` is the generated class name and the `$type` on the wire — already carrying
@@ -53,10 +54,7 @@ export interface SchemaRequest extends SchemaObject {
 	response: SchemaObject;
 }
 
-/**
- * Records rather than Maps, because a generated file can write an object literal but not a
- * Map literal, and a conversion step would only exist to be kept in step.
- */
+/** Records rather than Maps: a property names its type, and both of these are looked up by it. */
 export interface ProtocolSchema {
 	/** Keyed by generated name, e.g. `ItemId`. */
 	enums: Record<string, SchemaEnum>;
@@ -65,5 +63,3 @@ export interface ProtocolSchema {
 	requests: SchemaRequest[];
 	events: SchemaObject[];
 }
-
-export { PROTOCOL } from './protocol.generated';

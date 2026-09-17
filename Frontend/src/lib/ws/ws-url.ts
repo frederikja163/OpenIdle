@@ -246,6 +246,11 @@ export function versionUrl(apiUrl: string): string {
 	return `${stripTrailingSlash(apiUrl)}/version`;
 }
 
+/** The backend's `GET /schema`: the protocol contract it was built from. */
+export function schemaUrl(apiUrl: string): string {
+	return `${stripTrailingSlash(apiUrl)}/schema`;
+}
+
 /** The backend's `GET /levels`, under whichever API base it is reached at. */
 export function levelsUrl(apiUrl: string): string {
 	return `${stripTrailingSlash(apiUrl)}/levels`;
