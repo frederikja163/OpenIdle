@@ -447,6 +447,21 @@
     <Property name="Skills" type="Skill" multiple="true" />
   </Event>
 
+  <Enum name="ActivityStopReason">
+    <Value name="Requested" />
+    <Value name="OutOfItems" />
+  </Enum>
+
+  <Event name="ActivityStarted">
+    <Property name="ActivityId" type="ActivityId" />
+    <Property name="StartTime" type="TimeStamp" />
+  </Event>
+
+  <Event name="ActivityStopped">
+    <Property name="ActivityId" type="ActivityId" />
+    <Property name="Reason" type="ActivityStopReason" />
+  </Event>
+
   <Request name="ListProfiles">
     <Response>
       <Property name="Profiles" type="Profile" multiple="true" />

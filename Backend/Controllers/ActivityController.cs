@@ -19,7 +19,7 @@ public sealed class ActivityController(ActivityService activityService) : Socket
     [Request]
     public async Task StopActivity(StopActivityRequest request)
     {
-        await activityService.StopActivityAsync(ProfileId);
+        await activityService.StopActivityAsync(ProfileId, ActivityStopReason.Requested);
         await RespondAsync(new StopActivityResponse());
     }
 }
